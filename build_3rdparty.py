@@ -202,6 +202,7 @@ def download_tarball(url, sha256, dir, name):
     src = join_path(dir, sub)
     tgt = join_path(dir, name)
     rmdir(src)
+    tar.extraction_filter = tarfile.data_filter
     tar.extractall(dir)
     rmdir(tgt)
     os.rename(src, tgt)
