@@ -646,7 +646,7 @@ int CUT_FTPClient::ResumeReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFil
         return OnError(UTE_PORT_FAILED);
 
 
-    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
+    if (!CUT_ParsePASVEndpoint(responseBuf, m_szAddress, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
 
     // Check for abortion flag
@@ -762,7 +762,7 @@ int CUT_FTPClient::ReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFile) {
         return OnError(UTE_PORT_FAILED);
 
 
-    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
+    if (!CUT_ParsePASVEndpoint(responseBuf, m_szAddress, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
 
     // Check for abortion flag
@@ -1020,7 +1020,7 @@ int CUT_FTPClient::SendFilePASV(CUT_DataSource & source, LPCSTR destFile) {
     if(rt < 200 || rt >299)
         return OnError(UTE_PORT_FAILED);
 
-    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
+    if (!CUT_ParsePASVEndpoint(responseBuf, m_szAddress, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
 
     // Check for abortion flag
@@ -2090,7 +2090,7 @@ int CUT_FTPClient::GetDirInfoPASV(LPCSTR path){
     if(rt < 200 || rt >299)
         return OnError(UTE_PORT_FAILED);
 
-    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
+    if (!CUT_ParsePASVEndpoint(responseBuf, m_szAddress, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_LIST_FAILED);
 
     //send the list command, the server will then wait for us to

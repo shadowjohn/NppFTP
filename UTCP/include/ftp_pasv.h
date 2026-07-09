@@ -51,4 +51,19 @@ static bool CUT_ParsePASVResponse(const char *response, char *ipAddress, size_t 
 	return true;
 }
 
+static bool CUT_ParsePASVEndpoint(const char *response, const char *controlAddress, char *dataAddress, size_t dataAddressSize, int *port)
+{
+	char ignoredPasvAddress[16];
+
+	if (!controlAddress || !*controlAddress || !dataAddress || dataAddressSize == 0)
+		return false;
+
+	if (!CUT_ParsePASVResponse(response, ignoredPasvAddress, sizeof(ignoredPasvAddress), port))
+		return false;
+
+	strncpy(dataAddress, controlAddress, dataAddressSize - 1);
+	dataAddress[dataAddressSize - 1] = '\0';
+	return true;
+}
+
 #endif

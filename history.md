@@ -189,3 +189,15 @@
 - 使用者提供的 PuTTY PPK 可用 `plink.exe` 成功通過 GitHub SSH 認證，回應 `Hi shadowjohn!`。
 - 本機 repo 已設定 `.git/config` 的 `core.sshCommand` 走 PuTTY `plink.exe` 與該 PPK；這是 local config，不會進 commit。
 - 驗證：`git ls-remote origin HEAD` 成功回 HEAD hash。
+
+## 2026-07-09 FTP PASV endpoint policy
+
+- 修第五個 security finding：PASV response 裡 server 回報的 host 不再直接拿來連 data socket，避免被導到非控制連線 peer 的位址。
+- `CUT_ParsePASVEndpoint` 仍會解析並驗證 PASV 六段數字與 port，但 data host 一律使用控制連線已連上的 `m_szAddress`。
+- `ResumeReceiveFilePASV`、`ReceiveFilePASV`、`SendFilePASV`、`GetDirInfoPASV` 都改走同一個 helper。
+- 新增 regression：server 回 `10.0.0.5` 時，data host 仍應是控制 peer `203.0.113.9`。
+- 驗證：
+  - MSVC 編譯並執行 `_build\tests\pasv_response_parse.exe`，通過。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`8A142DA59B833D89FA4AB55622F2948D80DBEE71FDF41690380955DFD0476539`。
+  - 仍有既有 UTCP header 的 C4819 warnings，沒有 error。
