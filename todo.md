@@ -32,10 +32,11 @@
 - [x] Fix FTP PASV parsing overflow: parse octets as bounded integers before formatting.
 - [x] Fix FTP PASV endpoint policy: default data connection host to control peer.
 - [x] Fix `CUT_StrMethods::RemoveCRLF` unsigned underflow.
-- [ ] Fix SFTP directory listing path composition overflow.
-- [ ] Replace default profile password storage with Windows DPAPI or equivalent.
-- [ ] Pin GitHub Actions by commit SHA and set explicit workflow permissions.
-- [ ] Add caps for FTP multiline responses and directory listings.
+- [x] Fix SFTP directory listing path composition overflow.
+- [x] Replace default profile password storage with Windows DPAPI or equivalent.
+- [x] Pin GitHub Actions by commit SHA and set explicit workflow permissions.
+- [x] Add caps for FTP multiline responses and directory listings.
+- [x] Fix review follow-ups: isolate release token, make FTP response cap fail closed, use SFTP path helper in production, avoid DPAPI fallback and secret test logs.
 
 ## 4. PSPad-style remote browser
 

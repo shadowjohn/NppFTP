@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "FTPClientWrapper.h"
+#include "sftp_dir_path.h"
 
 #include "KBIntDialog.h"
 #include <fcntl.h>
@@ -109,8 +110,6 @@ int FTPClientWrapperSSH::GetDir(const char * path, FTPFile** files) {
 		return OnReturn(-1);
 	}
 
-	bool endslash = path[strlen(path)-1] == '/';
-
 	/* reading the whole directory, file by file */
 	while((sfile = sftp_readdir(m_sftpsession, dir)) && !m_aborting) {
 		file.filePath[0] = 0;
@@ -118,11 +117,10 @@ int FTPClientWrapperSSH::GetDir(const char * path, FTPFile** files) {
 		if (!strcmp(sfile->name, ".") || !strcmp(sfile->name, ".."))
 			continue;
 
-		strcpy(file.filePath, path);
-		if (!endslash) {
-			strcat(file.filePath, "/");
+		if (sftp_compose_entry_path(path, sfile->name, file.filePath, sizeof(file.filePath)) != 0) {
+			sftp_attributes_free(sfile);
+			continue;
 		}
-		strcat(file.filePath, sfile->name);
 		file.fileSize = (long)sfile->size;
 
 		file.mtime = ConvertFiletime(sfile->mtime, sfile->mtime_nseconds);
@@ -149,6 +147,7 @@ int FTPClientWrapperSSH::GetDir(const char * path, FTPFile** files) {
 		{
 			//file permissions are available in unix format
 			strncpy(file.mod, sfile->longname, sizeof(file.mod)-1);
+			file.mod[sizeof(file.mod)-1] = '\0';
 		}
 
 		vFiles.push_back(file);

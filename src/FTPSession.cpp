@@ -271,7 +271,14 @@ int FTPSession::GetDirectoryHierarchy(const char * inputDir) {
 				HTREEITEM hti = (HTREEITEM)(currentFileObj->GetData());
 				if (hti) {
 
-					sprintf(currentPath,"%s%s/", currentPath, pathEntry);
+					{
+						size_t cur = strlen(currentPath);
+						if (snprintf(currentPath + cur, sizeof(currentPath) - cur, "%s/", pathEntry) < 0
+							|| strlen(currentPath) >= sizeof(currentPath) - 1) {
+							SU::free(dir);
+							return 1;
+						}
+					}
 					pathEntry = strtok (NULL,"/");
 
 					continue;
@@ -293,7 +300,16 @@ int FTPSession::GetDirectoryHierarchy(const char * inputDir) {
 			parentDirs.push_back(SU::strdup(currentPath));
 		}
 
-		sprintf(currentPath,"%s%s/", currentPath, pathEntry);
+		{
+			size_t cur = strlen(currentPath);
+			if (snprintf(currentPath + cur, sizeof(currentPath) - cur, "%s/", pathEntry) < 0
+				|| strlen(currentPath) >= sizeof(currentPath) - 1) {
+				SU::free(dir);
+				for (size_t i = 0; i < parentDirs.size(); i++)
+					SU::free(parentDirs[i]);
+				return 1;
+			}
+		}
 
 		parentDirs.push_back(SU::strdup(currentPath));
 		pathEntry = strtok (NULL,"/");

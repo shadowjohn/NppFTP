@@ -51,6 +51,9 @@ Modification made May 2012:
 
 #include "ftp_c.h"
 
+const int MAX_FTP_MULTILINE_RESPONSE_LINES = 10000;
+const int MAX_FTP_DIR_INFO_LINES = 100000;
+
 #include "ftp_pasv.h"
 #include "ut_strop.h"
 
@@ -1981,6 +1984,7 @@ int CUT_FTPClient::GetDirInfo(LPCSTR path){
     CUT_DIRINFOA * di = NULL;
     BOOL once = TRUE;
 
+    int dirLines = 0;
     // v4.2 change to eliminate C4127: conditional expression is constant
     for(;;) {
         // Check for abortion flag
@@ -1989,11 +1993,17 @@ int CUT_FTPClient::GetDirInfo(LPCSTR path){
             return OnError(UTE_ABORTED);
             }
 
+        if (dirLines >= MAX_FTP_DIR_INFO_LINES) {
+            m_wsData.CloseConnection();
+            return OnError(UTE_LIST_FAILED);
+        }
+
         //retrive a dir line
         if (m_wsData.ReceiveLine(m_szBuf,sizeof(m_szBuf)) <= 0)
             break;
 
         CUT_StrMethods::RemoveCRLF(m_szBuf);
+        dirLines++;
 
 
         // With out this step the client will assume the field TOTAL (which is provided by some unix servers), It will be assumed
@@ -2124,6 +2134,7 @@ int CUT_FTPClient::GetDirInfoPASV(LPCSTR path){
     ClearDirInfo();
     CUT_DIRINFOA * di = NULL;
 
+    int dirLines = 0;
     // v4.2 change to eliminate C4127: conditional expression is constant
     for (;;) {
         // Check for abortion flag
@@ -2132,11 +2143,17 @@ int CUT_FTPClient::GetDirInfoPASV(LPCSTR path){
             return OnError(UTE_ABORTED);
             }
 
+        if (dirLines >= MAX_FTP_DIR_INFO_LINES) {
+            m_wsData.CloseConnection();
+            return OnError(UTE_LIST_FAILED);
+        }
+
         //retrive a dir line
         if (m_wsData.ReceiveLine(m_szBuf,sizeof(m_szBuf),m_wsData.GetReceiveTimeOut ()/1000) <= 0)
             break;
 
         CUT_StrMethods::RemoveCRLF(m_szBuf);
+        dirLines++;
 
         // GW:
         // With out this step the client will assume the field TOTAL (which is provided by some unix servers), It will be assumed
@@ -2491,6 +2508,7 @@ int CUT_FTPClient::PeekResponseCode(CUT_WSClient *ws, LPSTR string, int maxlen) 
 
     //check for a multi-line response
     if(c =='-') {
+        int responseLines = 1;
         while(strstr(m_szBuf,mlCode) != m_szBuf) {
 
             //clear the multi-line response list the first time through
@@ -2503,10 +2521,17 @@ int CUT_FTPClient::PeekResponseCode(CUT_WSClient *ws, LPSTR string, int maxlen) 
 
             m_listResponse.AddString(m_szBuf);
 
+            if (responseLines >= MAX_FTP_MULTILINE_RESPONSE_LINES) {
+                m_lastResponseCode = 0;
+                m_cachedResponse = false;
+                return 0;
+            }
+
             //get the line
             if(ws->ReceiveLine(m_szBuf,sizeof(m_szBuf),m_wsData.GetReceiveTimeOut ()/1000) <=0)
                 break;
             CUT_StrMethods::RemoveCRLF(m_szBuf);
+            responseLines++;
             }
 
         m_listResponse.AddString(m_szBuf);

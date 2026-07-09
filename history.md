@@ -214,3 +214,81 @@
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`EEB862AEF1A59522D28EB98BBFEE17195696EAC7B99FC4E72421C3C7BCF8F614`。
   - 仍有既有 UTCP 編碼 C4819 warnings，沒有 error。
+
+## 2026-07-09 SFTP directory listing path composition overflow
+
+- 修第七個 security finding：SFTP `GetDir` 把 parent path 與 server 回傳的 filename 用 `strcpy`/`strcat` 寫入 `FTPFile::filePath[MAX_PATH+1]`，惡意 server 傳回超長 filename 會 overflow。
+- `FTPClientWrapperSSH::GetDir` 三處修補：
+  1. **Line 121–125**：`strcpy`+`strcat` 替換為 `snprintf`，組合路徑超出 buffer 時 skip 該 entry 並釋放 sftp_attributes。
+  2. **Line 112**：`path[strlen(path)-1]` 對空字串會讀 `path[-1]`；改為先存 `pathlen`，用 `(pathlen > 0)` 守護。
+  3. **Line 151**：`strncpy(file.mod, sfile->longname, sizeof(file.mod)-1)` 沒確保 NUL 結尾；補上 `file.mod[sizeof(file.mod)-1] = '\0'`。
+- 同型修補 `FTPSession::GetDirectoryHierarchy`（line 274, 296）：`sprintf(currentPath, "%s%s/", currentPath, pathEntry)` 同時是 overlapping source/destination UB 與無 bounds check；改為 `snprintf` in-place append，超長時 early return 並釋放已分配的 `parentDirs`。
+- 新增 `src/sftp_dir_path.h`，把 path composition 邏輯抽成可獨立測試的 inline helper。
+- 新增 `tests/sftp_dir_path.cpp`，驗證正常路徑、超長 overflow 拒絕、邊界長度、空路徑、NULL 輸入。
+- 驗證：
+  - MSVC 編譯並執行 `_build\tests\sftp_dir_path.exe`，`sftp_dir_path_exit=0`，通過。
+  - `.\build.bat` 通過，只重編 `FTPClientWrapperSSH.cpp` 與 `FTPSession.cpp`，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`6CAF3798B3C64F4D9FB0AB6124D8F8AFD04049D9E378696D3E81A7D15F508C0C`。
+  - 仍有既有 UTCP 編碼 C4819 warnings，沒有 error。
+
+## 2026-07-09 Pin GitHub Actions by commit SHA and set explicit workflow permissions
+
+- 將 GitHub Actions 工作流（Workflow）使用的 Actions 全數改為使用完整的 40 字元 commit SHA 進行固定（Pinning），而非使用可變動的 version tags，並在註解中保留原始 Tag（如 `# v7`）以維持可讀性。
+- 調整項目包含 `actions/checkout`、`actions/upload-artifact`、`softprops/action-gh-release` 及 `advanced-security/spdx-dependency-submission-action`。
+- 安全加固工作流權限（Workflow Permissions）：
+  - 於 `CI_build.yml` 頂層設定預設為最小權限 `permissions: contents: read`。
+  - `build_windows` 與 `build_linux` 維持 read-only token；tag 發版改由獨立的 `release_artifacts` job 使用 `permissions: contents: write`。
+  - `spdx_upload.yml` 維持原有的局部權限宣告並將 actions 釘死在對應的 commit SHA。
+
+## 2026-07-09 Replace default profile password storage with Windows DPAPI or equivalent
+
+- 修正第八個 security finding（預設設定檔密碼儲存弱點）：原本在未使用 Master Password 時，密碼與私鑰 Passphrase 是使用寫死的 DES 金鑰 `"NppFTP00"` 進行加密（等同於明文儲存）。
+- 使用 Windows Data Protection API (DPAPI) 進行安全加固：
+  - 於 `src/Encryption.cpp` 實作 `DPAPI_encrypt` 與 `DPAPI_decrypt` 輔助函式，內部呼叫 Win32 的 `CryptProtectData` 及 `CryptUnprotectData`。
+  - 當沒有啟用 Master Password 且 `IsDefaultKey()` 為真時，新儲存的密碼/Passphrase 會以 DPAPI 加密，並在輸出的十六進位字串前綴 `"DPAPI:"` 識別。
+  - 完美相容舊版設定檔（Backward Compatibility）：在解密時，若字串不包含 `"DPAPI:"` 前綴，會自動回退使用 DES 搭配預設金鑰 `"NppFTP00"` 進行解密，確保使用者更新插件後既有密碼不會遺失。
+  - DPAPI 加密失敗時不再暗退回預設 DES；`FTPProfile::SaveProfile` 會回傳 `NULL` 讓儲存失敗，而不是寫入弱加密密碼。
+  - 當使用者啟用 Master Password 時，系統會依舊自動切換為 DES 搭配 Master Password 加密模式。
+- 新增 `tests/encryption_dpapi.cpp` 單元測試：
+  - 測試預設模式下的 DPAPI 加解密（產生 `"DPAPI:"` 前綴）。
+  - 測試舊版 DES 密碼的向後相容性解密。
+  - 測試 Master Password 模式下切換回 DES 加解密之行為。
+- 驗證：
+  - 編譯並執行 `_build\tests\encryption_dpapi.exe`，`encryption_dpapi_exit=0` 通過所有 Assert 驗證。
+  - 執行 `.\build.bat` 成功，產出新的 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`79FBCF76122C1B6BBB70FE3954C3F25CDF10F71B962669C2EEAB199CB8532E20`。
+
+## 2026-07-09 Add caps for FTP multiline responses and directory listings
+
+- 修正第十個 security finding（FTP 協定封包長度未限制弱點）：當連線至惡意或設定錯誤的 FTP 伺服器時，若伺服器發送無限的 FTP 多行回應（Multiline Response）或極大的目錄清單（Directory Listing），原本程式會無限循環讀取並分配記憶體，造成記憶體耗盡（OOM）或 CPU 飆高造成阻斷服務（DoS）攻擊。
+- 限制資源消耗的加固措施：
+  - 於 `UTCP/src/ftp_c.cpp` 定義最大限制常數：
+    - `MAX_FTP_MULTILINE_RESPONSE_LINES = 10000` (控制連線多行回應最大限制 10,000 行)。
+    - `MAX_FTP_DIR_INFO_LINES = 100000` (目錄清單檔案數量最大限制 100,000 筆)。
+  - 於 `CUT_FTPClient::PeekResponseCode` 迴圈中加入行數計數與限制判定，超出時回傳 protocol failure，避免控制連線殘留資料後仍被當成成功連線。
+  - 於 `CUT_FTPClient::GetDirInfo` 及 `CUT_FTPClient::GetDirInfoPASV` 接收目錄封包的迴圈中加入檔案數量計數與限制判定，超出時即關閉連線並回傳 `UTE_LIST_FAILED` 錯誤。
+- 新增 `tests/ftp_response_cap.cpp` 單元測試：
+  - 啟動一個本地端的 Mock FTP 伺服器執行緒。
+  - 模擬伺服器發送 10,050 行的無限多行回應。
+  - 驗證用戶端在讀取回應達 10,000 行上限後，連線會失敗關閉，不會把 capped greeting 當成成功。
+- 驗證：
+  - 編譯並執行 `_build\tests\ftp_response_cap.exe`，`ftp_response_cap_exit=0` 通過所有測試。
+  - 執行 `.\build.bat` 成功，產出新的 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`1DA9917471C5DC237969EBFD069C92BE1012D6312AEB1BDB812956BFDE6A54C7`。
+
+## 2026-07-09 Review fixups for external security pass
+
+- 修正 review 發現的四個問題：
+  - `CI_build.yml` 不再讓 untrusted build job 持有 `contents: write`；tag-only `release_artifacts` job 下載 artifacts 後再發 GitHub Release。
+  - FTP multiline response cap hit 現在 fail closed；`client.Connect` 對超長 greeting 會回錯，不會把殘留 response 留在控制連線後續使用。
+  - `FTPClientWrapperSSH::GetDir` 改用 `sftp_compose_entry_path`，避免測試 helper 和產品碼各跑一套。
+  - DPAPI 預設加密失敗不再暗退回 DES；測試也移除加密與解密後密碼的 stdout 輸出。
+- 額外補 `FTPProfile` 錯誤路徑：passphrase 解密失敗時不再 `strdup(NULL)`；profile password/passphrase 加密失敗時 `SaveProfile` 回傳 `NULL`。
+- 額外補 `Encryption.cpp` 邊界處理：DPAPI 空字串 round-trip 有測到，`strlen()` 轉舊介面 `int` 前會先檢查 `INT_MAX`，避免新修補帶進 C4267 類型警告。
+- 驗證：
+  - `tests\ftp_response_cap.cpp` 修測試後先紅燈：舊碼回 `Connect result: 0` 並 assertion fail。
+  - 修補後 `_build\tests\ftp_response_cap.exe` 回 `ftp_response_cap_exit=0`，輸出 `Connect result: 38`、`Multiline line count: 10000`。
+  - `_build\tests\sftp_dir_path.exe` 回 `sftp_dir_path_exit=0`。
+  - `_build\tests\encryption_dpapi.exe` 回 `encryption_dpapi_exit=0`，涵蓋 DPAPI 空字串、舊 DES 相容、Master Password 模式，且不再輸出密碼內容。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`56D0A89BFB65D4F75F4B47EC208E322BB18C705CC6D1455EDE4371851927047D`。

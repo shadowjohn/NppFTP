@@ -714,7 +714,10 @@ FTPProfile* FTPProfile::LoadProfile(const TiXmlElement * profileElem) {
 			profile->m_passphrase = SU::strdup("");
 		} else {
 			char * decryptphrase = Encryption::Decrypt(NULL, -1, attrstr, true);
-			profile->m_passphrase = SU::strdup(decryptphrase);
+			if (decryptphrase)
+				profile->m_passphrase = SU::strdup(decryptphrase);
+			else
+				profile->m_passphrase = SU::strdup("");
 			Encryption::FreeData(decryptphrase);
 		}
 
@@ -770,6 +773,10 @@ TiXmlElement* FTPProfile::SaveProfile() const {
 	profileElem->SetAttribute("username", m_username);
 
 	char * encryptPass = Encryption::Encrypt(NULL, -1, m_askPassword?"":m_password, -1);	//when asking for password, do not store the password
+	if (!encryptPass) {
+		delete profileElem;
+		return NULL;
+	}
 	profileElem->SetAttribute("password", encryptPass);
 	Encryption::FreeData(encryptPass);
 
@@ -794,6 +801,10 @@ TiXmlElement* FTPProfile::SaveProfile() const {
 	SU::FreeChar(utf8keyfile);
 
 	char * encryptPhrase = Encryption::Encrypt(NULL, -1, m_askPassphrase?"":m_passphrase, -1);
+	if (!encryptPhrase) {
+		delete profileElem;
+		return NULL;
+	}
 	profileElem->SetAttribute("passphrase", encryptPhrase);
 	Encryption::FreeData(encryptPhrase);
 

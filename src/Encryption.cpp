@@ -19,7 +19,9 @@
 #include "StdInc.h"
 #include "Encryption.h"
 
+#include <limits.h>
 #include <openssl/des.h>
+#include <wincrypt.h>
 
 //The default key is initialzed to this. It is pretty much the same as saving passwords plaintext,
 //though 8 year olds can't read it then
@@ -27,6 +29,86 @@ char * Encryption::_DefaultKey = NULL;
 bool Encryption::_IsDefaultKey = true;
 const char * defaultString = "NppFTP00";	//must be 8 in length
 //const size_t Encryption::KeySize = 8;
+
+static bool StringLengthInt(const char * data, int * size) {
+	if (!data || !size) {
+		return false;
+	}
+
+	size_t length = strlen(data);
+	if (length > INT_MAX) {
+		return false;
+	}
+
+	*size = static_cast<int>(length);
+	return true;
+}
+
+static char* DPAPI_encrypt(const char * data, int size) {
+	if (!data || size < 0) {
+		return NULL;
+	}
+
+	DATA_BLOB data_in;
+	data_in.pbData = (BYTE*)data;
+	data_in.cbData = static_cast<DWORD>(size);
+
+	DATA_BLOB data_out;
+	if (CryptProtectData(&data_in, L"NppFTP Profile Password", NULL, NULL, NULL, 0, &data_out)) {
+		if (data_out.cbData > INT_MAX) {
+			LocalFree(data_out.pbData);
+			return NULL;
+		}
+
+		char * hexData = SU::DataToHex((char*)data_out.pbData, static_cast<int>(data_out.cbData));
+		LocalFree(data_out.pbData);
+		if (hexData) {
+			size_t hex_len = strlen(hexData);
+			char * result = new char[6 + hex_len + 1];
+			strcpy(result, "DPAPI:");
+			strcpy(result + 6, hexData);
+			delete [] hexData;
+			return result;
+		}
+	}
+	return NULL;
+}
+
+static char* DPAPI_decrypt(const char * data, bool addZero) {
+	if (strncmp(data, "DPAPI:", 6) != 0) {
+		return NULL;
+	}
+	const char * hex_start = data + 6;
+	size_t hex_len = strlen(hex_start);
+	if (hex_len > INT_MAX) {
+		return NULL;
+	}
+
+	char * encrdata = SU::HexToData(hex_start, static_cast<int>(hex_len), false);
+	if (!encrdata) {
+		return NULL;
+	}
+
+	DATA_BLOB data_in;
+	data_in.pbData = (BYTE*)encrdata;
+	data_in.cbData = static_cast<DWORD>(hex_len / 2);
+
+	DATA_BLOB data_out;
+	char * decrypted = NULL;
+	if (CryptUnprotectData(&data_in, NULL, NULL, NULL, NULL, 0, &data_out)) {
+		size_t decryptedSize = static_cast<size_t>(data_out.cbData) + (addZero ? 1 : 0);
+		decrypted = new char[decryptedSize];
+		if (decrypted) {
+			memcpy(decrypted, data_out.pbData, static_cast<size_t>(data_out.cbData));
+			if (addZero) {
+				decrypted[data_out.cbData] = 0;
+			}
+		}
+		LocalFree(data_out.pbData);
+	}
+	delete [] encrdata;
+	return decrypted;
+}
 
 int Encryption::Init() {
 	_DefaultKey = new char[KeySize+1];
@@ -42,8 +124,12 @@ int Encryption::Deinit() {
 }
 
 char* Encryption::Encrypt(const char * key, int keysize, const char * data, int size) {
-	if (size == -1)
-		size = strlen(data);
+	if (size == -1 && !StringLengthInt(data, &size))
+		return NULL;
+
+	if (key == NULL && IsDefaultKey()) {
+		return DPAPI_encrypt(data, size);
+	}
 
 	char * encdata = DES_encrypt(key, keysize, data, size, false, DES_ENCRYPT);
 	if (!encdata)
@@ -55,7 +141,21 @@ char* Encryption::Encrypt(const char * key, int keysize, const char * data, int 
 }
 
 char* Encryption::Decrypt(const char * key, int keysize, const char * data, bool addZero) {
-	int size = strlen(data);
+	if (!data)
+		return NULL;
+
+	if (key == NULL && IsDefaultKey() && strncmp(data, "DPAPI:", 6) == 0) {
+		char * dpapiDecrypted = DPAPI_decrypt(data, addZero);
+		if (dpapiDecrypted) {
+			return dpapiDecrypted;
+		}
+		return NULL;
+	}
+
+	int size = 0;
+	if (!StringLengthInt(data, &size))
+		return NULL;
+
 	char * encrdata = SU::HexToData(data, size, false);
 	if (!encrdata)
 		return NULL;
@@ -72,8 +172,9 @@ int Encryption::FreeData(char * data) {
 }
 
 int Encryption::SetDefaultKey(const char * defKey, int size) {
-	if (size == -1)
-		size = strlen(defKey);
+	if (size == -1 && !StringLengthInt(defKey, &size))
+		return -1;
+
 	if (size == 0) {
 		_IsDefaultKey = true;
 		defKey = defaultString;	//cannot allow empty strings
@@ -105,8 +206,11 @@ char* Encryption::DES_encrypt(const char * key, int keysize, const char * data, 
 		memcpy(keybuf, _DefaultKey, KeySize);
 		keysize = KeySize;
 	} else {
-		if (keysize == -1)
-			keysize = strlen(key);	//zero terminator NOT included
+		if (keysize == -1) {
+			// zero terminator NOT included
+			if (!StringLengthInt(key, &keysize))
+				return NULL;
+		}
 		if (keysize > KeySize)
 			keysize = KeySize;
 		memcpy(keybuf, key, keysize);
@@ -114,8 +218,8 @@ char* Encryption::DES_encrypt(const char * key, int keysize, const char * data, 
 			keybuf[i] = 0;
 	}
 
-	if (size == -1)
-		size = strlen(data);
+	if (size == -1 && !StringLengthInt(data, &size))
+		return NULL;
 
 	char * decrypted = new char[size+(addZero?1:0)];
 	if (!decrypted)
