@@ -493,30 +493,30 @@ int FTPWindow::LayoutRemoteBrowser() {
 	GetWindowRect(m_treeview.GetHWND(), &rc);
 	MapWindowPoints(NULL, m_hwnd, (LPPOINT)&rc, 2);
 
-	int x = rc.left + 4;
-	int y = rc.top + 3;
-	int width = rc.right - rc.left - 8;
-	if (width < 120)
-		width = 120;
-	int labelWidth = 82;
-	int rowHeight = 20;
+	int x = rc.left + 5;
+	int y = rc.top + 4;
+	int width = rc.right - rc.left - 10;
+	if (width < 180)
+		width = 180;
+	int labelWidth = 104;
+	int rowHeight = 22;
 	int editHeight = 22;
 	int editWidth = width - labelWidth;
-	if (editWidth < 20)
-		editWidth = 20;
+	if (editWidth < 36)
+		editWidth = 36;
 
 	MoveWindow(m_remoteHostLabel, x, y, width, 16, TRUE);
-	y += 16;
+	y += 17;
 	MoveWindow(m_remotePathLabel, x, y, width, 16, TRUE);
-	y += 20;
+	y += 22;
 	MoveWindow(m_remoteSearchLabel, x, y + 3, labelWidth, 16, TRUE);
 	MoveWindow(m_remoteSearchEdit, x + labelWidth, y, editWidth, editHeight, TRUE);
-	y += rowHeight + 4;
+	y += rowHeight + 5;
 	MoveWindow(m_remoteDirLabel, x, y + 3, labelWidth, 16, TRUE);
 	MoveWindow(m_remoteDirCombo, x + labelWidth, y, editWidth, 160, TRUE);
-	y += rowHeight + 8;
+	y += rowHeight + 7;
 
-	int listHeight = rc.bottom - y - 4;
+	int listHeight = rc.bottom - y - 5;
 	if (listHeight < 20)
 		listHeight = 20;
 	MoveWindow(m_remoteList, x, y, width, listHeight, TRUE);

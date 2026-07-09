@@ -58,8 +58,8 @@
 - [x] Add click feedback for directory/file activation with a temporary busy cursor.
 - [x] Make `Change dir` Enter navigate known directories and open known files.
 - [x] Make unknown `Change dir` paths no-op without visible error.
-- [ ] Align FTP/current path/search/change-dir/list spacing with the PSPad reference screenshots.
-- [ ] Keep labels ASCII in source; track localized labels only as a separate resource/i18n task.
+- [x] Align FTP/current path/search/change-dir/list spacing with the PSPad reference screenshots.
+- [x] Keep labels ASCII in source; track localized labels only as a separate resource/i18n task.
 - [ ] Run manual Notepad++ QA for resize, icons, metadata columns, header drag, double-click, typed dir/file, and unknown path.
 
 ## Not now

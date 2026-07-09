@@ -359,3 +359,11 @@
   - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`E457E516B5455CA9B8BFD69A471E75B316135157D6F671555B32710031C7A31F`。
+
+## 2026-07-09 Align flat browser labels
+
+- 微調 flat remote browser 的 layout 常數：左邊距、label 欄寬、最小寬度、row spacing 與 list 底部留白，讓 FTP line、current path、Quick search、Change dir、list 更接近 PSPad 參考畫面。
+- 本刀刻意維持 source labels 為 ASCII：`FTP:`、`Quick search:`、`Change dir:`、`Name` 等文字未轉中文，避免把 UI spacing 與 source encoding/i18n 混在同一筆。
+- 驗證：
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`3CE1DD97D728532F2E0745075E96DD0D6AC1B2B31E6419776717A3C0523D2680`。
