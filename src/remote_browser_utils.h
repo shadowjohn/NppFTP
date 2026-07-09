@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <shlwapi.h>
 #include <stdio.h>
+#include <string.h>
 #include <tchar.h>
 #include <wctype.h>
 
@@ -76,6 +77,71 @@ static inline void remote_browser_permission_text(const char *mod, TCHAR *buffer
 	for (; mod[i] && i + 1 < bufferCount; i++)
 		buffer[i] = (TCHAR)(unsigned char)mod[i];
 	buffer[i] = 0;
+}
+
+static inline int remote_browser_simplify_typed_path(const char *path, const char *currentDir, char *buffer, size_t bufferCount)
+{
+	if (!path || path[0] == 0 || !buffer || bufferCount < 2)
+		return -1;
+	if (path[0] != '/' && (!currentDir || currentDir[0] != '/'))
+		return -1;
+
+	size_t pathLen = strlen(path);
+	size_t currentLen = (path[0] == '/') ? 0 : strlen(currentDir);
+	size_t combinedLen = pathLen + currentLen + ((path[0] == '/') ? 0 : 1);
+	char *combined = new char[combinedLen + 1];
+	size_t *marks = new size_t[combinedLen + 1];
+
+	if (path[0] == '/') {
+		strcpy(combined, path);
+	} else {
+		strcpy(combined, currentDir);
+		strcat(combined, "/");
+		strcat(combined, path);
+	}
+
+	buffer[0] = '/';
+	buffer[1] = 0;
+	size_t outputLen = 1;
+	size_t markCount = 0;
+	const char *cursor = combined;
+
+	while (*cursor) {
+		while (*cursor == '/')
+			cursor++;
+		const char *segment = cursor;
+		while (*cursor && *cursor != '/')
+			cursor++;
+		size_t segmentLen = cursor - segment;
+		if (segmentLen == 0)
+			continue;
+		if (segmentLen == 1 && segment[0] == '.')
+			continue;
+		if (segmentLen == 2 && segment[0] == '.' && segment[1] == '.') {
+			if (markCount > 0) {
+				outputLen = marks[--markCount];
+				buffer[outputLen] = 0;
+			}
+			continue;
+		}
+
+		size_t separatorLen = (outputLen > 1) ? 1 : 0;
+		if (outputLen + separatorLen + segmentLen >= bufferCount) {
+			delete [] marks;
+			delete [] combined;
+			return -1;
+		}
+		marks[markCount++] = outputLen;
+		if (separatorLen)
+			buffer[outputLen++] = '/';
+		memcpy(buffer + outputLen, segment, segmentLen);
+		outputLen += segmentLen;
+		buffer[outputLen] = 0;
+	}
+
+	delete [] marks;
+	delete [] combined;
+	return 0;
 }
 
 #endif //REMOTE_BROWSER_UTILS_H

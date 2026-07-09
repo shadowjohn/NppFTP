@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <string.h>
 
 int main()
 {
@@ -31,6 +32,15 @@ int main()
 	assert(_tcscmp(text, TEXT("drwxr-xr-x")) == 0);
 	remote_browser_permission_text(NULL, text, 64);
 	assert(_tcscmp(text, TEXT("")) == 0);
+
+	char path[64]{};
+	assert(remote_browser_simplify_typed_path("/abs/path", "/var/www/html", path, 64) == 0);
+	assert(strcmp(path, "/abs/path") == 0);
+	assert(remote_browser_simplify_typed_path("child", "/var/www/html", path, 64) == 0);
+	assert(strcmp(path, "/var/www/html/child") == 0);
+	assert(remote_browser_simplify_typed_path("../sibling", "/var/www/html", path, 64) == 0);
+	assert(strcmp(path, "/var/www/sibling") == 0);
+	assert(remote_browser_simplify_typed_path("/too/long/path", "/", path, 8) == -1);
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

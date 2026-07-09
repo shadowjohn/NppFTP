@@ -348,3 +348,14 @@
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`0E9A2F883BD483CDDA09E4DABD5D3B5E72DD259C524DBDB21D44603A55B562E0`。
   - Win32 cursor 行為尚待 Notepad++ 內手動 QA 確認。
+
+## 2026-07-09 Handle typed flat browser paths
+
+- `Change dir` combo 的 Enter 現在只對已知 cache tree 物件動作：已知 directory 會切換目前資料夾，已知 file 會走 `DownloadFileCache()` 開啟，未知路徑直接 no-op，不 beep、不排 `GetDirectoryHierarchy()`。
+- 下拉選取 recent dir 仍會導航；移除 combo `CBN_KILLFOCUS` 自動導航，避免輸入框失焦時意外開檔。
+- 新增 `remote_browser_simplify_typed_path()`，支援絕對路徑、相對 child、`../sibling`，輸出超過 buffer 時回失敗。
+- 驗證：
+  - 先跑紅燈：`tests\remote_browser_utils.cpp` 因缺少 `remote_browser_simplify_typed_path()` 編譯失敗。
+  - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`E457E516B5455CA9B8BFD69A471E75B316135157D6F671555B32710031C7A31F`。

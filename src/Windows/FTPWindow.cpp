@@ -630,7 +630,7 @@ int FTPWindow::AddRemoteRecentDir(const char * path) {
 }
 
 int FTPWindow::NavigateRemotePathFromCombo() {
-	if (!m_remoteDirCombo)
+	if (!m_remoteDirCombo || !m_ftpSession || !m_ftpSession->IsConnected())
 		return -1;
 
 	TCHAR pathText[MAX_PATH]{};
@@ -639,8 +639,25 @@ int FTPWindow::NavigateRemotePathFromCombo() {
 	if (!path)
 		return -1;
 
-	int res = NavigateRemotePath(path);
+	const char * current = m_remoteCurrentDir ? m_remoteCurrentDir->GetPath() : "/";
+	char target[MAX_PATH]{};
+	int res = remote_browser_simplify_typed_path(path, current, target, MAX_PATH);
 	SU::FreeChar(path);
+	if (res != 0)
+		return -1;
+
+	FileObject * targetObj = m_ftpSession->FindPathObject(target);
+	if (!targetObj)
+		return 0;
+
+	AddRemoteRecentDir(target);
+	if (targetObj->isDir())
+		return SetRemoteCurrentDir(targetObj, true);
+
+	m_remoteBusyCursor = true;
+	res = m_ftpSession->DownloadFileCache(targetObj->GetPath());
+	if (res != 0)
+		m_remoteBusyCursor = false;
 	return res;
 }
 
@@ -873,7 +890,7 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					result = TRUE;
 					break; }
 				case IDC_REMOTE_DIR: {
-					if (HIWORD(wParam) == CBN_SELENDOK || HIWORD(wParam) == CBN_KILLFOCUS)
+					if (HIWORD(wParam) == CBN_SELENDOK)
 						NavigateRemotePathFromCombo();
 					result = TRUE;
 					break; }
