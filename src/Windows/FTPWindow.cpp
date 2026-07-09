@@ -236,6 +236,8 @@ int FTPWindow::OnSize(int newWidth, int newHeight) {
 	m_rebar.Resize(newWidth, toolbarHeight);
 
 	int clientheight = newHeight - toolbarHeight;
+	if (clientheight < 0)
+		clientheight = 0;
 
 	m_splitter.OnSize(0, toolbarHeight, newWidth, clientheight);
 	LayoutRemoteBrowser();
@@ -419,23 +421,29 @@ int FTPWindow::LayoutRemoteBrowser() {
 	int labelWidth = 82;
 	int rowHeight = 20;
 	int editHeight = 22;
+	int editWidth = width - labelWidth;
+	if (editWidth < 20)
+		editWidth = 20;
 
 	MoveWindow(m_remoteHostLabel, x, y, width, 16, TRUE);
 	y += 16;
 	MoveWindow(m_remotePathLabel, x, y, width, 16, TRUE);
 	y += 20;
 	MoveWindow(m_remoteSearchLabel, x, y + 3, labelWidth, 16, TRUE);
-	MoveWindow(m_remoteSearchEdit, x + labelWidth, y, width - labelWidth, editHeight, TRUE);
+	MoveWindow(m_remoteSearchEdit, x + labelWidth, y, editWidth, editHeight, TRUE);
 	y += rowHeight + 4;
 	MoveWindow(m_remoteDirLabel, x, y + 3, labelWidth, 16, TRUE);
-	MoveWindow(m_remoteDirCombo, x + labelWidth, y, width - labelWidth, 160, TRUE);
+	MoveWindow(m_remoteDirCombo, x + labelWidth, y, editWidth, 160, TRUE);
 	y += rowHeight + 8;
 
 	int listHeight = rc.bottom - y - 4;
 	if (listHeight < 20)
 		listHeight = 20;
 	MoveWindow(m_remoteList, x, y, width, listHeight, TRUE);
-	ListView_SetColumnWidth(m_remoteList, 0, width - 4);
+	int columnWidth = width - 4;
+	if (columnWidth < 20)
+		columnWidth = 20;
+	ListView_SetColumnWidth(m_remoteList, 0, columnWidth);
 
 	return 0;
 }
@@ -676,14 +684,18 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			break; }
 		case WM_CAPTURECHANGED: {
 			m_splitter.OnCaptureChanged((HWND)lParam);
+			if (m_remoteBrowserShown)
+				LayoutRemoteBrowser();
 			break; }
 		case WM_LBUTTONDOWN: {
 			m_splitter.OnButtonDown();
 			break; }
 		case WM_LBUTTONUP: {
-			if(m_splitter.OnButtonUp())
+			if(m_splitter.OnButtonUp()) {
 				m_ftpSettings->SetSplitRatio(m_splitter.GetRatio());
-			else if (m_currentDragObject != NULL )	{
+				if (m_remoteBrowserShown)
+					LayoutRemoteBrowser();
+			} else if (m_currentDragObject != NULL )	{
 				// Get destination item.
 				HTREEITEM htiDest = TreeView_GetDropHilight(m_treeview.GetHWND());
 				ImageList_EndDrag();
@@ -706,7 +718,11 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			}
 			break; }
 		case WM_MOUSEMOVE: {
-			if ((wParam & MK_LBUTTON) && m_splitter.OnMouseMove()) break;
+			if ((wParam & MK_LBUTTON) && m_splitter.OnMouseMove()) {
+				if (m_remoteBrowserShown)
+					LayoutRemoteBrowser();
+				break;
+			}
 			if((wParam & MK_LBUTTON) || (wParam & MK_RBUTTON)) {
 
 				HTREEITEM htiTarget;  // Handle to target item.

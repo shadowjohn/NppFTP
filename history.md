@@ -316,3 +316,13 @@
 - 根據 Notepad++ 實測截圖與 PSPad 參考畫面，將下一刀拆成可獨立驗證的 task：resize/layout、icons、metadata columns、header drag/drop、busy cursor、typed path handling、spacing alignment、manual QA。
 - 建立 `docs/superpowers/plans/2026-07-09-remote-browser-polish.md`，並同步更新 `todo.md` 的 `4.1 PSPad-style remote browser polish` 清單。
 - 決策：先保留 source labels 為 ASCII，避免在這刀混入編碼/i18n 變更；若要中文 labels，另開 resource/i18n task。
+
+## 2026-07-09 Fix flat browser resize layout
+
+- 修正 PSPad-style flat remote browser 在 splitter 拖曳、放開、capture 變更後沒有同步重排的問題；每次 `WindowSplitter` 移動隱藏 tree panel 後，flat controls 會補跑 `LayoutRemoteBrowser()`。
+- 補上 dock 高度過小時的 `clientheight` 下限，以及 search/change-dir/list column 的寬度下限，避免縮太小時把負尺寸丟給 `MoveWindow()` 或 list column。
+- 決策：這刀不改 `WindowSplitter` 本體，降低影響舊 tree/queue layout 的風險；先把 flat browser 跟上既有 splitter 結果。
+- 驗證：
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`5FDE4F9E6E84B87724E09F1D848883FD0EEA6F2E0453B5BA0CD9233AD9D843CF`。
+  - Notepad++ 內的 shrink/enlarge/splitter/reconnect 手動 QA 尚未執行，留到完成 polish slice 後一起測。

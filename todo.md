@@ -50,7 +50,7 @@
 
 ## 4.1 PSPad-style remote browser polish
 
-- [ ] Fix remote browser panel resize/layout after dock shrink, dock expand, and splitter movement.
+- [x] Fix remote browser panel resize/layout after dock shrink, dock expand, and splitter movement.
 - [ ] Add folder/file icons to the flat list.
 - [ ] Change list columns to PSPad order: `Name`, `Size`, `Modified`, `Type`, `Permissions`.
 - [ ] Enable header drag/drop so column order can be changed by the user.
