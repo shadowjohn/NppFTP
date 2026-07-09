@@ -373,3 +373,8 @@
 - 更新 `README.md`，補上此 fork 目前維護重點：安全加固、可重現 Windows build、PSPad-style flat remote browser，以及相關文件入口。
 - 決策：README 維持 ASCII 文字，避免在原本簡短英文文件中混入編碼/i18n 變更；詳細中文歷程仍放 `history.md`。
 - 驗證：文件-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
+
+## 2026-07-09 Promote maintenance branch to master
+
+- 將 `codex/nppftp-security-maintenance` 以 fast-forward merge 簽進 `master`，master 從 `8b0e0e1` 更新到 `4cfb9b7`。
+- 合併前驗證：`_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`，且 `.\build.bat` 通過。
