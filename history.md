@@ -384,3 +384,10 @@
 - 將 `snapshot/orin.png` 與 `snapshot/new.png` 納入版本控制，作為 README 的舊版 tree browser 與新版 PSPad-like flat browser 對照圖。
 - `README.md` 改成中文詳細版，補上設計理由、安全維修摘要、build 方式、專案紀錄入口與剩餘手動 QA。
 - 驗證：文件與圖片-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
+
+## 2026-07-09 Add maintained GitHub Actions build
+
+- 在既有 `.github/workflows/CI_build.yml` 加入 `maintained_windows_x64` job，push / pull request / manual dispatch 時會直接執行 `build.bat -Arch x64 -Config Release`。
+- 上傳 `_build\NppFTP-0.30.22-win64.zip` 與 `_build\Release\NppFTP.dll` 為 `NppFTP-maintained-win64` artifact。
+- 決策：先保留既有 upstream Windows/Linux matrix，不在這刀刪平台；新增 job 只覆蓋目前本 fork 實際維護的 Windows x64 Release build path。
+- 驗證：`.\build.bat -CheckOnly` 通過，`CI_build.yml` 可被 Python YAML parser 讀取，`git diff --check` 無 whitespace error。
