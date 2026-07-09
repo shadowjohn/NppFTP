@@ -201,3 +201,16 @@
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`8A142DA59B833D89FA4AB55622F2948D80DBEE71FDF41690380955DFD0476539`。
   - 仍有既有 UTCP header 的 C4819 warnings，沒有 error。
+
+## 2026-07-09 RemoveCRLF unsigned underflow
+
+- 修第六個 security finding：`CUT_StrMethods::RemoveCRLF` 對空字串會用 `size_t` 做 `len - 1`，造成 unsigned underflow 並讀到 buffer 前方。
+- 同檔 `IsWithCRLF` 也有空字串讀 `buf[len-1]` 的同型問題，一併在同一個字串工具邊界補掉。
+- `UTCP/src/utstrlst.cpp` 不是 UTF-8，`apply_patch` 無法讀；本次用 byte-for-byte Latin-1 roundtrip 只替換 ASCII 條件式，避免改檔案編碼。
+- 新增 `tests/remove_crlf.cpp`，用 guard page 讓舊碼空字串 underflow 穩定重現。
+- 驗證：
+  - 修補前 `_build\tests\remove_crlf.exe` 回 `-1073741819` access violation，確認紅燈有效。
+  - 修補後同一測試回 `remove_crlf_exit=0`。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`EEB862AEF1A59522D28EB98BBFEE17195696EAC7B99FC4E72421C3C7BCF8F614`。
+  - 仍有既有 UTCP 編碼 C4819 warnings，沒有 error。

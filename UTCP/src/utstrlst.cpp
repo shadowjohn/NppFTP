@@ -57,7 +57,7 @@ void CUT_StrMethods::RemoveCRLF(LPSTR buf)
     size_t      len, indx = 1;
     if(buf != NULL){
         len = strlen(buf);
-        while((len - indx) >= 0 && indx <= 2) {
+        while(indx <= len && indx <= 2) {
             if(buf[len - indx] == '\r' || buf[len - indx] == '\n')
                 buf[len - indx] = 0;
             ++indx;
@@ -74,7 +74,7 @@ void CUT_StrMethods::RemoveCRLF(LPWSTR buf)
     size_t      len, indx = 1;
     if(buf != NULL){
         len = wcslen(buf);
-        while((len - indx) >= 0 && indx <= 2) {
+        while(indx <= len && indx <= 2) {
             if(buf[len - indx] == _T('\r') || buf[len - indx] == _T('\n'))
                 buf[len - indx] = 0;
             ++indx;
@@ -97,7 +97,7 @@ BOOL CUT_StrMethods::IsWithCRLF(LPCSTR buf)
     if(buf != NULL) {
         // v4.2 changed to size_t
         size_t len = strlen(buf);
-        if(buf[len-1] == '\r' || buf[len-1] == '\n')
+        if(len > 0 && (buf[len-1] == '\r' || buf[len-1] == '\n'))
             retval =  TRUE;
     }
     return retval;
@@ -112,7 +112,7 @@ BOOL CUT_StrMethods::IsWithCRLF(LPCWSTR buf)
     if(buf != NULL) {
         // v4.2 changed to size_t
         size_t len = wcslen(buf);
-        if(buf[len-1] == _T('\r') || buf[len-1] == _T('\n'))
+        if(len > 0 && (buf[len-1] == _T('\r') || buf[len-1] == _T('\n')))
             retval =  TRUE;
     }
     return retval;

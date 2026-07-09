@@ -31,7 +31,7 @@
 - [x] Fix cache path traversal: reject `..`, canonicalize final path, enforce cache-root containment.
 - [x] Fix FTP PASV parsing overflow: parse octets as bounded integers before formatting.
 - [x] Fix FTP PASV endpoint policy: default data connection host to control peer.
-- [ ] Fix `CUT_StrMethods::RemoveCRLF` unsigned underflow.
+- [x] Fix `CUT_StrMethods::RemoveCRLF` unsigned underflow.
 - [ ] Fix SFTP directory listing path composition overflow.
 - [ ] Replace default profile password storage with Windows DPAPI or equivalent.
 - [ ] Pin GitHub Actions by commit SHA and set explicit workflow permissions.
