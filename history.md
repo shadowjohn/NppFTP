@@ -391,3 +391,9 @@
 - 上傳 `_build\NppFTP-0.30.22-win64.zip` 與 `_build\Release\NppFTP.dll` 為 `NppFTP-maintained-win64` artifact。
 - 決策：先保留既有 upstream Windows/Linux matrix，不在這刀刪平台；新增 job 只覆蓋目前本 fork 實際維護的 Windows x64 Release build path。
 - 驗證：`.\build.bat -CheckOnly` 通過，`CI_build.yml` 可被 Python YAML parser 讀取，`git diff --check` 無 whitespace error。
+
+## 2026-07-09 Refresh README screenshots
+
+- 更新 README 圖片對照：`snapshot/pspad.png` 作為 PSPad FTP 參考圖，`snapshot/new_notepad.png` 作為新版 NppFTP 實作畫面。
+- 移除舊的 `snapshot/new.png`，README 現在清楚分成舊版 NppFTP tree、PSPad 參考、新版 NppFTP flat browser 三段。
+- 驗證：文件與圖片-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
