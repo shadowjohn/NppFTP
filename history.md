@@ -181,3 +181,11 @@
   - 先編譯測試時 helper header 不存在，`tests\pasv_response_parse.cpp(1): fatal error C1083`，確認紅燈有效。
   - 補 helper 後，用 MSVC 編譯並執行 `_build\tests\pasv_response_parse.exe`，通過。
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；仍有 UTCP header 的 C4819 warnings，沒有 error。
+
+## 2026-07-09 Git SSH key setup
+
+- `origin` 是 `git@github.com:shadowjohn/NppFTP.git`；一開始一般 SSH push 失敗，錯誤是 `Permission denied (publickey)`。
+- 已先用 GitHub CLI token 把 `codex/nppftp-security-maintenance` 推上 GitHub。
+- 使用者提供的 PuTTY PPK 可用 `plink.exe` 成功通過 GitHub SSH 認證，回應 `Hi shadowjohn!`。
+- 本機 repo 已設定 `.git/config` 的 `core.sshCommand` 走 PuTTY `plink.exe` 與該 PPK；這是 local config，不會進 commit。
+- 驗證：`git ls-remote origin HEAD` 成功回 HEAD hash。
