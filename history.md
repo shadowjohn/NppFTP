@@ -326,3 +326,15 @@
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`5FDE4F9E6E84B87724E09F1D848883FD0EEA6F2E0453B5BA0CD9233AD9D843CF`。
   - Notepad++ 內的 shrink/enlarge/splitter/reconnect 手動 QA 尚未執行，留到完成 polish slice 後一起測。
+
+## 2026-07-09 Add flat browser metadata columns
+
+- 將 flat remote browser 的 list view 改為 PSPad 順序欄位：`Name`、`Size`、`Modified`、`Type`、`Permissions`，並開啟 `LVS_EX_HEADERDRAGDROP` 讓使用者可拖曳欄位順序。
+- 資料列現在會從 `FileObject` 填入 metadata：檔案 size、local modified time、檔案 type、副檔名大寫、permissions/mod string；資料夾 size/type 留空。
+- folder/file icon 重用既有 `TreeImageList`，新增只讀 `GetImageList()` 讓 flat list view 掛同一組 Windows small icons，避免另養 icon 資源。
+- 新增 `remote_browser_format_size()`、`remote_browser_type_text()`、`remote_browser_permission_text()` helper，並補 `tests\remote_browser_utils.cpp` 測試。
+- 驗證：
+  - 先跑紅燈：`tests\remote_browser_utils.cpp` 因缺少 metadata helper 編譯失敗。
+  - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`FD57618A846554272A141B09DE6F9E9E630D04954571CAA2C2CD4BB2882235D8`。

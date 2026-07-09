@@ -77,6 +77,7 @@ public:
 	virtual int				SetTreeview(Treeview * tree);
 
 	virtual int				SetFancyIcon(bool useFancy);
+	virtual HIMAGELIST		GetImageList();
 
 	virtual int				GetIconIndex(const FileObject* fo, bool isSelected);
 protected:

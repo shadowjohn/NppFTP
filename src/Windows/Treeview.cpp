@@ -582,6 +582,10 @@ int TreeImageList::SetFancyIcon(bool useFancy) {
 	return 0;
 }
 
+HIMAGELIST TreeImageList::GetImageList() {
+	return m_hImageListTreeviewCurrent;
+}
+
 int TreeImageList::GetIconIndex(const FileObject* fo, bool isSelected) {
 	int index= -1;
 

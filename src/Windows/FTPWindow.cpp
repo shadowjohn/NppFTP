@@ -38,15 +38,96 @@ enum {
 	IDC_REMOTE_DIR = 13002
 };
 
-static int InsertRemoteListObject(HWND list, FileObject * fo, const TCHAR * text)
+enum {
+	REMOTE_COLUMN_NAME = 0,
+	REMOTE_COLUMN_SIZE,
+	REMOTE_COLUMN_MODIFIED,
+	REMOTE_COLUMN_TYPE,
+	REMOTE_COLUMN_PERMISSIONS
+};
+
+static void InsertRemoteListColumn(HWND list, int index, const TCHAR * text, int width)
+{
+	LVCOLUMN lvc{};
+	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
+	lvc.fmt = LVCFMT_LEFT;
+	lvc.cx = width;
+	lvc.pszText = (TCHAR*)text;
+	ListView_InsertColumn(list, index, &lvc);
+}
+
+static void ResizeRemoteListColumns(HWND list, int width)
+{
+	int sizeWidth = 70;
+	int modifiedWidth = 130;
+	int typeWidth = 60;
+	int permissionsWidth = 95;
+	int nameWidth = width - sizeWidth - modifiedWidth - typeWidth - permissionsWidth - 4;
+	if (nameWidth < 120)
+		nameWidth = 120;
+
+	ListView_SetColumnWidth(list, REMOTE_COLUMN_NAME, nameWidth);
+	ListView_SetColumnWidth(list, REMOTE_COLUMN_SIZE, sizeWidth);
+	ListView_SetColumnWidth(list, REMOTE_COLUMN_MODIFIED, modifiedWidth);
+	ListView_SetColumnWidth(list, REMOTE_COLUMN_TYPE, typeWidth);
+	ListView_SetColumnWidth(list, REMOTE_COLUMN_PERMISSIONS, permissionsWidth);
+}
+
+static void FormatRemoteModifiedTime(FILETIME modified, TCHAR * buffer, size_t bufferCount)
+{
+	remote_browser_clear_text(buffer, bufferCount);
+	if (!buffer || bufferCount == 0)
+		return;
+
+	SYSTEMTIME utc{};
+	SYSTEMTIME local{};
+	if (!FileTimeToSystemTime(&modified, &utc))
+		return;
+	if (!SystemTimeToTzSpecificLocalTime(NULL, &utc, &local))
+		local = utc;
+
+	TCHAR dateText[32]{};
+	TCHAR timeText[32]{};
+	if (!GetDateFormat(LOCALE_USER_DEFAULT, DATE_SHORTDATE, &local, NULL, dateText, 32))
+		return;
+	if (!GetTimeFormat(LOCALE_USER_DEFAULT, 0, &local, NULL, timeText, 32))
+		return;
+
+#ifdef _MSC_VER
+	_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%s %s"), dateText, timeText);
+#else
+	_sntprintf(buffer, bufferCount, TEXT("%s %s"), dateText, timeText);
+	buffer[bufferCount - 1] = 0;
+#endif
+}
+
+static int InsertRemoteListObject(HWND list, TreeImageList * imageList, FileObject * fo, const TCHAR * text, bool showDetails)
 {
 	LVITEM lvi{};
-	lvi.mask = LVIF_TEXT | LVIF_PARAM;
+	lvi.mask = LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE;
 	lvi.iItem = ListView_GetItemCount(list);
 	lvi.iSubItem = 0;
 	lvi.lParam = (LPARAM)fo;
 	lvi.pszText = (TCHAR*)text;
-	return ListView_InsertItem(list, &lvi);
+	lvi.iImage = imageList ? imageList->GetIconIndex(fo, false) : 0;
+	int item = ListView_InsertItem(list, &lvi);
+	if (item == -1 || !showDetails || !fo)
+		return item;
+
+	TCHAR sizeText[32]{};
+	TCHAR modifiedText[64]{};
+	TCHAR typeText[32]{};
+	TCHAR permissionsText[32]{};
+	remote_browser_format_size(fo->isDir(), fo->GetSize(), sizeText, 32);
+	FormatRemoteModifiedTime(fo->GetMTime(), modifiedText, 64);
+	remote_browser_type_text(fo->isDir(), fo->isLink(), fo->GetLocalName(), typeText, 32);
+	remote_browser_permission_text(fo->GetMod(), permissionsText, 32);
+
+	ListView_SetItemText(list, item, REMOTE_COLUMN_SIZE, sizeText);
+	ListView_SetItemText(list, item, REMOTE_COLUMN_MODIFIED, modifiedText);
+	ListView_SetItemText(list, item, REMOTE_COLUMN_TYPE, typeText);
+	ListView_SetItemText(list, item, REMOTE_COLUMN_PERMISSIONS, permissionsText);
+	return item;
 }
 
 FTPWindow::FTPWindow() :
@@ -141,6 +222,7 @@ int FTPWindow::Create(HWND hParent, HWND hNpp, int MenuID, int MenuCommand) {
 
 	m_treeimagelist.SetTreeview(&m_treeview);
 	m_treeimagelist.SetFancyIcon(true);
+	ListView_SetImageList(m_remoteList, m_treeimagelist.GetImageList(), LVSIL_SMALL);
 	m_toolbar.AddToRebar(&m_rebar);
 
 	CreateMenus();
@@ -373,15 +455,12 @@ int FTPWindow::CreateRemoteBrowser() {
 	SetWindowLongPtr(m_remoteDirCombo, GWLP_USERDATA, (LONG_PTR)this);
 	m_remoteDirComboProc = (WNDPROC)SetWindowLongPtr(m_remoteDirCombo, GWLP_WNDPROC, (LONG_PTR)FTPWindow::RemoteDirComboProc);
 
-	ListView_SetExtendedListViewStyle(m_remoteList, LVS_EX_FULLROWSELECT);
-
-	LVCOLUMN lvc{};
-	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
-	lvc.fmt = LVCFMT_LEFT;
-	lvc.cx = 250;
-	TCHAR name[] = TEXT("Name");
-	lvc.pszText = name;
-	ListView_InsertColumn(m_remoteList, 0, &lvc);
+	ListView_SetExtendedListViewStyle(m_remoteList, LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_NAME, TEXT("Name"), 160);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_SIZE, TEXT("Size"), 70);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_MODIFIED, TEXT("Modified"), 130);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_TYPE, TEXT("Type"), 60);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_PERMISSIONS, TEXT("Permissions"), 95);
 
 	return 0;
 }
@@ -440,10 +519,7 @@ int FTPWindow::LayoutRemoteBrowser() {
 	if (listHeight < 20)
 		listHeight = 20;
 	MoveWindow(m_remoteList, x, y, width, listHeight, TRUE);
-	int columnWidth = width - 4;
-	if (columnWidth < 20)
-		columnWidth = 20;
-	ListView_SetColumnWidth(m_remoteList, 0, columnWidth);
+	ResizeRemoteListColumns(m_remoteList, width);
 
 	return 0;
 }
@@ -494,13 +570,13 @@ int FTPWindow::FillRemoteList() {
 
 	FileObject * parent = m_remoteCurrentDir->GetParent();
 	if (parent)
-		InsertRemoteListObject(m_remoteList, parent, TEXT(".."));
+		InsertRemoteListObject(m_remoteList, &m_treeimagelist, parent, TEXT(".."), false);
 
 	int count = m_remoteCurrentDir->GetChildCount();
 	for (int i = 0; i < count; i++) {
 		FileObject * child = m_remoteCurrentDir->GetChild(i);
 		if (remote_browser_matches_filter(child->GetLocalName(), filter))
-			InsertRemoteListObject(m_remoteList, child, child->GetLocalName());
+			InsertRemoteListObject(m_remoteList, &m_treeimagelist, child, child->GetLocalName(), true);
 	}
 
 	return 0;
