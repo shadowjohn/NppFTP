@@ -48,6 +48,20 @@
 - [x] Wire double-click folder navigation and file open/download.
 - [ ] Persist only a small recent-directory list per profile.
 
+## 4.1 PSPad-style remote browser polish
+
+- [ ] Fix remote browser panel resize/layout after dock shrink, dock expand, and splitter movement.
+- [ ] Add folder/file icons to the flat list.
+- [ ] Change list columns to PSPad order: `Name`, `Size`, `Modified`, `Type`, `Permissions`.
+- [ ] Enable header drag/drop so column order can be changed by the user.
+- [ ] Populate size, modified date, type, and permissions from `FileObject` metadata.
+- [ ] Add click feedback for directory/file activation with a temporary busy cursor.
+- [ ] Make `Change dir` Enter navigate known directories and open known files.
+- [ ] Make unknown `Change dir` paths no-op without visible error.
+- [ ] Align FTP/current path/search/change-dir/list spacing with the PSPad reference screenshots.
+- [ ] Keep labels ASCII in source; track localized labels only as a separate resource/i18n task.
+- [ ] Run manual Notepad++ QA for resize, icons, metadata columns, header drag, double-click, typed dir/file, and unknown path.
+
 ## Not now
 
 - [ ] Do not rewrite the whole FTP window before the flat browser works.

@@ -310,3 +310,9 @@
   - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`7D268F7846E479A8A11C7C9E05A2DF3E1C800ED97A9DE82CE48279846434F996`。
+
+## 2026-07-09 Open tasks for flat remote browser polish
+
+- 根據 Notepad++ 實測截圖與 PSPad 參考畫面，將下一刀拆成可獨立驗證的 task：resize/layout、icons、metadata columns、header drag/drop、busy cursor、typed path handling、spacing alignment、manual QA。
+- 建立 `docs/superpowers/plans/2026-07-09-remote-browser-polish.md`，並同步更新 `todo.md` 的 `4.1 PSPad-style remote browser polish` 清單。
+- 決策：先保留 source labels 為 ASCII，避免在這刀混入編碼/i18n 變更；若要中文 labels，另開 resource/i18n task。
