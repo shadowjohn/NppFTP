@@ -40,12 +40,12 @@
 
 ## 4. PSPad-style remote browser
 
-- [ ] Keep the old tree code until the new current-directory view is usable.
-- [ ] Add a current path display.
-- [ ] Add a quick search box for filtering the current directory list.
-- [ ] Add a change-directory combo box with recent paths and manual entry.
-- [ ] Show the current directory as a flat list: `..`, folders, files.
-- [ ] Wire double-click folder navigation and file open/download.
+- [x] Keep the old tree code until the new current-directory view is usable.
+- [x] Add a current path display.
+- [x] Add a quick search box for filtering the current directory list.
+- [x] Add a change-directory combo box with recent paths and manual entry.
+- [x] Show the current directory as a flat list: `..`, folders, files.
+- [x] Wire double-click folder navigation and file open/download.
 - [ ] Persist only a small recent-directory list per profile.
 
 ## Not now

@@ -292,3 +292,21 @@
   - `_build\tests\encryption_dpapi.exe` 回 `encryption_dpapi_exit=0`，涵蓋 DPAPI 空字串、舊 DES 相容、Master Password 模式，且不再輸出密碼內容。
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`56D0A89BFB65D4F75F4B47EC208E322BB18C705CC6D1455EDE4371851927047D`。
+
+## 2026-07-09 PSPad-style flat remote browser first slice
+
+- 依照 `snapshot/new.png` 的方向做第一版 current-directory browser：連線後隱藏原本樹狀視圖，改顯示目前 FTP host、目前路徑、quick search、change-dir combo，以及單層 list view。
+- 保留舊 tree code 與 `FileObject` 資料流：profiles tree 斷線時照舊使用；連線時 tree 仍在背景接收 `OnDirectoryRefresh`，flat list 只顯示目前目錄 children，避免重接 FTP/SFTP queue。
+- 新 flat list 行為：
+  - 顯示 `..`、folders、files。
+  - quick search 使用 case-insensitive substring filter。
+  - change-dir combo 可手動輸入路徑並按 Enter；也會記住最近 8 筆本次執行期目錄。
+  - double-click folder 進入該目錄；double-click file 沿用 `DownloadFileCache()` 下載後開檔。
+  - toolbar 的 Open Directory 也改走同一條 `NavigateRemotePath()`，讓 flat view 能同步跳轉。
+- 本次刻意不做：recent dirs 寫入 profile/settings、list context menu、drag/drop、folder/file icon。先讓單層瀏覽穩定可用。
+- 新增 `src/remote_browser_utils.h` 與 `tests/remote_browser_utils.cpp`，只測 quick search filter 行為。
+- 驗證：
+  - 先跑紅燈：`tests\remote_browser_utils.cpp` 因缺少 `src/remote_browser_utils.h` 編譯失敗。
+  - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`7D268F7846E479A8A11C7C9E05A2DF3E1C800ED97A9DE82CE48279846434F996`。

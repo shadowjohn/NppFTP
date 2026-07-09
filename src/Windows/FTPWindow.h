@@ -104,6 +104,21 @@ protected:
 
 	virtual int				Copy(FileObject* fo, FileObject* _newParent);
 	virtual int				VScrollTreeView(LONG pos);
+	virtual int				CreateRemoteBrowser();
+	virtual int				DestroyRemoteBrowser();
+	virtual int				LayoutRemoteBrowser();
+	virtual int				ShowRemoteBrowser(bool show);
+	virtual int				SetRemoteCurrentDir(FileObject * dir, bool refresh);
+	virtual int				FillRemoteList();
+	virtual int				UpdateRemotePathControls();
+	virtual int				AddRemoteRecentDir(const char * path);
+	virtual int				NavigateRemotePathFromCombo();
+	virtual int				NavigateRemotePath(const char * path);
+	virtual int				ActivateRemoteListSelection();
+	virtual FileObject*		GetRemoteListSelection();
+	virtual int				OnRemoteListSelectionChanged();
+
+	static LRESULT CALLBACK	RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	//virtual int				UploadOtherFile(FileObject * parent);
 
@@ -118,11 +133,23 @@ protected:
 
 	OutputWindow			m_outputWindow;
 	bool					m_outputShown;
+	bool					m_remoteBrowserShown;
 
 	HBRUSH					m_backgroundBrush;
 
 	FileObject*				m_currentSelection;
+	FileObject*				m_remoteCurrentDir;
 	bool					m_localFileExists;
+
+	HWND					m_remoteHostLabel;
+	HWND					m_remotePathLabel;
+	HWND					m_remoteSearchLabel;
+	HWND					m_remoteSearchEdit;
+	HWND					m_remoteDirLabel;
+	HWND					m_remoteDirCombo;
+	HWND					m_remoteList;
+	WNDPROC					m_remoteDirComboProc;
+	char					m_remotePendingPath[MAX_PATH];
 
 	HMENU					m_popupProfile;
 	HMENU					m_popupSettings;
