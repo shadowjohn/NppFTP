@@ -367,3 +367,9 @@
 - 驗證：
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`3CE1DD97D728532F2E0745075E96DD0D6AC1B2B31E6419776717A3C0523D2680`。
+
+## 2026-07-09 Update README maintenance notes
+
+- 更新 `README.md`，補上此 fork 目前維護重點：安全加固、可重現 Windows build、PSPad-style flat remote browser，以及相關文件入口。
+- 決策：README 維持 ASCII 文字，避免在原本簡短英文文件中混入編碼/i18n 變更；詳細中文歷程仍放 `history.md`。
+- 驗證：文件-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
