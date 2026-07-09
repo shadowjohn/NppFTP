@@ -46,7 +46,7 @@ NppFTP::~NppFTP() {
 		//delete m_profiles[i];
 	}
 
-	SSLCertificates::FreeX509Vector(m_certificates);
+	SSLCertificates::FreeScopedX509Vector(m_certificates);
 
 	if (m_configStore)
 		delete [] m_configStore;
@@ -253,17 +253,16 @@ int NppFTP::LoadSettings() {
 
 	ftpElem = certificatesDoc.FirstChildElement("NppFTP");
 	if (!ftpElem) {
-		m_certificates.clear();
+		SSLCertificates::FreeScopedX509Vector(m_certificates);
 		result = 1;
 	} else {
 		TiXmlElement * dersElem = ftpElem->FirstChildElement(SSLCertificates::DERsElem);
 		if (!dersElem) {
-			m_certificates.clear();
+			SSLCertificates::FreeScopedX509Vector(m_certificates);
 			result = 1;
 		} else {
-			vDER derVect = SSLCertificates::LoadDER(dersElem);
-			m_certificates = SSLCertificates::ConvertDERVector(derVect);
-			SSLCertificates::FreeDERVector(derVect);
+			SSLCertificates::FreeScopedX509Vector(m_certificates);
+			m_certificates = SSLCertificates::LoadScopedX509(dersElem);
 		}
 	}
 
@@ -300,9 +299,7 @@ int NppFTP::SaveSettings() {
 	ftpElem = new TiXmlElement("NppFTP");
 	certificatesDoc->LinkEndChild(ftpElem);
 
-	vDER derVect = SSLCertificates::ConvertX509Vector(m_certificates);
-	TiXmlElement * dersElem = SSLCertificates::SaveDER(derVect);
-	SSLCertificates::FreeDERVector(derVect);
+	TiXmlElement * dersElem = SSLCertificates::SaveScopedX509(m_certificates);
 	ftpElem->LinkEndChild(dersElem);
 
 	settingsDoc->SaveFile();

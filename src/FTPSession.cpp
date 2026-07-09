@@ -83,7 +83,7 @@ int FTPSession::Deinit() {
 	return 0;
 }
 
-int FTPSession::SetCertificates(vX509 * x509Vect) {
+int FTPSession::SetCertificates(vScopedX509 * x509Vect) {
 	m_certificates = x509Vect;
 	return 0;
 }

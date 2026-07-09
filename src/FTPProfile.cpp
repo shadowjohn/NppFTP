@@ -219,6 +219,7 @@ FTPClientWrapper* FTPProfile::CreateWrapper() {
 			else if (m_securityMode == Mode_FTPES)
 				SSLwrapper->SetMode(CUT_FTPClient::FTPES);
 
+			SSLwrapper->SetCertificateScope(m_name, m_parent);
 			SSLwrapper->SetConnectionMode(m_connectionMode);
 			SSLwrapper->SetPortRange(m_dataPortMin, m_dataPortMax);
 			SSLwrapper->SetListParams(m_ftpListParams);

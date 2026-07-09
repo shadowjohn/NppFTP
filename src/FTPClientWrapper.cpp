@@ -58,7 +58,7 @@ int FTPClientWrapper::SetProgressMonitor(ProgressMonitor * progmon) {
 	return 0;
 }
 
-int FTPClientWrapper::SetCertificates(vX509 * x509Vect) {
+int FTPClientWrapper::SetCertificates(vScopedX509 * x509Vect) {
 	m_certificates = x509Vect;
 	return 0;
 }

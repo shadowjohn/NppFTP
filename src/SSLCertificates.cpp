@@ -21,6 +21,21 @@
 
 const char * SSLCertificates::DERsElem = "Certificates";
 
+static char * DupScopeValue(const char * value) {
+	return SU::strdup(value ? value : "");
+}
+
+static FTPSCertificateScope ScopeFromScopedX509(const ScopedX509 & scoped) {
+	FTPSCertificateScope scope = {
+		scoped.profileName,
+		scoped.profileParent,
+		scoped.hostname,
+		scoped.port,
+		scoped.securityMode
+	};
+	return scope;
+}
+
 TiXmlElement* SSLCertificates::SaveDER(const vDER & derVect) {
 	TiXmlElement * dersElem = new TiXmlElement(DERsElem);
 	for(size_t i = 0; i < derVect.size(); i++) {
@@ -55,6 +70,79 @@ vDER SSLCertificates::LoadDER(const TiXmlElement * dersElem) {
 	}
 
 	return ders;
+}
+
+TiXmlElement* SSLCertificates::SaveScopedX509(const vScopedX509 & x509Vect) {
+	TiXmlElement * dersElem = new TiXmlElement(DERsElem);
+	for(size_t i = 0; i < x509Vect.size(); i++) {
+		const ScopedX509 & scoped = x509Vect[i];
+		FTPSCertificateScope scope = ScopeFromScopedX509(scoped);
+		if (!scoped.certificate || !FTPSCertificateScopeIsComplete(scope))
+			continue;
+
+		DER der = ConvertX509(scoped.certificate);
+		if (der.len <= 0) {
+			FreeDER(der);
+			continue;
+		}
+
+		TiXmlElement * derElem = new TiXmlElement("Certificate");
+		char * derString = GetDERString(der);
+		derElem->SetAttribute("DER", derString);
+		derElem->SetAttribute("profileName", scoped.profileName);
+		derElem->SetAttribute("profileParent", scoped.profileParent);
+		derElem->SetAttribute("hostname", scoped.hostname);
+		derElem->SetAttribute("port", scoped.port);
+		derElem->SetAttribute("securityMode", scoped.securityMode);
+		FreeDERString(derString);
+		FreeDER(der);
+		dersElem->LinkEndChild(derElem);
+	}
+
+	return dersElem;
+}
+
+vScopedX509 SSLCertificates::LoadScopedX509(const TiXmlElement * dersElem) {
+	vScopedX509 x509Vect;
+
+	if (!dersElem)
+		return x509Vect;
+
+	if ( strcmp(DERsElem, dersElem->Value()) )
+		return x509Vect;
+
+	const TiXmlElement* child = dersElem->FirstChildElement("Certificate");
+
+	for( ; child; child = child->NextSiblingElement("Certificate") )
+	{
+		const char * derString = child->Attribute("DER");
+		const char * profileName = child->Attribute("profileName");
+		const char * profileParent = child->Attribute("profileParent");
+		const char * hostname = child->Attribute("hostname");
+		int port = 0;
+		int securityMode = 0;
+
+		if (!derString || !profileName || !profileParent || !hostname)
+			continue;
+		if (child->QueryIntAttribute("port", &port) != TIXML_SUCCESS)
+			continue;
+		if (child->QueryIntAttribute("securityMode", &securityMode) != TIXML_SUCCESS)
+			continue;
+
+		FTPSCertificateScope scope = {profileName, profileParent, hostname, port, securityMode};
+		if (!FTPSCertificateScopeIsComplete(scope))
+			continue;
+
+		DER der = GetDER(derString);
+		X509 * x509 = ConvertDER(der);
+		FreeDER(der);
+		if (!x509)
+			continue;
+
+		x509Vect.push_back(MakeScopedX509(x509, scope));
+	}
+
+	return x509Vect;
 }
 
 vX509 SSLCertificates::ConvertDERVector(const vDER & derVect) {
@@ -107,6 +195,33 @@ DER SSLCertificates::ConvertX509(const X509 * x509) {
 	return der;
 }
 
+ScopedX509 SSLCertificates::MakeScopedX509(const X509 * x509, const FTPSCertificateScope & scope) {
+	ScopedX509 scoped{};
+	scoped.certificate = (X509*)x509;
+	scoped.profileName = DupScopeValue(scope.profileName);
+	scoped.profileParent = DupScopeValue(scope.profileParent);
+	scoped.hostname = DupScopeValue(scope.hostname);
+	scoped.port = scope.port;
+	scoped.securityMode = scope.securityMode;
+	return scoped;
+}
+
+bool SSLCertificates::MatchesScopedX509(const ScopedX509 & scoped, const X509 * x509, const FTPSCertificateScope & scope) {
+	if (!scoped.certificate || !x509)
+		return false;
+
+	return X509_cmp(scoped.certificate, (X509*)x509) == 0 &&
+		FTPSCertificateScopeMatches(ScopeFromScopedX509(scoped), scope);
+}
+
+bool SSLCertificates::ContainsScopedX509(const vScopedX509 & x509Vect, const X509 * x509, const FTPSCertificateScope & scope) {
+	for(size_t i = 0; i < x509Vect.size(); i++) {
+		if (MatchesScopedX509(x509Vect[i], x509, scope))
+			return true;
+	}
+	return false;
+}
+
 int SSLCertificates::FreeDERVector(vDER & derVect) {
 	for(size_t i = 0; i < derVect.size(); i++) {
 		FreeDER(derVect[i]);
@@ -125,6 +240,15 @@ int SSLCertificates::FreeX509Vector(vX509 & x509Vect) {
 	return 0;
 }
 
+int SSLCertificates::FreeScopedX509Vector(vScopedX509 & x509Vect) {
+	for(size_t i = 0; i < x509Vect.size(); i++) {
+		FreeScopedX509(x509Vect[i]);
+	}
+	x509Vect.clear();
+
+	return 0;
+}
+
 int SSLCertificates::FreeDER(DER & der) {
 	//delete [] der;
 	OPENSSL_free(der.data);
@@ -133,6 +257,28 @@ int SSLCertificates::FreeDER(DER & der) {
 
 int SSLCertificates::FreeX509(X509 * x509) {
 	X509_free(x509);
+	return 0;
+}
+
+int SSLCertificates::FreeScopedX509(ScopedX509 & x509) {
+	if (x509.certificate) {
+		X509_free(x509.certificate);
+		x509.certificate = NULL;
+	}
+	if (x509.profileName) {
+		SU::free(x509.profileName);
+		x509.profileName = NULL;
+	}
+	if (x509.profileParent) {
+		SU::free(x509.profileParent);
+		x509.profileParent = NULL;
+	}
+	if (x509.hostname) {
+		SU::free(x509.hostname);
+		x509.hostname = NULL;
+	}
+	x509.port = 0;
+	x509.securityMode = 0;
 	return 0;
 }
 

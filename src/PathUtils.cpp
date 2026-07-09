@@ -22,6 +22,36 @@
 #include <shlobj.h>
 #include <commdlg.h>
 
+static bool ExternalPathHasParentSegment(const char * path) {
+	if (!path)
+		return true;
+
+	const char * part = path;
+	while (*part) {
+		while (*part == '/')
+			part++;
+
+		const char * end = part;
+		while (*end && *end != '/')
+			end++;
+
+		if ((end - part) == 2 && part[0] == '.' && part[1] == '.')
+			return true;
+
+		part = end;
+	}
+
+	return false;
+}
+
+static bool LocalPathIsInsideRoot(const TCHAR * root, const TCHAR * path) {
+	int rootLen = lstrlen(root);
+	if (_tcsnicmp(root, path, rootLen) != 0)
+		return false;
+
+	return path[rootLen] == 0 || path[rootLen] == TEXT('\\');
+}
+
 int PU::LocalToExternalPath(const TCHAR * local, char * external, int externalsize) {
 	if (!local || !external || externalsize == 0)
 		return -1;
@@ -163,14 +193,35 @@ int PU::ConcatLocalToExternal(const char * external, const TCHAR * _local, char 
 }
 
 int PU::ConcatExternalToLocal(const TCHAR * local, const char * _external, TCHAR * localbuf, int localsize) {
+	if (ExternalPathHasParentSegment(_external))
+		return -1;
+
+	TCHAR root[MAX_PATH];
+	if (!PathCanonicalize(root, local))
+		return -1;
+	PathRemoveBackslash(root);
+
 	TCHAR external[MAX_PATH];
 	int res = PU::ExternalToLocalPath(_external, external, MAX_PATH);
 	if (res == -1)
 		return -1;
 
-	res = PU::ConcatLocal(local, external, localbuf, localsize);
+	TCHAR combined[MAX_PATH];
+	res = PU::ConcatLocal(root, external, combined, MAX_PATH);
 	if (res == -1)
 		return -1;
+
+	TCHAR canonical[MAX_PATH];
+	if (!PathCanonicalize(canonical, combined))
+		return -1;
+	PathRemoveBackslash(canonical);
+
+	if (!LocalPathIsInsideRoot(root, canonical))
+		return -1;
+
+	if (lstrlen(canonical) >= localsize)
+		return -1;
+	lstrcpy(localbuf, canonical);
 
 	return 0;
 }

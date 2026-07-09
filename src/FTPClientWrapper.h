@@ -48,8 +48,10 @@ public:
 	virtual	int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetAborted(BOOL aborted);
 	virtual int				SetCurrentTotal(long total);
+	virtual int				SetExpectedHostname(const char * hostname);
+	virtual int				SetCertificateScope(const char * profileName, const char * profileParent, const char * hostname, int port, int securityMode);
 
-	virtual int				SetCertificates(vX509 * x509Vect);
+	virtual int				SetCertificates(vScopedX509 * x509Vect);
 
 	virtual DWORD			LastAction();
 
@@ -70,7 +72,12 @@ protected:
 	BOOL					m_isAborted;
 	ProgressMonitor*		m_progmon;
 	long					m_currentTotal;	//kinda hacky
-	vX509*					m_certificates;
+	vScopedX509*			m_certificates;
+	char*					m_profileName;
+	char*					m_profileParent;
+	char*					m_hostname;
+	int						m_port;
+	int						m_securityMode;
 
 	DWORD					m_lastAction;
 };
@@ -90,7 +97,7 @@ public:
 
 	virtual int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetTimeout(int timeout);
-	virtual int				SetCertificates(vX509 * x509Vect);
+	virtual int				SetCertificates(vScopedX509 * x509Vect);
 
 	virtual int				Connect() = 0;
 	virtual int				Disconnect() = 0;
@@ -139,7 +146,7 @@ protected:
 
 	int						m_timeout;
 	ProgressMonitor*		m_progmon;
-	vX509*					m_certificates;
+	vScopedX509*			m_certificates;
 };
 
 // =================================================================================================
@@ -220,7 +227,9 @@ public:
 
 	virtual int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetTimeout(int timeout);
-	virtual int				SetCertificates(vX509 * x509Vect);
+	virtual int				SetCertificates(vScopedX509 * x509Vect);
+	virtual int				SetCertificateScope(const TCHAR * profileName, const TCHAR * profileParent);
+	virtual int				SetCertificateScopeUtf8(const char * profileName, const char * profileParent);
 
 	virtual int				Connect();
 	virtual int				Disconnect();
@@ -264,6 +273,8 @@ protected:
 	FtpSSLWrapper			m_client;
 	CUT_FTPClient::FTPSMode	m_mode;
 	char*					m_ftpListParams;
+	char*					m_profileName;
+	char*					m_profileParent;
 
 	FILETIME				ConvertFiletime(int day, int month, int year, int hour, int minute);
 };

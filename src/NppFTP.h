@@ -61,7 +61,7 @@ private:
 
 	NppData					m_nppData;
 
-	vX509					m_certificates;
+	vScopedX509				m_certificates;
 };
 
 #endif //NPPFTP_H

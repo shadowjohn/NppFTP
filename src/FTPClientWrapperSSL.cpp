@@ -19,6 +19,7 @@
 #include "StdInc.h"
 #include "FTPClientWrapper.h"
 
+#include "FTPSHostnameVerifier.h"
 #include "SSLCertificates.h"
 #include "MessageDialog.h"
 #include <algorithm>
@@ -26,9 +27,12 @@
 FTPClientWrapperSSL::FTPClientWrapperSSL(const char * host, int port, const char * user, const char * password) :
 	FTPClientWrapper(Client_SSL, host, port, user, password),
 	m_mode(CUT_FTPClient::FTP),
-	m_ftpListParams(NULL)
+	m_ftpListParams(NULL),
+	m_profileName(NULL),
+	m_profileParent(NULL)
 {
 	m_client.setsMode(m_mode);
+	SetCertificateScopeUtf8("", "");
 }
 
 FTPClientWrapperSSL::~FTPClientWrapperSSL()
@@ -37,11 +41,20 @@ FTPClientWrapperSSL::~FTPClientWrapperSSL()
 		SU::free(m_ftpListParams);
 		m_ftpListParams = NULL;
 	}
+	if (m_profileName) {
+		SU::free(m_profileName);
+		m_profileName = NULL;
+	}
+	if (m_profileParent) {
+		SU::free(m_profileParent);
+		m_profileParent = NULL;
+	}
 }
 
 FTPClientWrapper* FTPClientWrapperSSL::Clone() {
 	FTPClientWrapperSSL* wrapper = new FTPClientWrapperSSL(m_hostname, m_port, m_username, m_password);
 	wrapper->SetMode(m_mode);
+	wrapper->SetCertificateScopeUtf8(m_profileName, m_profileParent);
 	if (m_ftpListParams)
 		wrapper->m_ftpListParams = SU::strdup(m_ftpListParams);
 	wrapper->SetTimeout(m_timeout);
@@ -60,10 +73,35 @@ int FTPClientWrapperSSL::SetProgressMonitor(ProgressMonitor * progmon) {
 	return ret;
 }
 
-int FTPClientWrapperSSL::SetCertificates(vX509 * x509Vect) {
+int FTPClientWrapperSSL::SetCertificates(vScopedX509 * x509Vect) {
 	int ret = FTPClientWrapper::SetCertificates(x509Vect);
 	ret = m_client.SetCertificates(x509Vect);
 	return ret;
+}
+
+int FTPClientWrapperSSL::SetCertificateScope(const TCHAR * profileName, const TCHAR * profileParent) {
+	char * utf8Name = SU::TCharToUtf8(profileName ? profileName : TEXT(""));
+	char * utf8Parent = SU::TCharToUtf8(profileParent ? profileParent : TEXT(""));
+
+	int ret = SetCertificateScopeUtf8(utf8Name, utf8Parent);
+
+	SU::FreeChar(utf8Name);
+	SU::FreeChar(utf8Parent);
+	return ret;
+}
+
+int FTPClientWrapperSSL::SetCertificateScopeUtf8(const char * profileName, const char * profileParent) {
+	char * newProfileName = SU::strdup(profileName ? profileName : "");
+	char * newProfileParent = SU::strdup(profileParent ? profileParent : "");
+
+	if (m_profileName)
+		SU::free(m_profileName);
+	if (m_profileParent)
+		SU::free(m_profileParent);
+
+	m_profileName = newProfileName;
+	m_profileParent = newProfileParent;
+	return m_client.SetCertificateScope(m_profileName, m_profileParent, m_hostname, m_port, (int)m_mode);
 }
 
 int FTPClientWrapperSSL::SetTimeout(int timeout) {
@@ -391,6 +429,7 @@ int FTPClientWrapperSSL::OnReturn(int ret) {
 int FTPClientWrapperSSL::SetMode(CUT_FTPClient::FTPSMode mode) {
 	m_mode = mode;
 	m_client.setsMode(m_mode);
+	m_client.SetCertificateScope(m_profileName, m_profileParent, m_hostname, m_port, (int)m_mode);
 
 	return 0;
 }
@@ -476,11 +515,28 @@ FtpSSLWrapper::FtpSSLWrapper() :
 	m_isAborted(FALSE),
 	m_progmon(NULL),
 	m_currentTotal(-1),
-	m_certificates(NULL)
+	m_certificates(NULL),
+	m_profileName(NULL),
+	m_profileParent(NULL),
+	m_hostname(NULL),
+	m_port(0),
+	m_securityMode(0)
 {
 }
 
 FtpSSLWrapper::~FtpSSLWrapper() {
+	if (m_profileName) {
+		SU::free(m_profileName);
+		m_profileName = NULL;
+	}
+	if (m_profileParent) {
+		SU::free(m_profileParent);
+		m_profileParent = NULL;
+	}
+	if (m_hostname) {
+		SU::free(m_hostname);
+		m_hostname = NULL;
+	}
 }
 
 int FtpSSLWrapper::Send(LPCSTR data, int len) {
@@ -527,7 +583,33 @@ int FtpSSLWrapper::SetCurrentTotal(long total) {
 	return 0;
 }
 
-int FtpSSLWrapper::SetCertificates(vX509 * x509Vect) {
+int FtpSSLWrapper::SetExpectedHostname(const char * hostname) {
+	if (m_hostname) {
+		SU::free(m_hostname);
+		m_hostname = NULL;
+	}
+
+	m_hostname = SU::strdup(hostname ? hostname : "");
+	return 0;
+}
+
+int FtpSSLWrapper::SetCertificateScope(const char * profileName, const char * profileParent, const char * hostname, int port, int securityMode) {
+	char * newProfileName = SU::strdup(profileName ? profileName : "");
+	char * newProfileParent = SU::strdup(profileParent ? profileParent : "");
+
+	if (m_profileName)
+		SU::free(m_profileName);
+	if (m_profileParent)
+		SU::free(m_profileParent);
+
+	m_profileName = newProfileName;
+	m_profileParent = newProfileParent;
+	m_port = port;
+	m_securityMode = securityMode;
+	return SetExpectedHostname(hostname);
+}
+
+int FtpSSLWrapper::SetCertificates(vScopedX509 * x509Vect) {
 	m_certificates = x509Vect;
 	return 0;
 }
@@ -590,6 +672,10 @@ int FtpSSLWrapper::OnLoadCertificates(SSL_CTX * ctx) {
 	if (!m_certificates)
 		return UTE_SUCCESS;
 
+	FTPSCertificateScope scope = {m_profileName, m_profileParent, m_hostname, m_port, m_securityMode};
+	if (!FTPSCertificateScopeIsComplete(scope))
+		return UTE_SUCCESS;
+
 	 X509_STORE * x509Store = SSL_CTX_get_cert_store(ctx);
 	 if (!x509Store)
 		return UTE_SUCCESS;
@@ -599,13 +685,17 @@ int FtpSSLWrapper::OnLoadCertificates(SSL_CTX * ctx) {
 
 	int size = (int)m_certificates->size();
 	for(int i = 0; i < size; i++) {
+		if (!SSLCertificates::MatchesScopedX509(m_certificates->at(i), m_certificates->at(i).certificate, scope))
+			continue;
+
 		//int ret = SSL_CTX_use_certificate(ctx, (X509*)m_certificates->at(i));
-		int ret = X509_STORE_add_cert(x509Store, (X509*)m_certificates->at(i));
+		int ret = X509_STORE_add_cert(x509Store, m_certificates->at(i).certificate);
 		if (ret == 0) {
 			err = ERR_get_error();
 			OutErr("[FTPS] X509_STORE_add_cert failed (%d): %s.", err, ERR_reason_error_string(err));
 			OutErr("[FTPS] Removing certificate from trusted list.", ret);
 			size--;
+			SSLCertificates::FreeScopedX509(m_certificates->at(i));
 			m_certificates->erase(m_certificates->begin()+i);
 			i--;	//assuming i is signed
 		}
@@ -619,22 +709,30 @@ int FtpSSLWrapper::OnSSLCertificate(const SSL * ssl, const X509* certificate, in
 		return UTE_ERROR;
 	}
 
-	//since the CTX is setup before connections are made, it is possible a previously untrusted certificate becomes trusted but verify_cert
-	//has no idea of that. This loop allows those certificates to 'pass' as well, as they would have anyway later on
-	bool previouslyAccepted = false;
-	int size = (int)m_certificates->size();
-	for(int i = 0; i < size; i++) {
-		if (!X509_cmp(certificate, (X509*)m_certificates->at(i))) {
-			previouslyAccepted = true;
-			break;
-		}
+	if (!m_hostname || m_hostname[0] == '\0') {
+		OutErr("[FTPS] No hostname configured for certificate validation, aborting connection.");
+		return UTE_ERROR;
 	}
 
-	if (verifyResult == X509_V_OK || previouslyAccepted) {
+	//since the CTX is setup before connections are made, it is possible a previously untrusted certificate becomes trusted but verify_cert
+	//has no idea of that. This loop allows those certificates to 'pass' as well, as they would have anyway later on
+	FTPSCertificateScope scope = {m_profileName, m_profileParent, m_hostname, m_port, m_securityMode};
+	bool scopeComplete = FTPSCertificateScopeIsComplete(scope);
+	bool previouslyAccepted = false;
+	if (m_certificates && scopeComplete)
+		previouslyAccepted = SSLCertificates::ContainsScopedX509(*m_certificates, certificate, scope);
+
+	bool hostnameMatches = FTPSCertificateMatchesHostname(certificate, m_hostname);
+	if (!hostnameMatches) {
+		OutErr("[FTPS] Certificate hostname mismatch for '%s'.", m_hostname);
+	}
+
+	if ((verifyResult == X509_V_OK || previouslyAccepted) && hostnameMatches) {
 		OutDebug("[FTPS] Certificate valid.");
 	} else {
 		//X509_error_string(verifyResult);
-		OutErr("[FTPS] Certificate invalid (%d): %s.", verifyResult, X509_verify_cert_error_string(verifyResult));
+		const char * reason = hostnameMatches ? X509_verify_cert_error_string(verifyResult) : "certificate is not valid for the configured host";
+		OutErr("[FTPS] Certificate invalid (%d): %s.", verifyResult, reason);
 
 		//MessageDialog md;
 		//int ret = md.Create(_MainOutputWindow, TEXT("FTP(E)S certificate verification"), TEXT("The certificate is unknown. Do you trust it?"));
@@ -644,15 +742,15 @@ int FtpSSLWrapper::OnSSLCertificate(const SSL * ssl, const X509* certificate, in
 				TEXT("Do you accept it anyway? ")
 				TEXT("Please note that it may have other errors as well.");
 
-		TCHAR * msgBuf = SU::TSprintfNB(msgString, X509_verify_cert_error_string(verifyResult), verifyResult);
+		TCHAR * msgBuf = SU::TSprintfNB(msgString, reason, verifyResult);
 		int ret = MessageBox(_MainOutputWindow, msgBuf, TEXT("FTP(E)S certificate verification"), MB_YESNO | MB_ICONWARNING);
 		SU::FreeTChar(msgBuf);
 		if (ret == IDYES) {
 			OutDebug("[FTPS] Certificate accepted");
 
-			if (m_certificates) {
+			if (m_certificates && scopeComplete && !SSLCertificates::ContainsScopedX509(*m_certificates, certificate, scope)) {
 				SSL_get_peer_certificate(ssl);	//increase reference counter
-				m_certificates->push_back(certificate);
+				m_certificates->push_back(SSLCertificates::MakeScopedX509(certificate, scope));
 			}
 		} else {
 			OutDebug("[FTPS] Certificate rejected");

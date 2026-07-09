@@ -19,6 +19,8 @@
 #ifndef SSLCERTIFICATES_H
 #define SSLCERTIFICATES_H
 
+#include "FTPSCertificateScope.h"
+
 #include <openssl/x509.h>
 
 struct DER {
@@ -29,10 +31,24 @@ struct DER {
 typedef std::vector<DER> vDER;
 typedef std::vector<const X509 *> vX509;
 
+struct ScopedX509 {
+	X509 * certificate;
+	char * profileName;
+	char * profileParent;
+	char * hostname;
+	int port;
+	int securityMode;
+};
+
+typedef std::vector<ScopedX509> vScopedX509;
+
 class SSLCertificates {
 public:
 	static TiXmlElement*	SaveDER(const vDER & derVect);
 	static vDER				LoadDER(const TiXmlElement * dersElem);
+
+	static TiXmlElement*	SaveScopedX509(const vScopedX509 & x509Vect);
+	static vScopedX509		LoadScopedX509(const TiXmlElement * dersElem);
 
 	static vX509			ConvertDERVector(const vDER & derVect);
 	static vDER				ConvertX509Vector(const vX509 & x509Vect);
@@ -40,11 +56,17 @@ public:
 	static X509*			ConvertDER(const DER & der);
 	static DER				ConvertX509(const X509 * x509);
 
+	static ScopedX509		MakeScopedX509(const X509 * x509, const FTPSCertificateScope & scope);
+	static bool				MatchesScopedX509(const ScopedX509 & scoped, const X509 * x509, const FTPSCertificateScope & scope);
+	static bool				ContainsScopedX509(const vScopedX509 & x509Vect, const X509 * x509, const FTPSCertificateScope & scope);
+
 	static int				FreeDERVector(vDER & derVect);
 	static int				FreeX509Vector(vX509 & x509Vect);
+	static int				FreeScopedX509Vector(vScopedX509 & x509Vect);
 
 	static int				FreeDER(DER & der);
 	static int				FreeX509(X509 * x509);
+	static int				FreeScopedX509(ScopedX509 & x509);
 
 	static const char*		DERsElem;
 private:

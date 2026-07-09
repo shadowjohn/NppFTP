@@ -19,7 +19,7 @@
 // =================================================================
 // Ultimate TCP/IP v4.2
 // This software along with its related components, documentation and files ("The Libraries")
-// is © 1994-2007 The Code Project (1612916 Ontario Limited) and use of The Libraries is
+// is Â© 1994-2007 The Code Project (1612916 Ontario Limited) and use of The Libraries is
 // governed by a software license agreement ("Agreement").  Copies of the Agreement are
 // available at The Code Project (www.codeproject.com), as part of the package you downloaded
 // to obtain this file, or directly from our office.  For a copy of the license governing
@@ -51,6 +51,7 @@ Modification made May 2012:
 
 #include "ftp_c.h"
 
+#include "ftp_pasv.h"
 #include "ut_strop.h"
 
 
@@ -622,12 +623,10 @@ Return
 ****************************************/
 int CUT_FTPClient::ResumeReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFile) {
 
-    UINT    loop;
     int     rt, error;
     char    responseBuf[100];
     int     port;
     char    ipAddress[20];
-    char    *token;
     OpenMsgType fileType = UTM_OM_WRITING;  // by default we will write a file unless it exist
                                             // then we will append to it
 
@@ -647,40 +646,8 @@ int CUT_FTPClient::ResumeReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFil
         return OnError(UTE_PORT_FAILED);
 
 
-    // find the first '(' in the response and then parse out
-    // the address supplied by the server
-    loop = 0;
-    while ( loop < strlen(responseBuf) ){
-        if ( responseBuf[loop] == '(' )
-            break;
-        loop++;
-        }
-
-    if ( loop == strlen(responseBuf) ) // we hit the end of the buffer
-        return OnError(UTE_RETR_FAILED);
-
-    // token out the ipaddress and port string
-    token = strtok( &responseBuf[loop], "()" );
-
-    // get the four portions of the ip address
-    strcpy(ipAddress, strtok( token, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-
-    // get the two portions that make up the port number
-    port = atoi( strtok(NULL, ",)\r\n") ) * 256;
-    port += atoi( strtok(NULL, ",)\r\n") );
-
-    // test the results to ensure everything is OK.
-    if ( !IsIPAddress(ipAddress) )
+    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
-
-    if ( port<=0 || port > 65535 )
-        return OnError(UTE_CONNECT_TERMINATED);
 
     // Check for abortion flag
     if(IsAborted()) {
@@ -775,12 +742,10 @@ Return
 ****************************************/
 int CUT_FTPClient::ReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFile) {
 
-    UINT    loop;
     int     rt, error;
     char    responseBuf[100];
     int     port;
     char    ipAddress[20];
-    char    *token;
 
 
     //send the port command
@@ -797,40 +762,8 @@ int CUT_FTPClient::ReceiveFilePASV(CUT_DataSource & dest, LPCSTR sourceFile) {
         return OnError(UTE_PORT_FAILED);
 
 
-    // find the first '(' in the response and then parse out
-    // the address supplied by the server
-    loop = 0;
-    while ( loop < strlen(responseBuf) ){
-        if ( responseBuf[loop] == '(' )
-            break;
-        loop++;
-        }
-
-    if ( loop == strlen(responseBuf) ) // we hit the end of the buffer
-        return OnError(UTE_RETR_FAILED);
-
-    // token out the ipaddress and port string
-    token = strtok( &responseBuf[loop], "()" );
-
-    // get the four portions of the ip address
-    strcpy(ipAddress, strtok( token, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-
-    // get the two portions that make up the port number
-    port = atoi( strtok(NULL, ",)\r\n") ) * 256;
-    port += atoi( strtok(NULL, ",)\r\n") );
-
-    // test the results to ensure everything is OK.
-    if ( !IsIPAddress(ipAddress) )
+    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
-
-    if ( port<=0 || port > 65535 )
-        return OnError(UTE_CONNECT_TERMINATED);
 
     // Check for abortion flag
     if(IsAborted()) {
@@ -1069,9 +1002,7 @@ Return
 ****************************************/
 int CUT_FTPClient::SendFilePASV(CUT_DataSource & source, LPCSTR destFile) {
 
-    UINT    loop;
     int     error, rt, port;
-    char    *token;
     char    ipAddress[20];
     char    responseBuf[100];
 
@@ -1089,40 +1020,8 @@ int CUT_FTPClient::SendFilePASV(CUT_DataSource & source, LPCSTR destFile) {
     if(rt < 200 || rt >299)
         return OnError(UTE_PORT_FAILED);
 
-    // find the first '(' in the response and then parse out
-    // the address supplied by the server
-    loop = 0;
-    while ( loop < strlen(responseBuf) ){
-        if ( responseBuf[loop] == '(' )
-            break;
-        loop++;
-        }
-
-    if ( loop == strlen(responseBuf) ) // we hit the end of the buffer
-        return OnError(UTE_STOR_FAILED);
-
-    // token out the ipaddress and port string
-    token = strtok( &responseBuf[loop], "()" );
-
-    // get the four portions of the ip address
-    strcpy(ipAddress, strtok( token, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-
-    // get the two portions that make up the port number
-    port = atoi( strtok(NULL, ",)\r\n") ) * 256;
-    port += atoi( strtok(NULL, ",)\r\n") );
-
-    // test the results to ensure everything is OK.
-    if ( !IsIPAddress(ipAddress) )
+    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_SVR_DATA_CONNECT_FAILED);
-
-    if ( port<=0 || port > 65535 )
-        return OnError(UTE_CONNECT_TERMINATED);
 
     // Check for abortion flag
     if(IsAborted()) {
@@ -2174,10 +2073,8 @@ Return
 int CUT_FTPClient::GetDirInfoPASV(LPCSTR path){
     int     error, rt;
     char    responseBuf[100];
-    char    *token;
     char    ipAddress[20];
     int     port;
-    UINT    loop;
 
     //send the port command
     Send("PASV\r\n");
@@ -2193,40 +2090,8 @@ int CUT_FTPClient::GetDirInfoPASV(LPCSTR path){
     if(rt < 200 || rt >299)
         return OnError(UTE_PORT_FAILED);
 
-    // find the first '(' in the response and then parse out
-    // the address supplied by the server
-    loop = 0;
-    while ( loop < strlen(responseBuf) ) {
-        if ( responseBuf[loop] == '(' )
-            break;
-        loop++;
-        }
-
-    if ( loop == strlen(responseBuf) ) // we hit the end of the buffer
-        return OnError(UTE_SVR_DATA_CONNECT_FAILED);
-
-    // token out the ipaddress and port string
-    token = strtok( &responseBuf[loop], "()" );
-
-    // get the four portions of the ip address
-    strcpy(ipAddress, strtok( token, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-    strcat(ipAddress, ".");
-    strcat(ipAddress, strtok( NULL, ",)\r\n" ));
-
-    // get the two portions that make up the port number
-    port = atoi( strtok(NULL, ",)\r\n") ) * 256;
-    port += atoi( strtok(NULL, ",)\r\n") );
-
-    // test the results to ensure everything is OK.
-    if ( !IsIPAddress(ipAddress) )
+    if (!CUT_ParsePASVResponse(responseBuf, ipAddress, sizeof(ipAddress), &port))
         return OnError(UTE_LIST_FAILED);
-
-    if ( port <= 0 || port > 65535 )
-        return OnError(UTE_DATAPORT_FAILED);
 
     //send the list command, the server will then wait for us to
     // connect on the port it provided in the PASV statement.

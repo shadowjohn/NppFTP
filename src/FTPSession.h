@@ -35,7 +35,7 @@ public:
 	int						Init(FTPWindow * ftpWindow, FTPSettings * ftpSettings);
 	int						Deinit();
 
-	int						SetCertificates(vX509 * x509Vect);
+	int						SetCertificates(vScopedX509 * x509Vect);
 
 	int						StartSession(FTPProfile * sessionProfile);
 	int						TerminateSession();
@@ -98,7 +98,7 @@ private:
 
 	FileObject*				m_rootObject;
 
-	vX509*					m_certificates;
+	vScopedX509*			m_certificates;
 };
 
 #endif //FTPSESSION_H
