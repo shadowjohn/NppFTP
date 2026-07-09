@@ -378,3 +378,9 @@
 
 - 將 `codex/nppftp-security-maintenance` 以 fast-forward merge 簽進 `master`，master 從 `8b0e0e1` 更新到 `4cfb9b7`。
 - 合併前驗證：`_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`，且 `.\build.bat` 通過。
+
+## 2026-07-09 Add README snapshot comparison
+
+- 將 `snapshot/orin.png` 與 `snapshot/new.png` 納入版本控制，作為 README 的舊版 tree browser 與新版 PSPad-like flat browser 對照圖。
+- `README.md` 改成中文詳細版，補上設計理由、安全維修摘要、build 方式、專案紀錄入口與剩餘手動 QA。
+- 驗證：文件與圖片-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
