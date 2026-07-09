@@ -134,6 +134,7 @@ protected:
 	OutputWindow			m_outputWindow;
 	bool					m_outputShown;
 	bool					m_remoteBrowserShown;
+	bool					m_remoteBusyCursor;
 
 	HBRUSH					m_backgroundBrush;
 

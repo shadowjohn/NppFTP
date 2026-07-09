@@ -55,7 +55,7 @@
 - [x] Change list columns to PSPad order: `Name`, `Size`, `Modified`, `Type`, `Permissions`.
 - [x] Enable header drag/drop so column order can be changed by the user.
 - [x] Populate size, modified date, type, and permissions from `FileObject` metadata.
-- [ ] Add click feedback for directory/file activation with a temporary busy cursor.
+- [x] Add click feedback for directory/file activation with a temporary busy cursor.
 - [ ] Make `Change dir` Enter navigate known directories and open known files.
 - [ ] Make unknown `Change dir` paths no-op without visible error.
 - [ ] Align FTP/current path/search/change-dir/list spacing with the PSPad reference screenshots.

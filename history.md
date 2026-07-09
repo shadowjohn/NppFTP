@@ -338,3 +338,13 @@
   - 補 helper 後 `_build\tests\remote_browser_utils.exe` 回 `remote_browser_utils_exit=0`。
   - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
   - `_build\NppFTP-0.30.22-win64.zip` SHA256：`FD57618A846554272A141B09DE6F9E9E630D04954571CAA2C2CD4BB2882235D8`。
+
+## 2026-07-09 Show busy cursor for flat browser actions
+
+- 新增 `m_remoteBusyCursor`，flat browser 進入資料夾、輸入路徑觸發 directory hierarchy、或開啟檔案下載快取時，會先把 remote controls 的游標切成 `IDC_WAIT`。
+- `WM_SETCURSOR` 只在 remote labels/search/combo/list 及其 child control 上套用 wait cursor，splitter 游標仍優先。
+- directory get / download queue operation 結束、connect/disconnect 收尾時會清掉 busy flag，避免游標卡住。
+- 驗證：
+  - `.\build.bat` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`。
+  - `_build\NppFTP-0.30.22-win64.zip` SHA256：`0E9A2F883BD483CDDA09E4DABD5D3B5E72DD259C524DBDB21D44603A55B562E0`。
+  - Win32 cursor 行為尚待 Notepad++ 內手動 QA 確認。

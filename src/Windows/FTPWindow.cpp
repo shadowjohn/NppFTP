@@ -138,6 +138,7 @@ FTPWindow::FTPWindow() :
 	m_splitter(this, &m_treeview, &m_queueWindow),
 	m_outputShown(false),
 	m_remoteBrowserShown(false),
+	m_remoteBusyCursor(false),
 	m_currentSelection(NULL),
 	m_remoteCurrentDir(NULL),
 	m_localFileExists(false),
@@ -551,8 +552,11 @@ int FTPWindow::SetRemoteCurrentDir(FileObject * dir, bool refresh) {
 	FillRemoteList();
 	SetToolbarState();
 
-	if (refresh && dir->GetRefresh() && m_ftpSession)
-		m_ftpSession->GetDirectory(dir->GetPath());
+	if (refresh && dir->GetRefresh() && m_ftpSession) {
+		m_remoteBusyCursor = true;
+		if (m_ftpSession->GetDirectory(dir->GetPath()) != 0)
+			m_remoteBusyCursor = false;
+	}
 
 	return 0;
 }
@@ -657,7 +661,11 @@ int FTPWindow::NavigateRemotePath(const char * path) {
 		return SetRemoteCurrentDir(targetObj, true);
 
 	lstrcpynA(m_remotePendingPath, target, MAX_PATH);
-	return m_ftpSession->GetDirectoryHierarchy(target);
+	m_remoteBusyCursor = true;
+	int res = m_ftpSession->GetDirectoryHierarchy(target);
+	if (res != 0)
+		m_remoteBusyCursor = false;
+	return res;
 }
 
 int FTPWindow::ActivateRemoteListSelection() {
@@ -669,7 +677,11 @@ int FTPWindow::ActivateRemoteListSelection() {
 	if (fo->isDir())
 		return SetRemoteCurrentDir(fo, true);
 
-	return m_ftpSession->DownloadFileCache(fo->GetPath());
+	m_remoteBusyCursor = true;
+	int res = m_ftpSession->DownloadFileCache(fo->GetPath());
+	if (res != 0)
+		m_remoteBusyCursor = false;
+	return res;
 }
 
 FileObject* FTPWindow::GetRemoteListSelection() {
@@ -755,6 +767,21 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		case WM_SETCURSOR: {
 			if (m_splitter.OnSetCursor()) {
 				return TRUE;
+			}
+			if (m_remoteBusyCursor && m_remoteBrowserShown) {
+				HWND cursorWindow = (HWND)wParam;
+				if (cursorWindow == m_remoteHostLabel ||
+					cursorWindow == m_remotePathLabel ||
+					cursorWindow == m_remoteSearchLabel ||
+					cursorWindow == m_remoteSearchEdit ||
+					cursorWindow == m_remoteDirLabel ||
+					cursorWindow == m_remoteDirCombo ||
+					cursorWindow == m_remoteList ||
+					IsChild(m_remoteDirCombo, cursorWindow) ||
+					IsChild(m_remoteList, cursorWindow)) {
+					SetCursor(LoadCursor(NULL, IDC_WAIT));
+					return TRUE;
+				}
 			}
 			return FALSE;
 			break; }
@@ -1709,10 +1736,16 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 		case QueueOperation::QueueTypeCopyFile:
 		case QueueOperation::QueueTypeUpload: {
 			m_busy = isStart;
+			if (!isStart && (queueOp->GetType() == QueueOperation::QueueTypeDownload ||
+				queueOp->GetType() == QueueOperation::QueueTypeDownloadHandle))
+				m_remoteBusyCursor = false;
 			break; }
 		case QueueOperation::QueueTypeConnect:
 		case QueueOperation::QueueTypeDisconnect:
-		case QueueOperation::QueueTypeDirectoryGet:
+		case QueueOperation::QueueTypeDirectoryGet: {
+			if (!isStart)
+				m_remoteBusyCursor = false;
+			break; }
 		case QueueOperation::QueueTypeDirectoryCreate:
 		case QueueOperation::QueueTypeDirectoryRemove:
 		case QueueOperation::QueueTypeFileCreate:
@@ -1976,6 +2009,7 @@ int FTPWindow::OnConnect(int code) {
 	m_currentSelection = NULL;
 	m_currentDragObject = NULL;
 	m_currentDropObject = NULL;
+	m_remoteBusyCursor = false;
 
 	m_treeview.ClearAll();
 
@@ -2016,6 +2050,7 @@ int FTPWindow::OnDisconnect(int /*code*/) {
 	m_currentDropObject = NULL;
 	m_remoteCurrentDir = NULL;
 	m_remotePendingPath[0] = 0;
+	m_remoteBusyCursor = false;
 	ShowRemoteBrowser(false);
 	if (m_remoteList)
 		ListView_DeleteAllItems(m_remoteList);
