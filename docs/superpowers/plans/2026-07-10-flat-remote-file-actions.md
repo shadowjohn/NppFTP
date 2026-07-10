@@ -44,7 +44,7 @@
 - Produces remote_browser_permission_to_octal(const char*, TCHAR*, size_t), remote_browser_octal_to_checks(const TCHAR*, bool[9]), remote_browser_checks_to_octal(const bool[9], TCHAR*, size_t).
 - Produces ChmodDialog::Create(HWND, const char*) and ChmodDialog::GetMode().
 
-- [ ] **Step 1: Write the failing helper test**
+- [x] **Step 1: Write the failing helper test**
 
 Append to tests/remote_browser_utils.cpp:
 
@@ -61,7 +61,7 @@ assert(remote_browser_checks_to_octal(checks, mode, 4) == 0);
 assert(_tcscmp(mode, TEXT("755")) == 0);
 ~~~
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run:
 
@@ -71,7 +71,7 @@ cmd.exe /C "call \"C:\Program Files\Microsoft Visual Studio\18\Community\Common7
 
 Expected: compile failure because the helper names do not exist.
 
-- [ ] **Step 3: Implement the helpers and dialog**
+- [x] **Step 3: Implement the helpers and dialog**
 
 Add this helper logic to src/remote_browser_utils.h:
 
@@ -96,7 +96,7 @@ Implement the checkbox helpers with the same 4/2/1 bit order and reject invalid 
 
 Create ChmodDialog as a Dialog subclass with Create(HWND, const char*) and GetMode(). Add IDD_DIALOG_CHMOD with Owner, Group, and Other group boxes, nine AUTOCHECKBOX controls, an octal LTEXT, and existing OK/Cancel buttons. On checkbox change, use remote_browser_checks_to_octal; on OK, return result 1 only for a valid three-digit mode.
 
-- [ ] **Step 4: Run test and build**
+- [x] **Step 4: Run test and build**
 
 Run the test command from Step 2, then:
 
@@ -106,7 +106,7 @@ Run the test command from Step 2, then:
 
 Expected: remote_browser_utils_exit=0 and _build\Release\NppFTP.dll exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~
 git add src/remote_browser_utils.h tests/remote_browser_utils.cpp src/Windows/ChmodDialog.h src/Windows/ChmodDialog.cpp src/Windows/resource.h src/Windows/NppFTP.rc

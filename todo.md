@@ -66,7 +66,7 @@
 
 - [ ] Add flat-list context menus, keyboard F2 rename, and current-directory blank-area commands.
 - [ ] Add multi-file picker and drag/drop target routing with session-only overwrite confirmation.
-- [ ] Add native checkbox-based CHMOD dialog with synchronized octal mode.
+- [x] Add native checkbox-based CHMOD dialog with synchronized octal mode.
 - [ ] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
 - [ ] Show actionable mutation failures, with a single summary for recursive uploads.
 

@@ -42,6 +42,21 @@ int main()
 	assert(strcmp(path, "/var/www/sibling") == 0);
 	assert(remote_browser_simplify_typed_path("/too/long/path", "/", path, 8) == -1);
 
+	TCHAR mode[4]{};
+	bool checks[9]{};
+	assert(remote_browser_permission_to_octal("drwxr-xr-x", mode, 4) == 0);
+	assert(_tcscmp(mode, TEXT("755")) == 0);
+	assert(remote_browser_permission_to_octal("-rw-r-----", mode, 4) == 0);
+	assert(_tcscmp(mode, TEXT("640")) == 0);
+	assert(remote_browser_permission_to_octal(NULL, mode, 4) == -1);
+	assert(remote_browser_octal_to_checks(TEXT("755"), checks) == 0);
+	assert(checks[0] && checks[1] && checks[2]);
+	assert(checks[3] && !checks[4] && checks[5]);
+	assert(checks[6] && !checks[7] && checks[8]);
+	assert(remote_browser_checks_to_octal(checks, mode, 4) == 0);
+	assert(_tcscmp(mode, TEXT("755")) == 0);
+	assert(remote_browser_octal_to_checks(TEXT("89x"), checks) == -1);
+
 	printf("remote_browser_utils_exit=0\n");
 	return 0;
 }

@@ -21,6 +21,7 @@
 
 #include "FTPSession.h"
 #include "resource.h"
+#include "ChmodDialog.h"
 #include "InputDialog.h"
 #include "MessageDialog.h"
 #include "Npp/Notepad_plus_msgs.h"
@@ -2269,20 +2270,14 @@ int FTPWindow::VScrollTreeView(LONG yPos)
 }
 
 int FTPWindow::Chmod(FileObject * fo) {
-	InputDialog id;
-
-	//int res = id.Create(m_hwnd, TEXT("Change Permissions"), TEXT("Please enter the number of permissions:"), fo->GetPermssion());
-	int res = id.Create(m_hwnd, TEXT("Change Permissions"), TEXT("Please enter the number of permissions:"), TEXT("Enter Number"));
+	ChmodDialog dialog;
+	int res = dialog.Create(m_hwnd, fo->GetMod());
 	if (res != 1)
 		return 0;
 
-	const TCHAR * newMode = id.GetValue();
-	const char *newMode_CP = SU::TCharToCP(newMode, CP_ACP);
-
-	if( newMode_CP[0] == 'E' )
-		return 0;
-
-	res = m_ftpSession->Chmod(fo->GetPath(), newMode_CP);
+	char *newMode = SU::TCharToUtf8(dialog.GetMode());
+	res = m_ftpSession->Chmod(fo->GetPath(), newMode);
+	SU::FreeChar(newMode);
 	if (res == -1)
 		return -1;
 

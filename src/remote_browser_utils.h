@@ -79,6 +79,57 @@ static inline void remote_browser_permission_text(const char *mod, TCHAR *buffer
 	buffer[i] = 0;
 }
 
+static inline int remote_browser_permission_to_octal(const char *mod, TCHAR *mode, size_t modeCount)
+{
+	if (!mod || !mode || modeCount < 4 || strlen(mod) < 10)
+		return -1;
+
+	for (int group = 0; group < 3; group++) {
+		int value = 0;
+		if (mod[1 + group * 3] == 'r')
+			value |= 4;
+		if (mod[2 + group * 3] == 'w')
+			value |= 2;
+		char execute = mod[3 + group * 3];
+		if (execute == 'x' || execute == 's' || execute == 't')
+			value |= 1;
+		mode[group] = (TCHAR)(TEXT('0') + value);
+	}
+	mode[3] = 0;
+	return 0;
+}
+
+static inline int remote_browser_octal_to_checks(const TCHAR *mode, bool checks[9])
+{
+	if (!mode || !checks || mode[0] == 0 || mode[1] == 0 || mode[2] == 0 || mode[3] != 0)
+		return -1;
+
+	for (int group = 0; group < 3; group++) {
+		if (mode[group] < TEXT('0') || mode[group] > TEXT('7'))
+			return -1;
+		int value = mode[group] - TEXT('0');
+		checks[group * 3] = (value & 4) != 0;
+		checks[group * 3 + 1] = (value & 2) != 0;
+		checks[group * 3 + 2] = (value & 1) != 0;
+	}
+	return 0;
+}
+
+static inline int remote_browser_checks_to_octal(const bool checks[9], TCHAR *mode, size_t modeCount)
+{
+	if (!checks || !mode || modeCount < 4)
+		return -1;
+
+	for (int group = 0; group < 3; group++) {
+		int value = (checks[group * 3] ? 4 : 0) |
+			(checks[group * 3 + 1] ? 2 : 0) |
+			(checks[group * 3 + 2] ? 1 : 0);
+		mode[group] = (TCHAR)(TEXT('0') + value);
+	}
+	mode[3] = 0;
+	return 0;
+}
+
 static inline int remote_browser_simplify_typed_path(const char *path, const char *currentDir, char *buffer, size_t bufferCount)
 {
 	if (!path || path[0] == 0 || !buffer || bufferCount < 2)

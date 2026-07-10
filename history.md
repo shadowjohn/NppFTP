@@ -414,3 +414,11 @@
 - 下一刀另做多國語系選擇，預設正體中文；本刀新增 UI 文字先維持英文，避免把 i18n 與檔案操作風險混在同一組變更。
 - 詳細規格：`docs/superpowers/specs/2026-07-10-remote-file-operations-design.md`。
 - 實作拆成兩份可獨立驗收的 task 計畫：先做直接檔案操作與錯誤提示，再做遞迴資料夾掃描、合併上傳與批次摘要；文件位於 `docs/superpowers/plans/2026-07-10-flat-remote-file-actions.md` 與 `docs/superpowers/plans/2026-07-10-recursive-directory-upload.md`。
+
+## 2026-07-10 Add graphical CHMOD dialog
+
+- 將 remote browser 原本的純數字 CHMOD 輸入框改成 Win32 原生對話框，Owner / Group / Other 各有 Read / Write / Execute 三個勾選框，並即時顯示三位八進位模式。
+- 權限字串與八進位模式的轉換集中在 `remote_browser_utils.h` 的三個小 helper；不新增 UI framework 或額外 dependency。
+- TDD：先加入 `755`、`640`、NULL 與非法八進位輸入 assertions，確認因 helper 不存在而編譯紅燈；補最小實作後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`3995AAECCA88B6882F29D07854CE94E933DD8729FB4BD4768F18FB5F14E98A47`。
+- CHMOD 對話框視覺與實際 FTP/SFTP 權限變更仍待 Notepad++ 實機 QA。
