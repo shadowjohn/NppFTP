@@ -36,6 +36,8 @@ extern char * _HostsFile;
 
 FTPClientWrapperSSH::FTPClientWrapperSSH(const char * host, int port, const char * user, const char * password) :
 	FTPClientWrapper(Client_SSH, host, port, user, password),
+	m_sshsession(NULL),
+	m_sftpsession(NULL),
 	m_useAgent(false),
 	m_acceptedMethods(SSH_AUTH_METHOD_PASSWORD)
 {
@@ -61,6 +63,20 @@ FTPClientWrapper* FTPClientWrapperSSH::Clone() {
 	wrapper->m_acceptedMethods = m_acceptedMethods;
 
 	return wrapper;
+}
+
+RemoteFailureKind FTPClientWrapperSSH::GetFailureKind() const {
+	if (!m_sftpsession)
+		return RemoteFailureUnknown;
+
+	switch(sftp_get_error(m_sftpsession)) {
+		case SSH_FX_PERMISSION_DENIED:
+			return RemoteFailurePermissionDenied;
+		case SSH_FX_NO_SUCH_FILE:
+			return RemoteFailureNotFound;
+		default:
+			return RemoteFailureUnknown;
+	}
 }
 
 DWORD FTPClientWrapperSSH::LastAction() {

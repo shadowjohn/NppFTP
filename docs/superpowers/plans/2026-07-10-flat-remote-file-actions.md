@@ -212,7 +212,7 @@ git commit -m "feat: add flat remote file actions"
 - Produces RemoteFailureKind, FTPClientWrapper::GetFailureKind(), QueueOperation::GetFailureKind(), and FTPWindow::ShowOperationFailure.
 - Consumed by the recursive directory upload plan.
 
-- [ ] **Step 1: Write the failing enum test**
+- [x] **Step 1: Write the failing enum test**
 
 Add #include "src/RemoteFailure.h" and then:
 
@@ -221,13 +221,13 @@ assert(RemoteFailureUnknown == 0);
 assert(RemoteFailurePermissionDenied != RemoteFailureNotFound);
 ~~~
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Run focused test**
 
 Run the Task 1 test command.
 
 Expected: compile failure because RemoteFailureKind is absent.
 
-- [ ] **Step 3: Propagate the failure kind and show it**
+- [x] **Step 3: Propagate the failure kind and show it**
 
 Add this enum to src/RemoteFailure.h and include that header from src/FTPClientWrapper.h:
 
@@ -259,7 +259,9 @@ Run the helper test and:
 
 Expected: test prints remote_browser_utils_exit=0 and build succeeds. Manually verify denied and missing SFTP paths are distinct; FTP/FTPS uses only the generic message.
 
-- [ ] **Step 5: Commit and record**
+Automated helper test and x64 Release build passed on 2026-07-10. The SFTP and FTP/FTPS interaction checks remain pending in todo.md.
+
+- [x] **Step 5: Commit and record**
 
 ~~~
 git add src/RemoteFailure.h src/FTPClientWrapper.h src/FTPClientWrapper.cpp src/FTPClientWrapperSSH.cpp src/QueueOperation.h src/QueueOperation.cpp src/Windows/FTPWindow.h src/Windows/FTPWindow.cpp tests/remote_browser_utils.cpp todo.md history.md

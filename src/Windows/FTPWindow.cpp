@@ -2138,6 +2138,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Upload of %T failed", opuld->GetLocalPath());
+				ShowOperationFailure(queueOp);
 				OnError(queueOp, code, data, isStart);
 				break;	//failure
 			}
@@ -2160,6 +2161,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to create directory %T", SU::Utf8ToTChar(opmkdir->GetDirPath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Created directory %T", SU::Utf8ToTChar(opmkdir->GetDirPath()));
@@ -2170,6 +2172,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to remove directory %T", SU::Utf8ToTChar(oprmdir->GetDirPath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Removed directory %T", SU::Utf8ToTChar(oprmdir->GetDirPath()));
@@ -2180,6 +2183,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to create file %T", SU::Utf8ToTChar(opmkfile->GetFilePath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Created file %T", SU::Utf8ToTChar(opmkfile->GetFilePath()));
@@ -2190,6 +2194,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to delete file %T", SU::Utf8ToTChar(opdelfile->GetFilePath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Deleted file %T", SU::Utf8ToTChar(opdelfile->GetFilePath()));
@@ -2200,6 +2205,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to rename file %T", SU::Utf8ToTChar(oprename->GetFilePath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Renamed %T to %T", SU::Utf8ToTChar(oprename->GetFilePath()), SU::Utf8ToTChar(oprename->GetNewPath()));
@@ -2210,6 +2216,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;
 			if (queueResult == -1) {
 				OutErr("Unable to chmod file %T", SU::Utf8ToTChar(opchmod->GetFilePath()));
+				ShowOperationFailure(queueOp);
 				break;	//failure
 			}
 			OutMsg("Chmod %T to %T", SU::Utf8ToTChar(opchmod->GetFilePath()), SU::Utf8ToTChar(opchmod->GetNewMode()));
@@ -2277,6 +2284,25 @@ int FTPWindow::OnError(QueueOperation * /*queueOp*/, int /*code*/, void * /*data
 
 	m_outputWindow.ScrollLastLine();
 
+	return 0;
+}
+
+int FTPWindow::ShowOperationFailure(QueueOperation * queueOp) {
+	const TCHAR * message = TEXT("The remote server rejected the operation. It may be a permission or path problem.");
+	if (queueOp) {
+		switch(queueOp->GetFailureKind()) {
+			case RemoteFailurePermissionDenied:
+				message = TEXT("Permission denied by the remote server.");
+				break;
+			case RemoteFailureNotFound:
+				message = TEXT("The remote file or directory no longer exists.");
+				break;
+			default:
+				break;
+		}
+	}
+
+	::MessageBox(m_hwnd, message, TEXT("Remote operation failed"), MB_OK | MB_ICONERROR);
 	return 0;
 }
 

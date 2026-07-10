@@ -432,3 +432,12 @@
 - TDD：先加入 overwrite decision assertions 並確認 undeclared enum 的編譯紅燈；補最小 enum 後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`DC2239025B3D9CF88E230F81F6BCBDC34CC55B56CC2FFB382F298284AFCE596E`。
 - 三組右鍵選單、F2、多檔 picker、三種 drop target、Skip / Cancel 與斷線重設 overwrite-all 仍待 Notepad++ 實機 QA。
+
+## 2026-07-10 Report remote operation failures
+
+- 新增 `RemoteFailureKind`，只分 `Unknown`、`PermissionDenied`、`NotFound`；FTP/FTPS base wrapper 固定回 Unknown，避免把模糊 server rejection 誤判成權限問題。
+- SFTP 只依 libssh 的 `SSH_FX_PERMISSION_DENIED` 與 `SSH_FX_NO_SUCH_FILE` 分類，其餘仍回 Unknown；同步將 SSH/SFTP session 指標在 constructor 初始化為 `NULL`。
+- `QueueOperation` 在 end notification 尚未 ACK 前，從實際執行的 wrapper 讀取 failure kind。上傳、建立/刪除目錄、建立/刪除檔案、更名與 CHMOD 失敗時保留原有 Output 訊息，另顯示固定英文提示；成功不顯示 modal。
+- TDD：先 include 尚不存在的 `RemoteFailure.h`，確認 focused test 以 C1083 紅燈；補 enum 與最小傳遞鏈後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`C49F7D3632B6E49F85C76B374FBA2868F667C76453123768DF285B72AE55C2C1`。
+- SFTP 權限不足、SFTP 路徑不存在，以及 FTP/FTPS generic rejection 的實際 modal 仍待 Notepad++ 實機 QA。

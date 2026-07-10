@@ -1,4 +1,5 @@
 #include "src/remote_browser_utils.h"
+#include "src/RemoteFailure.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -59,6 +60,8 @@ int main()
 	assert(RemoteOverwriteCancel == 0);
 	assert(RemoteOverwriteOverwrite == 1);
 	assert(RemoteOverwriteSkip == 2);
+	assert(RemoteFailureUnknown == 0);
+	assert(RemoteFailurePermissionDenied != RemoteFailureNotFound);
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

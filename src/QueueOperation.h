@@ -61,6 +61,7 @@ public:
 	virtual void*			GetNotifyData() const;
 	virtual void*			GetData() const;
 	virtual QueueType		GetType() const;
+	virtual RemoteFailureKind GetFailureKind() const;
 
 	virtual bool			GetRunning() const;
 	virtual int				SetRunning(bool running);

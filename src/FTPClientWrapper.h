@@ -24,6 +24,7 @@
 #include <libssh/libssh.h>
 #include <libssh/sftp.h>
 #include "FTPFile.h"
+#include "RemoteFailure.h"
 #include "SSLCertificates.h"
 
 enum Client_Type { Client_SSL, Client_SSH };
@@ -94,6 +95,7 @@ public:
 	virtual FTPClientWrapper*	Clone() = 0;	//Copy settings, but not connection status or anything
 
 	virtual Client_Type		GetType();
+	virtual RemoteFailureKind GetFailureKind() const;
 
 	virtual int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetTimeout(int timeout);
@@ -159,6 +161,7 @@ public:
 	virtual					~FTPClientWrapperSSH();
 
 	virtual FTPClientWrapper*	Clone();
+	virtual RemoteFailureKind GetFailureKind() const;
 
 	virtual int				Connect();
 	virtual int				Disconnect();

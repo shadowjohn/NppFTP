@@ -70,6 +70,10 @@ QueueOperation::QueueType QueueOperation::GetType() const {
 	return m_type;
 }
 
+RemoteFailureKind QueueOperation::GetFailureKind() const {
+	return m_client ? m_client->GetFailureKind() : RemoteFailureUnknown;
+}
+
 int QueueOperation::SetRunning(bool running) {
 	m_running = running;
 	return 0;

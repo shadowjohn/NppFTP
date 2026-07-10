@@ -48,6 +48,10 @@ Client_Type FTPClientWrapper::GetType() {
 	return m_type;
 }
 
+RemoteFailureKind FTPClientWrapper::GetFailureKind() const {
+	return RemoteFailureUnknown;
+}
+
 int FTPClientWrapper::SetTimeout(int timeout) {
 	m_timeout = timeout;
 	return 0;
