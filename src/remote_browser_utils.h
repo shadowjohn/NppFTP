@@ -8,6 +8,12 @@
 #include <tchar.h>
 #include <wctype.h>
 
+enum RemoteOverwriteDecision {
+	RemoteOverwriteCancel = 0,
+	RemoteOverwriteOverwrite = 1,
+	RemoteOverwriteSkip = 2
+};
+
 static inline bool remote_browser_matches_filter(const TCHAR *name, const TCHAR *filter)
 {
 	if (!name)

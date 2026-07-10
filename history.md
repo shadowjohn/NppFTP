@@ -422,3 +422,13 @@
 - TDD：先加入 `755`、`640`、NULL 與非法八進位輸入 assertions，確認因 helper 不存在而編譯紅燈；補最小實作後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`3995AAECCA88B6882F29D07854CE94E933DD8729FB4BD4768F18FB5F14E98A47`。
 - CHMOD 對話框視覺與實際 FTP/SFTP 權限變更仍待 Notepad++ 實機 QA。
+
+## 2026-07-10 Add flat remote file actions
+
+- flat remote list 新增三組英文右鍵選單：檔案可 Edit / CHMOD / Delete / Rename，目錄可 Upload files / CHMOD / Delete / Rename，空白區可 Refresh / Create directory / New file / Upload files；`..` 不顯示破壞性選單。
+- 新增 `F2` 更名與 Win32 多檔選擇視窗。拖放規則為：空白或檔案落在目前目錄，目錄列落在該目錄；flat list 與舊 tree 共用既有 OLE drop target，並改用 `ReleaseStgMedium` 正確釋放資料物件。
+- 新增檔案衝突對話框：`Skip` 只略過目前檔案、`Cancel` 停止剩餘批次；只有按下 `Overwrite` 並勾選 overwrite-all 才會記住本次連線，斷線即重設。
+- 本機資料夾已能在 picker/drop 路徑中被辨認，但本刀只寫入 Output 並略過，不會誤傳給單檔 `UploadFile`；遞迴建立與上傳依後續計畫實作。
+- TDD：先加入 overwrite decision assertions 並確認 undeclared enum 的編譯紅燈；補最小 enum 後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`DC2239025B3D9CF88E230F81F6BCBDC34CC55B56CC2FFB382F298284AFCE596E`。
+- 三組右鍵選單、F2、多檔 picker、三種 drop target、Skip / Cancel 與斷線重設 overwrite-all 仍待 Notepad++ 實機 QA。

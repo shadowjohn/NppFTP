@@ -56,6 +56,9 @@ int main()
 	assert(remote_browser_checks_to_octal(checks, mode, 4) == 0);
 	assert(_tcscmp(mode, TEXT("755")) == 0);
 	assert(remote_browser_octal_to_checks(TEXT("89x"), checks) == -1);
+	assert(RemoteOverwriteCancel == 0);
+	assert(RemoteOverwriteOverwrite == 1);
+	assert(RemoteOverwriteSkip == 2);
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

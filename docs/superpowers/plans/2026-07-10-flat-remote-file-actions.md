@@ -125,9 +125,9 @@ git commit -m "feat: add graphical chmod dialog"
 
 **Interfaces:**
 - Produces OverwriteDialog::Create(HWND, const TCHAR*), GetDecision(), GetOverwriteAll().
-- Produces FTPWindow::ShowRemotePopup, PromptRemoteRename, QueueDirectRemoteUploads, and GetRemoteDropTarget.
+- Produces FTPWindow::PromptRemoteRename, SelectRemoteUploadFiles, QueueDirectRemoteUploads, and GetRemoteDropTarget.
 
-- [ ] **Step 1: Write the failing overwrite-decision test**
+- [x] **Step 1: Write the failing overwrite-decision test**
 
 Add:
 
@@ -137,13 +137,13 @@ assert(RemoteOverwriteOverwrite == 1);
 assert(RemoteOverwriteSkip == 2);
 ~~~
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Run focused test**
 
 Run the Task 1 test command.
 
 Expected: compile failure until this enum exists in remote_browser_utils.h.
 
-- [ ] **Step 3: Implement the remote list interaction**
+- [x] **Step 3: Implement the remote list interaction**
 
 Add:
 
@@ -164,7 +164,7 @@ Add remote-only command IDs after IDM_POPUP_PASTE. Create and destroy three new 
 
 WM_CONTEXTMENU for m_remoteList must hit-test and select the pointed list item. It uses m_remoteCurrentDir for blank space and returns without a destructive menu for the .. row. LVN_KEYDOWN handles VK_F2 by using InputDialog seeded with FileObject::GetLocalName and calling existing Rename.
 
-Use a local static GetOpenFileName helper in FTPWindow.cpp with OFN_ALLOWMULTISELECT | OFN_EXPLORER, a 32768-TCHAR buffer, and std::vector<std::basic_string<TCHAR>>. Do not expand PathUtils for this single caller.
+Use SelectRemoteUploadFiles with GetOpenFileName, OFN_ALLOWMULTISELECT | OFN_EXPLORER, a 32768-TCHAR buffer, and std::vector<std::basic_string<TCHAR>>. Do not expand PathUtils for this single caller.
 
 QueueDirectRemoteUploads(FileObject *target, const std::vector<std::basic_string<TCHAR>>& paths) must:
 1. derive the local basename;
@@ -187,7 +187,9 @@ Run:
 
 Expected: build succeeds. In Notepad++, verify all three menus, F2, multi-file picker, drop on blank/file/directory, Skip-one-file, and overwrite-all reset after disconnect.
 
-- [ ] **Step 5: Commit**
+Automated x64 Release build passed on 2026-07-10. The Notepad++ interaction checks remain pending in todo.md.
+
+- [x] **Step 5: Commit**
 
 ~~~
 git add src/Windows/OverwriteDialog.h src/Windows/OverwriteDialog.cpp src/Windows/NppFTP.rc src/Windows/resource.h src/Windows/Commands.h src/Windows/FTPWindow.h src/Windows/FTPWindow.cpp tests/remote_browser_utils.cpp

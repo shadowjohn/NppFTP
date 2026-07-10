@@ -35,6 +35,9 @@
 #include "DragDropWindow.h"
 #include "ProfilesWindow.h"
 
+#include <string>
+#include <vector>
+
 class FTPSession;
 
 class FTPWindow : public DockableWindow, public DropTargetWindow, public DropDataWindow, public ProfilesWindow {
@@ -117,6 +120,11 @@ protected:
 	virtual int				ActivateRemoteListSelection();
 	virtual FileObject*		GetRemoteListSelection();
 	virtual int				OnRemoteListSelectionChanged();
+	virtual int				PromptRemoteRename(FileObject * fo);
+	virtual int				SelectRemoteUploadFiles(FileObject * target);
+	virtual int				QueueDirectRemoteUploads(FileObject * target, const std::vector<std::basic_string<TCHAR> > & paths);
+	virtual FileObject*		GetRemoteDropTarget(POINTL point, int * itemIndex = NULL);
+	virtual bool			IsRemoteParentItem(int itemIndex);
 
 	static LRESULT CALLBACK	RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -135,6 +143,7 @@ protected:
 	bool					m_outputShown;
 	bool					m_remoteBrowserShown;
 	bool					m_remoteBusyCursor;
+	bool					m_overwriteAll;
 
 	HBRUSH					m_backgroundBrush;
 
@@ -160,6 +169,9 @@ protected:
 	HMENU					m_popupLink;
 	HMENU					m_popupQueueActive;
 	HMENU					m_popupQueueHold;
+	HMENU					m_popupRemoteFile;
+	HMENU					m_popupRemoteDir;
+	HMENU					m_popupRemoteBlank;
 
 	FTPSession*				m_ftpSession;
 	vProfile*				m_vProfiles;

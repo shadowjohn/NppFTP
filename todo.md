@@ -64,11 +64,12 @@
 
 ## 5. Flat remote file operations
 
-- [ ] Add flat-list context menus, keyboard F2 rename, and current-directory blank-area commands.
-- [ ] Add multi-file picker and drag/drop target routing with session-only overwrite confirmation.
+- [x] Add flat-list context menus, keyboard F2 rename, and current-directory blank-area commands.
+- [x] Add multi-file picker and drag/drop target routing with session-only overwrite confirmation.
 - [x] Add native checkbox-based CHMOD dialog with synchronized octal mode.
 - [ ] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
 - [ ] Show actionable mutation failures, with a single summary for recursive uploads.
+- [ ] Run manual Notepad++ QA for flat-list menus, F2, picker/drop targets, Skip, Cancel, and session overwrite-all reset.
 
 ## 6. Localization
 

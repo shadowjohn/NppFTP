@@ -24,10 +24,12 @@
 #include "ChmodDialog.h"
 #include "InputDialog.h"
 #include "MessageDialog.h"
+#include "OverwriteDialog.h"
 #include "Npp/Notepad_plus_msgs.h"
 #include "remote_browser_utils.h"
 
 #include "Commands.h"
+#include <commdlg.h>
 #include <commctrl.h>
 #include <windowsx.h>
 #include <typeinfo>
@@ -140,6 +142,7 @@ FTPWindow::FTPWindow() :
 	m_outputShown(false),
 	m_remoteBrowserShown(false),
 	m_remoteBusyCursor(false),
+	m_overwriteAll(false),
 	m_currentSelection(NULL),
 	m_remoteCurrentDir(NULL),
 	m_localFileExists(false),
@@ -151,6 +154,9 @@ FTPWindow::FTPWindow() :
 	m_remoteDirCombo(NULL),
 	m_remoteList(NULL),
 	m_remoteDirComboProc(NULL),
+	m_popupRemoteFile(NULL),
+	m_popupRemoteDir(NULL),
+	m_popupRemoteBlank(NULL),
 	m_ftpSession(NULL),
 	m_vProfiles(NULL),
 	m_ftpSettings(NULL),
@@ -250,11 +256,14 @@ int FTPWindow::Create(HWND hParent, HWND hNpp, int MenuID, int MenuCommand) {
 	//DragAcceptFiles(m_hNpp, FALSE);
 	m_dropHwnd = m_hwnd;
 	DoRegisterDragDrop(m_treeview.GetHWND());
+	DoRegisterDragDrop(m_remoteList);
 
 	return 0;
 }
 
 int FTPWindow::Destroy() {
+	DoRevokeDragDrop(m_remoteList);
+	DoRevokeDragDrop(m_treeview.GetHWND());
 	DestroyRemoteBrowser();
 	m_treeview.Destroy();
 	m_toolbar.Destroy();
@@ -268,6 +277,9 @@ int FTPWindow::Destroy() {
 	DestroyMenu(m_popupTreeProfileRootFolder);
 	DestroyMenu(m_popupDir);
 	DestroyMenu(m_popupLink);
+	DestroyMenu(m_popupRemoteFile);
+	DestroyMenu(m_popupRemoteDir);
+	DestroyMenu(m_popupRemoteBlank);
 
 	return Window::Destroy();
 }
@@ -727,6 +739,131 @@ int FTPWindow::OnRemoteListSelectionChanged() {
 	return 0;
 }
 
+bool FTPWindow::IsRemoteParentItem(int itemIndex) {
+	if (!m_remoteList || itemIndex < 0)
+		return false;
+
+	TCHAR name[4]{};
+	ListView_GetItemText(m_remoteList, itemIndex, REMOTE_COLUMN_NAME, name, 4);
+	return lstrcmp(name, TEXT("..")) == 0;
+}
+
+int FTPWindow::PromptRemoteRename(FileObject * fo) {
+	if (!fo)
+		return -1;
+
+	InputDialog dialog;
+	int res = dialog.Create(m_hwnd, TEXT("Rename"), TEXT("Enter the new name:"), fo->GetLocalName());
+	if (res != 1)
+		return 0;
+	return Rename(fo, dialog.GetValue());
+}
+
+int FTPWindow::SelectRemoteUploadFiles(FileObject * target) {
+	if (!target || !target->isDir())
+		return -1;
+
+	std::vector<TCHAR> buffer(32768, 0);
+	OPENFILENAME ofn{};
+	ofn.lStructSize = sizeof(ofn);
+	ofn.hwndOwner = m_hwnd;
+	ofn.lpstrFile = &buffer[0];
+	ofn.nMaxFile = (DWORD)buffer.size();
+	ofn.Flags = OFN_ALLOWMULTISELECT | OFN_EXPLORER | OFN_FILEMUSTEXIST |
+		OFN_HIDEREADONLY | OFN_LONGNAMES | OFN_PATHMUSTEXIST;
+	if (!GetOpenFileName(&ofn))
+		return 0;
+
+	std::vector<std::basic_string<TCHAR> > paths;
+	const TCHAR * first = &buffer[0];
+	const TCHAR * next = first + lstrlen(first) + 1;
+	if (*next == 0) {
+		paths.push_back(first);
+	} else {
+		while (*next) {
+			TCHAR path[MAX_PATH]{};
+			if (PU::ConcatLocal(first, next, path, MAX_PATH) == 0)
+				paths.push_back(path);
+			else
+				OutErr("[FTPWindow] Local upload path is too long: %T", next);
+			next += lstrlen(next) + 1;
+		}
+	}
+
+	return QueueDirectRemoteUploads(target, paths);
+}
+
+int FTPWindow::QueueDirectRemoteUploads(FileObject * target, const std::vector<std::basic_string<TCHAR> > & paths) {
+	if (!target || !target->isDir() || !m_ftpSession)
+		return -1;
+
+	for (size_t i = 0; i < paths.size(); ++i) {
+		const TCHAR * path = paths[i].c_str();
+		DWORD attributes = GetFileAttributes(path);
+		if (attributes == INVALID_FILE_ATTRIBUTES) {
+			OutErr("[FTPWindow] Local upload item does not exist: %T", path);
+			continue;
+		}
+		if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+			OutMsg("[FTPWindow] Directory upload will be handled by the recursive upload task: %T", path);
+			continue;
+		}
+
+		const TCHAR * localName = PU::FindLocalFilename(path);
+		if (!localName)
+			continue;
+		char * remoteName = SU::TCharToUtf8(localName);
+		FileObject * existing = remoteName ? target->GetChildByName(remoteName) : NULL;
+		SU::FreeChar(remoteName);
+
+		if (existing && !m_overwriteAll) {
+			OverwriteDialog dialog;
+			dialog.Create(m_hwnd, localName);
+			if (dialog.GetDecision() == RemoteOverwriteCancel)
+				return 0;
+			if (dialog.GetDecision() == RemoteOverwriteSkip)
+				continue;
+			if (dialog.GetOverwriteAll())
+				m_overwriteAll = true;
+		}
+
+		m_ftpSession->UploadFile(path, target->GetPath(), true, 1);
+	}
+
+	return 0;
+}
+
+FileObject * FTPWindow::GetRemoteDropTarget(POINTL point, int * itemIndex) {
+	if (itemIndex)
+		*itemIndex = -1;
+	if (!m_remoteBrowserShown || !m_remoteList || !m_remoteCurrentDir)
+		return NULL;
+
+	RECT rect{};
+	GetWindowRect(m_remoteList, &rect);
+	POINT screenPoint{ point.x, point.y };
+	if (!PtInRect(&rect, screenPoint))
+		return NULL;
+
+	POINT clientPoint = screenPoint;
+	ScreenToClient(m_remoteList, &clientPoint);
+	LVHITTESTINFO hit{};
+	hit.pt = clientPoint;
+	int item = ListView_HitTest(m_remoteList, &hit);
+	if (itemIndex)
+		*itemIndex = item;
+	if (item < 0)
+		return m_remoteCurrentDir;
+
+	LVITEM lvi{};
+	lvi.iItem = item;
+	lvi.mask = LVIF_PARAM;
+	if (!ListView_GetItem(m_remoteList, &lvi))
+		return m_remoteCurrentDir;
+	FileObject * fo = (FileObject*)lvi.lParam;
+	return fo && fo->isDir() ? fo : m_remoteCurrentDir;
+}
+
 LRESULT CALLBACK FTPWindow::RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	FTPWindow * window = (FTPWindow*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 	if (window && uMsg == WM_KEYDOWN && wParam == VK_RETURN) {
@@ -983,6 +1120,49 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					}
 					result = TRUE;
 					break; }
+				case IDM_POPUP_REMOTE_UPLOADFILES: {
+					FileObject * target = m_currentSelection && m_currentSelection->isDir() ? m_currentSelection : m_remoteCurrentDir;
+					SelectRemoteUploadFiles(target);
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_EDIT: {
+					if (m_currentSelection && !m_currentSelection->isDir())
+						ActivateRemoteListSelection();
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_RENAME: {
+					PromptRemoteRename(m_currentSelection);
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_CHMOD: {
+					if (m_currentSelection)
+						Chmod(m_currentSelection);
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_DELETE: {
+					if (m_currentSelection) {
+						if (m_currentSelection->isDir())
+							DeleteDirectory(m_currentSelection);
+						else
+							DeleteFile(m_currentSelection);
+					}
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_REFRESH: {
+					if (m_remoteCurrentDir)
+						m_ftpSession->GetDirectory(m_remoteCurrentDir->GetPath());
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_NEWDIR: {
+					if (m_remoteCurrentDir)
+						CreateDirectory(m_remoteCurrentDir);
+					result = TRUE;
+					break; }
+				case IDM_POPUP_REMOTE_NEWFILE: {
+					if (m_remoteCurrentDir)
+						CreateFile(m_remoteCurrentDir);
+					result = TRUE;
+					break; }
 				case IDM_POPUP_REFRESHDIR:
 				case IDB_BUTTON_TOOLBAR_REFRESH: {
 					m_ftpSession->GetDirectory(m_currentSelection->GetPath());
@@ -1127,6 +1307,17 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						if ((nmlv->uChanged & LVIF_STATE) && (nmlv->uNewState & LVIS_SELECTED))
 							OnRemoteListSelectionChanged();
 						result = TRUE;
+						break; }
+					case LVN_KEYDOWN: {
+						NMLVKEYDOWN * key = (NMLVKEYDOWN*)lParam;
+						if (key->wVKey == VK_F2) {
+							int selected = ListView_GetNextItem(m_remoteList, -1, LVNI_SELECTED);
+							if (selected >= 0 && !IsRemoteParentItem(selected))
+								PromptRemoteRename(GetRemoteListSelection());
+							result = TRUE;
+							break;
+						}
+						doDefaultProc = true;
 						break; }
 					case NM_DBLCLK:
 					case NM_RETURN: {
@@ -1365,7 +1556,38 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
 			}
 
-			if (hWinContext == m_treeview.GetHWND()) {
+			if (hWinContext == m_remoteList) {
+				int item = -1;
+				if (fromKeyboard) {
+					item = ListView_GetNextItem(m_remoteList, -1, LVNI_SELECTED);
+					if (item >= 0) {
+						RECT itemRect{};
+						if (ListView_GetItemRect(m_remoteList, item, &itemRect, LVIR_BOUNDS)) {
+							menuPos.x = itemRect.left;
+							menuPos.y = itemRect.bottom;
+							ClientToScreen(m_remoteList, &menuPos);
+						}
+					}
+				} else {
+					POINT clientPoint = menuPos;
+					ScreenToClient(m_remoteList, &clientPoint);
+					LVHITTESTINFO hit{};
+					hit.pt = clientPoint;
+					item = ListView_HitTest(m_remoteList, &hit);
+				}
+
+				ListView_SetItemState(m_remoteList, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+				if (item >= 0) {
+					ListView_SetItemState(m_remoteList, item, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+					ListView_SetSelectionMark(m_remoteList, item);
+					m_currentSelection = GetRemoteListSelection();
+					if (!IsRemoteParentItem(item) && m_currentSelection)
+						hContext = m_currentSelection->isDir() ? m_popupRemoteDir : m_popupRemoteFile;
+				} else {
+					m_currentSelection = m_remoteCurrentDir;
+					hContext = m_popupRemoteBlank;
+				}
+			} else if (hWinContext == m_treeview.GetHWND()) {
 				if (!m_currentSelection) {
 					result = FALSE;
 					break;
@@ -1540,6 +1762,24 @@ HRESULT FTPWindow::OnDragEnter(LPDATAOBJECT /*pDataObj*/, DWORD /*grfKeyState*/,
 }
 
 HRESULT FTPWindow::OnDragOver(DWORD /*grfKeyState*/, POINTL pt, LPDWORD pdwEffect) {
+	RECT remoteRect{};
+	POINT screenPoint{ pt.x, pt.y };
+	bool overRemoteList = m_remoteBrowserShown && m_remoteList &&
+		GetWindowRect(m_remoteList, &remoteRect) && PtInRect(&remoteRect, screenPoint);
+	if (overRemoteList) {
+		int item = -1;
+		FileObject * target = GetRemoteDropTarget(pt, &item);
+		TreeView_Select(m_treeview.GetHWND(), NULL, TVGN_DROPHILITE);
+		ListView_SetItemState(m_remoteList, -1, 0, LVIS_DROPHILITED);
+		if (item >= 0)
+			ListView_SetItemState(m_remoteList, item, LVIS_DROPHILITED, LVIS_DROPHILITED);
+		m_currentDropObject = target;
+		*pdwEffect = target ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+		return S_OK;
+	}
+
+	if (m_remoteList)
+		ListView_SetItemState(m_remoteList, -1, 0, LVIS_DROPHILITED);
 	FileObject * fo = m_treeview.GetItemByPoint(pt);
 
 	if (fo && fo->isDir()) {
@@ -1557,37 +1797,46 @@ HRESULT FTPWindow::OnDragOver(DWORD /*grfKeyState*/, POINTL pt, LPDWORD pdwEffec
 
 HRESULT FTPWindow::OnDragLeave() {
 	TreeView_Select(m_treeview.GetHWND(), NULL, TVGN_DROPHILITE);
+	if (m_remoteList)
+		ListView_SetItemState(m_remoteList, -1, 0, LVIS_DROPHILITED);
+	m_currentDropObject = NULL;
 	return S_OK;
 }
 
 HRESULT FTPWindow::OnDrop(LPDATAOBJECT pDataObj, DWORD /*grfKeyState*/, POINTL /*pt*/, LPDWORD pdwEffect) {
+	*pdwEffect = DROPEFFECT_NONE;
+	FileObject * target = m_currentDropObject;
 	TreeView_Select(m_treeview.GetHWND(), NULL, TVGN_DROPHILITE);
+	if (m_remoteList)
+		ListView_SetItemState(m_remoteList, -1, 0, LVIS_DROPHILITED);
+	m_currentDropObject = NULL;
 
-	STGMEDIUM medium;
+	STGMEDIUM medium{};
 	FORMATETC formatetc{};
 	formatetc.cfFormat = CF_HDROP;
 	formatetc.tymed = TYMED_HGLOBAL;
-	formatetc.dwAspect = 0;
+	formatetc.dwAspect = DVASPECT_CONTENT;
 	formatetc.lindex = -1;
-	formatetc.ptd = NULL;;
+	formatetc.ptd = NULL;
 
 	HRESULT dataRes = pDataObj->GetData(&formatetc, &medium);
 	if (dataRes == S_OK) {
-		*pdwEffect = DROPEFFECT_COPY;
-		HDROP hdrop = (HDROP)GlobalLock(medium.hGlobal);
-
-		TCHAR pathToFile[MAX_PATH];
-		int filesDropped = DragQueryFile(hdrop, 0xffffffff, NULL, 0);
-		for (int i = 0; i < filesDropped; ++i) {
-			if (DragQueryFile(hdrop, i, pathToFile, MAX_PATH) != 0) {
-				//pathToFile is not checked. If it doesnt exist or its a directory or link, CreateFile either allows a handle to be opened or not
-				m_ftpSession->UploadFile(pathToFile, m_currentDropObject->GetPath(), true, 1);	//1: User specified location
-			}
+		std::vector<std::basic_string<TCHAR> > paths;
+		HDROP hdrop = (HDROP)medium.hGlobal;
+		UINT filesDropped = DragQueryFile(hdrop, 0xffffffff, NULL, 0);
+		for (UINT i = 0; i < filesDropped; ++i) {
+			UINT pathLength = DragQueryFile(hdrop, i, NULL, 0);
+			std::vector<TCHAR> path(pathLength + 1, 0);
+			if (DragQueryFile(hdrop, i, &path[0], pathLength + 1) != 0)
+				paths.push_back(&path[0]);
 		}
-
-
-		GlobalUnlock(medium.hGlobal);
-		GlobalFree(medium.hGlobal);
+		if (target) {
+			*pdwEffect = DROPEFFECT_COPY;
+			QueueDirectRemoteUploads(target, paths);
+		} else {
+			*pdwEffect = DROPEFFECT_NONE;
+		}
+		ReleaseStgMedium(&medium);
 	}
 
 	return S_OK;
@@ -1648,6 +1897,27 @@ int FTPWindow::CreateMenus() {
 	m_popupSettings = CreatePopupMenu();
 	AppendMenu(m_popupSettings,MF_STRING,IDM_POPUP_SETTINGSGENERAL,TEXT("&General settings"));
 	AppendMenu(m_popupSettings,MF_STRING,IDM_POPUP_SETTINGSPROFILE,TEXT("&Profile settings"));
+
+	m_popupRemoteFile = CreatePopupMenu();
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_EDIT, TEXT("&Edit"));
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_CHMOD, TEXT("&CHMOD"));
+	AppendMenu(m_popupRemoteFile, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete file"));
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_RENAME, TEXT("&Rename\tF2"));
+
+	m_popupRemoteDir = CreatePopupMenu();
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_UPLOADFILES, TEXT("&Upload files..."));
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_CHMOD, TEXT("&CHMOD"));
+	AppendMenu(m_popupRemoteDir, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete directory"));
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_RENAME, TEXT("&Rename\tF2"));
+
+	m_popupRemoteBlank = CreatePopupMenu();
+	AppendMenu(m_popupRemoteBlank, MF_STRING, IDM_POPUP_REMOTE_REFRESH, TEXT("&Refresh"));
+	AppendMenu(m_popupRemoteBlank, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupRemoteBlank, MF_STRING, IDM_POPUP_REMOTE_NEWDIR, TEXT("Create &directory"));
+	AppendMenu(m_popupRemoteBlank, MF_STRING, IDM_POPUP_REMOTE_NEWFILE, TEXT("&New file"));
+	AppendMenu(m_popupRemoteBlank, MF_STRING, IDM_POPUP_REMOTE_UPLOADFILES, TEXT("&Upload files..."));
 
 	//Create context menu for files in folder window
 	m_popupFile = CreatePopupMenu();
@@ -2069,6 +2339,7 @@ int FTPWindow::OnDisconnect(int /*code*/) {
 	m_remoteCurrentDir = NULL;
 	m_remotePendingPath[0] = 0;
 	m_remoteBusyCursor = false;
+	m_overwriteAll = false;
 	ShowRemoteBrowser(false);
 	if (m_remoteList)
 		ListView_DeleteAllItems(m_remoteList);
