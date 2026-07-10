@@ -397,3 +397,9 @@
 - 更新 README 圖片對照：`snapshot/pspad.png` 作為 PSPad FTP 參考圖，`snapshot/new_notepad.png` 作為新版 NppFTP 實作畫面。
 - 移除舊的 `snapshot/new.png`，README 現在清楚分成舊版 NppFTP tree、PSPad 參考、新版 NppFTP flat browser 三段。
 - 驗證：文件與圖片-only 變更，未重跑 build；執行 `git diff --check` 無 whitespace error。
+
+## 2026-07-10 Keep only maintained Windows build action
+
+- 移除 `CI_build.yml` 內舊 upstream Windows/Linux matrix 與 tag release artifact job，只保留 `maintained_windows_x64`。
+- 原因：GitHub Actions run `29007714842` 中 `maintained_windows_x64` 已成功產出 artifact，但舊 matrix 的 Win32 / Linux CMake 路線因 zlib 下載 checksum mismatch 拖紅整個 workflow。
+- 決策：P0 先只保證 `v0.30.22-3wa.1` 需要的 Windows x64 Release build；舊平台不要在第一版 release 前搶修。
