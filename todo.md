@@ -68,6 +68,7 @@
 - [x] Add multi-file picker and drag/drop target routing with session-only overwrite confirmation.
 - [x] Add native checkbox-based CHMOD dialog with synchronized octal mode.
 - [x] Add an owned recursive-upload planner with bounded paths and no reparse-point traversal.
+- [x] Add remote scan and parent-first mkdir/upload queue operations with disconnect-safe batch ownership.
 - [ ] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
 - [x] Show actionable single-operation mutation failures.
 - [ ] Show one failure summary for recursive uploads.

@@ -31,4 +31,21 @@ private:
 	std::vector<RemoteUploadItem> m_items;
 };
 
+struct RemoteUploadBatch {
+	RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath);
+	~RemoteUploadBatch();
+	void AddRef();
+	void Release();
+
+	RemoteUploadPlan * plan;
+	std::string targetPath;
+	int completedCount;
+	std::vector<std::basic_string<TCHAR> > failures;
+
+private:
+	volatile LONG m_references;
+	RemoteUploadBatch(const RemoteUploadBatch &);
+	RemoteUploadBatch & operator=(const RemoteUploadBatch &);
+};
+
 #endif //REMOTEUPLOADPLAN_H

@@ -130,9 +130,9 @@ git commit -m "feat: add remote directory upload plan"
 
 **Interfaces:**
 - Consumes RemoteUploadPlan and RemoteFailureKind.
-- Produces QueueRemoteUploadScan, QueueEnsureDirectory, QueueRemoteUploadComplete, FTPSession::ScanRemoteUploadPlan, and FTPSession::QueueRemoteUploadPlan.
+- Produces QueueRemoteUploadScan, QueueEnsureDirectory, QueueRemoteUploadFile, QueueRemoteUploadComplete, FTPSession::ScanRemoteUploadPlan, and FTPSession::QueueRemoteUploadPlan.
 
-- [ ] **Step 1: Extend test for selected state**
+- [x] **Step 1: Extend test for selected state**
 
 Add:
 
@@ -142,13 +142,13 @@ assert(!plan.GetItems()[2].selected);
 assert(plan.GetItems()[3].selected);
 ~~~
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Run focused test**
 
 Run the Task 1 Step 2 command.
 
 Expected: remote_upload_plan_exit=0.
 
-- [ ] **Step 3: Add scan, ensure, complete, and session APIs**
+- [x] **Step 3: Add scan, ensure, complete, and session APIs**
 
 Append these QueueType values after QueueTypeNoOp:
 
@@ -177,7 +177,7 @@ return m_result;
 
 This preserves merge behavior if another client creates the directory after scanning and rejects a file at the same path.
 
-QueueRemoteUploadComplete returns 0 and owns RemoteUploadBatch. The batch owns the plan, target path, completed count, and failure strings. It is added last so every prior operation may use its notify data.
+QueueRemoteUploadComplete returns 0 and is added last. RemoteUploadBatch owns the plan, target path, completed count, and failure strings. Recursive mkdir, upload, and complete operations each hold a small interlocked batch reference so clearing the queue during an active transfer cannot leave notifyData dangling.
 
 Add:
 
@@ -188,7 +188,7 @@ int QueueRemoteUploadPlan(RemoteUploadPlan *plan);
 
 ScanRemoteUploadPlan adds QueueRemoteUploadScan to m_mainQueue. QueueRemoteUploadPlan allocates RemoteUploadBatch, puts QueueEnsureDirectory for every directory and QueueUpload for every selected file on m_transferQueue, then adds QueueRemoteUploadComplete. Never put ensure-directory work on m_mainQueue because it races m_transferQueue uploads.
 
-- [ ] **Step 4: Build and inspect ordering**
+- [x] **Step 4: Build and inspect ordering**
 
 Run:
 
@@ -198,7 +198,9 @@ Run:
 
 Expected: build succeeds. During local validation, verify the order in Output is root directory, child directory, root file, child file, complete marker. Remove any temporary diagnostic lines before commit.
 
-- [ ] **Step 5: Commit**
+Automated x64 Release build passed on 2026-07-10. Ordering was inspected from the tested plan vector and the single transfer-queue enqueue loop; no diagnostic output was added.
+
+- [x] **Step 5: Commit**
 
 ~~~
 git add src/QueueOperation.h src/QueueOperation.cpp src/FTPSession.h src/FTPSession.cpp src/RemoteUploadPlan.h src/RemoteUploadPlan.cpp tests/remote_upload_plan.cpp

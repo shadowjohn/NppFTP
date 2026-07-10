@@ -450,6 +450,21 @@ const char* QueueUpload::GetExternalPath() {
 
 //////////////////////////////////////
 
+QueueRemoteUploadFile::QueueRemoteUploadFile(HWND hNotify, const char * externalFile, const TCHAR * localFile, Transfer_Mode tMode, RemoteUploadBatch * batch, int notifyCode) :
+	QueueUpload(hNotify, externalFile, localFile, tMode, notifyCode, batch),
+	m_batch(batch)
+{
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueRemoteUploadFile::~QueueRemoteUploadFile() {
+	if (m_batch)
+		m_batch->Release();
+}
+
+//////////////////////////////////////
+
 QueueGetDir::QueueGetDir(HWND hNotify, const char * dirPath, int notifyCode, void * notifyData) :
 	QueueOperation(QueueTypeDirectoryGet, hNotify, notifyCode, notifyData),
 	m_fileCount(0)
@@ -605,6 +620,150 @@ bool QueueNoOp::Equals(const QueueOperation & other) {
 		return false;
 	}
 	return true;
+}
+
+//////////////////////////////////////
+
+QueueRemoteUploadScan::QueueRemoteUploadScan(HWND hNotify, RemoteUploadPlan * plan, int notifyCode) :
+	QueueOperation(QueueTypeRemoteUploadScan, hNotify, notifyCode, plan),
+	m_plan(plan)
+{
+}
+
+QueueRemoteUploadScan::~QueueRemoteUploadScan() {
+	delete m_plan;
+}
+
+int QueueRemoteUploadScan::Perform() {
+	if (!m_plan) {
+		m_result = -1;
+		return m_result;
+	}
+	if (m_doConnect && !m_client->IsConnected()) {
+		m_result = m_client->Connect();
+		if (m_result == -1)
+			return m_result;
+	}
+
+	const std::vector<RemoteUploadItem> & items = m_plan->GetItems();
+	for (size_t i = 0; i < items.size(); ++i) {
+		if (!items[i].isDirectory)
+			continue;
+
+		FTPFile * files = NULL;
+		int count = m_client->GetDir(items[i].remotePath.c_str(), &files);
+		if (count >= 0) {
+			int applyResult = m_plan->ApplyRemoteDirectoryListing(items[i].remotePath.c_str(), files, count);
+			if (files)
+				m_client->ReleaseDir(files, count);
+			if (applyResult != 0) {
+				m_result = -1;
+				return m_result;
+			}
+			continue;
+		}
+
+		RemoteFailureKind failure = m_client->GetFailureKind();
+		if (failure == RemoteFailureNotFound)
+			continue;
+		m_result = -1;
+		return m_result;
+	}
+
+	m_result = 0;
+	return m_result;
+}
+
+bool QueueRemoteUploadScan::Equals(const QueueOperation & other) {
+	return QueueOperation::Equals(other);
+}
+
+RemoteUploadPlan * QueueRemoteUploadScan::ReleasePlan() {
+	RemoteUploadPlan * plan = m_plan;
+	m_plan = NULL;
+	m_notifyData = NULL;
+	return plan;
+}
+
+RemoteUploadPlan * QueueRemoteUploadScan::GetPlan() const {
+	return m_plan;
+}
+
+//////////////////////////////////////
+
+QueueEnsureDirectory::QueueEnsureDirectory(HWND hNotify, const char * directoryPath, int notifyCode, void * notifyData) :
+	QueueOperation(QueueTypeEnsureDirectory, hNotify, notifyCode, notifyData),
+	m_batch((RemoteUploadBatch*)notifyData)
+{
+	m_directoryPath = SU::strdup(directoryPath);
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueEnsureDirectory::~QueueEnsureDirectory() {
+	SU::free(m_directoryPath);
+	if (m_batch)
+		m_batch->Release();
+}
+
+int QueueEnsureDirectory::Perform() {
+	if (m_doConnect && !m_client->IsConnected()) {
+		m_result = m_client->Connect();
+		if (m_result == -1)
+			return m_result;
+	}
+
+	m_result = m_client->MkDir(m_directoryPath);
+	if (m_result == 0)
+		return m_result;
+
+	FTPFile * files = NULL;
+	int listed = m_client->GetDir(m_directoryPath, &files);
+	if (listed >= 0) {
+		if (files)
+			m_client->ReleaseDir(files, listed);
+		m_result = 0;
+	}
+	return m_result;
+}
+
+bool QueueEnsureDirectory::Equals(const QueueOperation & other) {
+	if (!QueueOperation::Equals(other))
+		return false;
+	const QueueEnsureDirectory & otherDirectory = (const QueueEnsureDirectory&)other;
+	return strcmp(m_directoryPath, otherDirectory.m_directoryPath) == 0;
+}
+
+const char * QueueEnsureDirectory::GetDirectoryPath() const {
+	return m_directoryPath;
+}
+
+//////////////////////////////////////
+
+QueueRemoteUploadComplete::QueueRemoteUploadComplete(HWND hNotify, RemoteUploadBatch * batch, int notifyCode) :
+	QueueOperation(QueueTypeRemoteUploadComplete, hNotify, notifyCode, batch),
+	m_batch(batch)
+{
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueRemoteUploadComplete::~QueueRemoteUploadComplete() {
+	if (m_batch)
+		m_batch->Release();
+}
+
+int QueueRemoteUploadComplete::Perform() {
+	m_result = 0;
+	return m_result;
+}
+
+bool QueueRemoteUploadComplete::Equals(const QueueOperation & other) {
+	return QueueOperation::Equals(other);
+}
+
+RemoteUploadBatch * QueueRemoteUploadComplete::GetBatch() const {
+	return m_batch;
 }
 
 //////////////////////////////////////

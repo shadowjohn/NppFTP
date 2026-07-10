@@ -21,6 +21,7 @@
 
 #include "FTPClientWrapper.h"
 #include "Monitor.h"
+#include "RemoteUploadPlan.h"
 
 class FTPQueue;
 
@@ -46,7 +47,8 @@ public:
 	enum QueueType { QueueTypeConnect, QueueTypeDisconnect, QueueTypeDownload, QueueTypeUpload,
 	                 QueueTypeDirectoryGet, QueueTypeDirectoryCreate, QueueTypeDirectoryRemove,
 	                 QueueTypeFileCreate, QueueTypeFileDelete, QueueTypeFileRename, QueueTypeQuote,
-	                 QueueTypeDownloadHandle, QueueTypeCopyFile, QueueTypeFileChmod, QueueTypeNoOp
+	                 QueueTypeDownloadHandle, QueueTypeCopyFile, QueueTypeFileChmod, QueueTypeNoOp,
+	                 QueueTypeRemoteUploadScan, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete
 	               };
 
 	enum QueueEvent { QueueEventStart=0x01, QueueEventEnd=0x02, QueueEventAdd=0x04, QueueEventRemove=0x08, QueueEventProgress=0x10 };
@@ -131,6 +133,47 @@ public:
 	virtual bool			Equals(const QueueOperation & other);
 };
 
+class QueueRemoteUploadScan : public QueueOperation {
+public:
+							QueueRemoteUploadScan(HWND hNotify, RemoteUploadPlan * plan, int notifyCode = 0);
+	virtual					~QueueRemoteUploadScan();
+
+	virtual int				Perform();
+	virtual bool			Equals(const QueueOperation & other);
+	virtual RemoteUploadPlan * ReleasePlan();
+	virtual RemoteUploadPlan * GetPlan() const;
+
+protected:
+	RemoteUploadPlan *		m_plan;
+};
+
+class QueueEnsureDirectory : public QueueOperation {
+public:
+							QueueEnsureDirectory(HWND hNotify, const char * directoryPath, int notifyCode = 0, void * notifyData = NULL);
+	virtual					~QueueEnsureDirectory();
+
+	virtual int				Perform();
+	virtual bool			Equals(const QueueOperation & other);
+	virtual const char *		GetDirectoryPath() const;
+
+protected:
+	char *					m_directoryPath;
+	RemoteUploadBatch *		m_batch;
+};
+
+class QueueRemoteUploadComplete : public QueueOperation {
+public:
+							QueueRemoteUploadComplete(HWND hNotify, RemoteUploadBatch * batch, int notifyCode = 0);
+	virtual					~QueueRemoteUploadComplete();
+
+	virtual int				Perform();
+	virtual bool			Equals(const QueueOperation & other);
+	virtual RemoteUploadBatch * GetBatch() const;
+
+protected:
+	RemoteUploadBatch *		m_batch;
+};
+
 /*
 notifyCode: 0: Automatic location. 1: User specified location
 */
@@ -204,6 +247,15 @@ protected:
 	char*					m_externalFile;
 	TCHAR*					m_localFile;
 	Transfer_Mode			m_tMode;
+};
+
+class QueueRemoteUploadFile : public QueueUpload {
+public:
+							QueueRemoteUploadFile(HWND hNotify, const char * externalFile, const TCHAR * localFile, Transfer_Mode tMode, RemoteUploadBatch * batch, int notifyCode = 0);
+	virtual					~QueueRemoteUploadFile();
+
+protected:
+	RemoteUploadBatch *		m_batch;
 };
 
 class QueueGetDir : public QueueOperation {

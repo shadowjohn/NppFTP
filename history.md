@@ -450,3 +450,13 @@
 - `ApplyRemoteDirectoryListing` 只將同一 remote parent 下的同名非目錄項目標成 collision；同名 remote directory 不會被當成檔案覆蓋候選。
 - TDD：先確認缺少 `RemoteUploadPlan.h/.cpp` 的 C1083 紅燈；補實作後，手動順序、synthetic `FTPFile` collision 與 `_build\tests` 巢狀 fixture 均通過，輸出 `remote_upload_plan_exit=0`。另修正原計畫不能對多 source 共用單一 `/Fo...obj` 的 MSVC 指令。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`DBC2AF958831E0FA98187F6DF874B9EB10F5F5327B1DBA9F9BEAAEFA0CF11F71`。
+
+## 2026-07-10 Queue recursive remote uploads in order
+
+- 新增 remote upload scan、ensure-directory、batch upload 與 complete marker operations；scan 只走 `m_mainQueue`，所有 mkdir / upload / complete 嚴格依 planner 順序放進同一條 `m_transferQueue`，避免跨 queue 建目錄競賽。
+- scan 只在 wrapper 明確回 `RemoteFailureNotFound` 時繼續；PermissionDenied 與 Unknown 都停止。FTP/FTPS 常把不存在與權限問題都包成模糊 550，因此本刀選擇不猜、不冒險繞過 collision scan，實際相容性留待 real-server QA。
+- ensure-directory 先嘗試 `MkDir`；若失敗但 `GetDir` 成功，就視為已存在目錄並安全合併，不刪除遠端內容，也不把同名檔誤認為目錄。
+- `RemoteUploadBatch` 擁有 plan、refresh target、完成數與 failures。recursive mkdir / upload / complete operation 各持 interlocked reference，避免使用者在 active transfer 中斷線、`ClearQueue` 先刪 complete marker 後造成 notifyData use-after-free。
+- focused test 新增 selected 狀態與 batch refcount smoke checks，`_build\tests\remote_upload_plan.exe` 輸出 `remote_upload_plan_exit=0`；enqueue 順序由已測 planner vector 與單一 transfer-queue loop 保證，未留下暫時 diagnostic。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`F78F2F490465C0F8E6F7CC91C775D5D563030094D561F70960230E870CACEEF0`。
+- 本筆只完成 queue/session 層，flat browser 的 directory picker/drop 接線、collision prompt、batch summary 與每列 progress 留在下一筆。

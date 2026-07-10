@@ -32,6 +32,9 @@ int main()
 	assert(plan.GetItems()[1].isDirectory);
 	assert(!plan.GetItems()[2].isDirectory);
 	assert(!plan.GetItems()[3].isDirectory);
+	plan.GetItems()[2].selected = false;
+	assert(!plan.GetItems()[2].selected);
+	assert(plan.GetItems()[3].selected);
 
 	FTPFile listed{};
 	lstrcpynA(listed.filePath, "/var/www/site/index.html", MAX_PATH);
@@ -75,6 +78,15 @@ int main()
 	assert(DeleteFile(indexFile));
 	assert(RemoveDirectory(assets));
 	assert(RemoveDirectory(fixture));
+
+	RemoteUploadPlan * ownedPlan = new RemoteUploadPlan;
+	RemoteUploadBatch * batch = new RemoteUploadBatch(ownedPlan, "/var/www");
+	assert(batch->plan == ownedPlan);
+	assert(batch->targetPath == "/var/www");
+	assert(batch->completedCount == 0);
+	batch->AddRef();
+	batch->Release();
+	batch->Release();
 	printf("remote_upload_plan_exit=0\n");
 	return 0;
 }

@@ -447,6 +447,61 @@ int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool t
 	return 0;
 }
 
+int FTPSession::ScanRemoteUploadPlan(RemoteUploadPlan * plan) {
+	if (!plan)
+		return -1;
+	if (!m_running || !m_mainQueue) {
+		delete plan;
+		return -1;
+	}
+
+	QueueRemoteUploadScan * scan = new QueueRemoteUploadScan(m_hNotify, plan);
+	m_mainQueue->AddQueueOp(scan);
+	return 0;
+}
+
+int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
+	if (!plan)
+		return -1;
+	if (!m_running || !m_transferQueue || !m_currentProfile || plan->GetItems().empty() ||
+		!plan->GetItems()[0].isDirectory) {
+		delete plan;
+		return -1;
+	}
+
+	const std::vector<RemoteUploadItem> & items = plan->GetItems();
+	std::string targetPath = items[0].remotePath;
+	size_t slash = targetPath.find_last_of('/');
+	if (slash == std::string::npos) {
+		delete plan;
+		return -1;
+	}
+	targetPath = slash == 0 ? "/" : targetPath.substr(0, slash);
+
+	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, targetPath.c_str());
+	QueueRemoteUploadComplete * complete = new QueueRemoteUploadComplete(m_hNotify, batch);
+	for (size_t i = 0; i < items.size(); ++i) {
+		const RemoteUploadItem & item = items[i];
+		if (item.isDirectory) {
+			QueueEnsureDirectory * ensure = new QueueEnsureDirectory(m_hNotify, item.remotePath.c_str(), 0, batch);
+			m_transferQueue->AddQueueOp(ensure);
+			continue;
+		}
+		if (!item.selected)
+			continue;
+
+		const TCHAR * localName = PU::FindLocalFilename(item.localPath.c_str());
+		if (!localName)
+			localName = item.localPath.c_str();
+		Transfer_Mode mode = m_currentProfile->GetFileTransferMode(localName);
+		QueueRemoteUploadFile * upload = new QueueRemoteUploadFile(m_hNotify, item.remotePath.c_str(), item.localPath.c_str(), mode, batch, 1);
+		m_transferQueue->AddQueueOp(upload);
+	}
+	m_transferQueue->AddQueueOp(complete);
+	batch->Release();
+	return 0;
+}
+
 int FTPSession::CopyFile(const char* sourcefile, const char* target, int code) {
 	if (!m_running)
 		return -1;

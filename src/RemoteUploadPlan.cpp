@@ -207,3 +207,27 @@ std::vector<RemoteUploadItem> & RemoteUploadPlan::GetItems()
 {
 	return m_items;
 }
+
+RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath) :
+	plan(uploadPlan),
+	targetPath(refreshPath ? refreshPath : ""),
+	completedCount(0),
+	m_references(1)
+{
+}
+
+RemoteUploadBatch::~RemoteUploadBatch()
+{
+	delete plan;
+}
+
+void RemoteUploadBatch::AddRef()
+{
+	InterlockedIncrement(&m_references);
+}
+
+void RemoteUploadBatch::Release()
+{
+	if (InterlockedDecrement(&m_references) == 0)
+		delete this;
+}
