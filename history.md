@@ -413,3 +413,4 @@
 - 失敗提示：單一 CHMOD / 更名 / 刪除 / 建立 / 上傳失敗要跳出結果提示並記到 Output；遞迴上傳逐筆寫 Output，結束只跳一個摘要。SFTP 可顯示權限不足或檔案不存在；FTP/FTPS 若只有模糊 server rejection（常見 550），必須如實顯示不確定原因，不能硬猜。
 - 下一刀另做多國語系選擇，預設正體中文；本刀新增 UI 文字先維持英文，避免把 i18n 與檔案操作風險混在同一組變更。
 - 詳細規格：`docs/superpowers/specs/2026-07-10-remote-file-operations-design.md`。
+- 實作拆成兩份可獨立驗收的 task 計畫：先做直接檔案操作與錯誤提示，再做遞迴資料夾掃描、合併上傳與批次摘要；文件位於 `docs/superpowers/plans/2026-07-10-flat-remote-file-actions.md` 與 `docs/superpowers/plans/2026-07-10-recursive-directory-upload.md`。
