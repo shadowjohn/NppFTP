@@ -478,3 +478,9 @@
 - 修正：建立/銷毀 FTPWindow 時以 `NPPM_MODELESSDIALOG` 登記/解除登記；remote list subclass 只在 F2 的 `WM_GETDLGCODE` 加上 `DLGC_WANTALLKEYS`，其餘鍵盤訊息維持原行為，並沿用既有 `PromptRemoteRename` handler。
 - TDD：新增 Win32 focused test，以真實 `IsDialogMessage` 驗證 F2 可抵達 list view 的 `LVN_KEYDOWN`；先因 `remote_browser_wants_key` 不存在而紅燈，補最小實作後輸出 `remote_list_keyboard_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`9E79B7CF81D9272F7AD051EFD4FBEE12C2F74F5B24E35CB4EEFFC49A402A0F81`。F2 仍待 Notepad++ 實機複驗。
+
+## 2026-07-10 Add local Notepad++ deployment helper
+
+- 新增 `copyNppFTPdllToRealENV.bat`，將 repo 相對路徑 `_build\Release\NppFTP.dll` 覆蓋到 `C:\Program Files\Notepad++\plugins\NppFTP\NppFTP.dll`。
+- 腳本先確認 build output 與正式 plugin 目錄存在，使用 `copy /Y /B` 覆蓋，再以 `fc /B` 驗證內容一致；失敗時提示關閉 Notepad++ 並以系統管理員身分執行。
+- 腳本不自動要求 UAC、不建立缺少的正式目錄，也未由自動驗證直接修改目前安裝中的 plugin。
