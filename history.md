@@ -471,3 +471,10 @@
 - focused test 覆蓋 parent-before-child path、selected、target-first directory detection、file/directory/link collision、fixture enumeration 與 batch refcount，輸出 `remote_upload_plan_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`D4D44E738558D82A76F42E180172AF71ABDF42730004CA9C46C5F6BDA9CFEA5A`。
 - 尚未替使用者連線執行 remote mutation；FTP/SFTP 新/舊目錄 merge、nested collision、symlink、每列 progress 與單一 summary 仍待 Notepad++ 實機 QA。
+
+## 2026-07-10 Fix F2 remote rename routing
+
+- 根因：Notepad++ 會先對已登記的 modeless 視窗執行 `IsDialogMessage`，再處理全域 accelerator；NppFTP dock 視窗未登記，因此 F2 被 Notepad++ 的快捷鍵先吃掉，flat list 的 `LVN_KEYDOWN` 不會觸發。
+- 修正：建立/銷毀 FTPWindow 時以 `NPPM_MODELESSDIALOG` 登記/解除登記；remote list subclass 只在 F2 的 `WM_GETDLGCODE` 加上 `DLGC_WANTALLKEYS`，其餘鍵盤訊息維持原行為，並沿用既有 `PromptRemoteRename` handler。
+- TDD：新增 Win32 focused test，以真實 `IsDialogMessage` 驗證 F2 可抵達 list view 的 `LVN_KEYDOWN`；先因 `remote_browser_wants_key` 不存在而紅燈，補最小實作後輸出 `remote_list_keyboard_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`9E79B7CF81D9272F7AD051EFD4FBEE12C2F74F5B24E35CB4EEFFC49A402A0F81`。F2 仍待 Notepad++ 實機複驗。

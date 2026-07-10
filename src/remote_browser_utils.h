@@ -14,6 +14,11 @@ enum RemoteOverwriteDecision {
 	RemoteOverwriteSkip = 2
 };
 
+static inline bool remote_browser_wants_key(const MSG *message)
+{
+	return message && message->message == WM_KEYDOWN && message->wParam == VK_F2;
+}
+
 static inline bool remote_browser_matches_filter(const TCHAR *name, const TCHAR *filter)
 {
 	if (!name)

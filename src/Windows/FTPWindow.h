@@ -132,6 +132,7 @@ protected:
 	virtual bool			IsRemoteParentItem(int itemIndex);
 
 	static LRESULT CALLBACK	RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK	RemoteListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR subclassId, DWORD_PTR data);
 
 	//virtual int				UploadOtherFile(FileObject * parent);
 

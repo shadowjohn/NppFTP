@@ -269,11 +269,13 @@ int FTPWindow::Create(HWND hParent, HWND hNpp, int MenuID, int MenuCommand) {
 	m_dropHwnd = m_hwnd;
 	DoRegisterDragDrop(m_treeview.GetHWND());
 	DoRegisterDragDrop(m_remoteList);
+	SendMessage(m_hNpp, NPPM_MODELESSDIALOG, MODELESSDIALOGADD, (LPARAM)m_hwnd);
 
 	return 0;
 }
 
 int FTPWindow::Destroy() {
+	SendMessage(m_hNpp, NPPM_MODELESSDIALOG, MODELESSDIALOGREMOVE, (LPARAM)m_hwnd);
 	DoRevokeDragDrop(m_remoteList);
 	DoRevokeDragDrop(m_treeview.GetHWND());
 	DestroyRemoteBrowser();
@@ -480,6 +482,7 @@ int FTPWindow::CreateRemoteBrowser() {
 	SendMessage(m_remoteDirCombo, CB_LIMITTEXT, MAX_PATH - 1, 0);
 	SetWindowLongPtr(m_remoteDirCombo, GWLP_USERDATA, (LONG_PTR)this);
 	m_remoteDirComboProc = (WNDPROC)SetWindowLongPtr(m_remoteDirCombo, GWLP_WNDPROC, (LONG_PTR)FTPWindow::RemoteDirComboProc);
+	SetWindowSubclass(m_remoteList, FTPWindow::RemoteListProc, 1, 0);
 
 	ListView_SetExtendedListViewStyle(m_remoteList, LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP);
 	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_NAME, TEXT("Name"), 160);
@@ -492,6 +495,8 @@ int FTPWindow::CreateRemoteBrowser() {
 }
 
 int FTPWindow::DestroyRemoteBrowser() {
+	if (m_remoteList)
+		RemoveWindowSubclass(m_remoteList, FTPWindow::RemoteListProc, 1);
 	HWND controls[] = { m_remoteHostLabel, m_remotePathLabel, m_remoteSearchLabel, m_remoteSearchEdit, m_remoteDirLabel, m_remoteDirCombo, m_remoteList };
 	for (int i = 0; i < (int)(sizeof(controls) / sizeof(controls[0])); i++) {
 		if (controls[i])
@@ -971,6 +976,13 @@ LRESULT CALLBACK FTPWindow::RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wPar
 	if (window && window->m_remoteDirComboProc)
 		return CallWindowProc(window->m_remoteDirComboProc, hwnd, uMsg, wParam, lParam);
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
+LRESULT CALLBACK FTPWindow::RemoteListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {
+	LRESULT result = DefSubclassProc(hwnd, uMsg, wParam, lParam);
+	if (uMsg == WM_GETDLGCODE && remote_browser_wants_key((MSG*)lParam))
+		result |= DLGC_WANTALLKEYS;
+	return result;
 }
 
 int FTPWindow::RegisterClass() {
