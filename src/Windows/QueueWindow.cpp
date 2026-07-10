@@ -170,10 +170,6 @@ int QueueWindow::ProgressQueueItem(QueueOperation * op) {
 	if (index == -1)
 		return -1;
 
-	if (index != 0) {
-		return -1;
-	}
-
 	TCHAR buffer[10];
 	float progress = op->GetProgress();
 	if (progress > 100.0f || progress < 0.0f) {

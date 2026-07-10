@@ -49,6 +49,18 @@ enum {
 	REMOTE_COLUMN_PERMISSIONS
 };
 
+static const TCHAR * GetRemoteFailureMessage(RemoteFailureKind failure)
+{
+	switch(failure) {
+		case RemoteFailurePermissionDenied:
+			return TEXT("Permission denied by the remote server.");
+		case RemoteFailureNotFound:
+			return TEXT("The remote file or directory no longer exists.");
+		default:
+			return TEXT("The remote server rejected the operation. It may be a permission or path problem.");
+	}
+}
+
 static void InsertRemoteListColumn(HWND list, int index, const TCHAR * text, int width)
 {
 	LVCOLUMN lvc{};
@@ -805,7 +817,7 @@ int FTPWindow::QueueDirectRemoteUploads(FileObject * target, const std::vector<s
 			continue;
 		}
 		if ((attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
-			OutMsg("[FTPWindow] Directory upload will be handled by the recursive upload task: %T", path);
+			BeginRemoteDirectoryUpload(path, target);
 			continue;
 		}
 
@@ -831,6 +843,91 @@ int FTPWindow::QueueDirectRemoteUploads(FileObject * target, const std::vector<s
 	}
 
 	return 0;
+}
+
+int FTPWindow::BeginRemoteDirectoryUpload(const TCHAR * localDirectory, FileObject * target) {
+	if (!localDirectory || !target || !target->isDir() || !m_ftpSession)
+		return -1;
+
+	RemoteUploadPlan * plan = new RemoteUploadPlan;
+	if (plan->Build(localDirectory, target->GetPath()) != 0) {
+		OutErr("[FTPWindow] Unable to read local directory %T", localDirectory);
+		::MessageBox(m_hwnd, TEXT("Unable to read the local directory."), TEXT("Directory upload failed"), MB_OK | MB_ICONERROR);
+		delete plan;
+		return -1;
+	}
+
+	m_remoteBusyCursor = true;
+	int result = m_ftpSession->ScanRemoteUploadPlan(plan);
+	if (result != 0)
+		m_remoteBusyCursor = false;
+	return result;
+}
+
+int FTPWindow::ConfirmRemoteUploadCollisions(RemoteUploadPlan * plan) {
+	if (!plan)
+		return -1;
+
+	std::vector<RemoteUploadItem> & items = plan->GetItems();
+	for (size_t i = 0; i < items.size(); ++i) {
+		RemoteUploadItem & item = items[i];
+		if (item.isDirectory || !item.remoteFileExists || !item.selected || m_overwriteAll)
+			continue;
+
+		const TCHAR * localName = PU::FindLocalFilename(item.localPath.c_str());
+		if (!localName)
+			localName = item.localPath.c_str();
+		OverwriteDialog dialog;
+		dialog.Create(m_hwnd, localName);
+		if (dialog.GetDecision() == RemoteOverwriteCancel)
+			return 1;
+		if (dialog.GetDecision() == RemoteOverwriteSkip) {
+			item.selected = false;
+			continue;
+		}
+		if (dialog.GetOverwriteAll())
+			m_overwriteAll = true;
+	}
+	return 0;
+}
+
+void FTPWindow::RecordRemoteUploadFailure(RemoteUploadBatch * batch, const TCHAR * operation, QueueOperation * op) {
+	if (!batch || !operation || !op)
+		return;
+
+	TCHAR * remotePath = NULL;
+	if (op->GetType() == QueueOperation::QueueTypeEnsureDirectory)
+		remotePath = SU::Utf8ToTChar(((QueueEnsureDirectory*)op)->GetDirectoryPath());
+	else if (op->GetType() == QueueOperation::QueueTypeUpload)
+		remotePath = SU::Utf8ToTChar(((QueueUpload*)op)->GetExternalPath());
+	const TCHAR * displayPath = remotePath ? remotePath : TEXT("(unknown path)");
+	const TCHAR * reason = GetRemoteFailureMessage(op->GetFailureKind());
+
+	std::basic_string<TCHAR> failure(operation);
+	failure.append(TEXT(" failed for "));
+	failure.append(displayPath);
+	failure.append(TEXT(": "));
+	failure.append(reason);
+	batch->failures.push_back(failure);
+	OutErr("[FTPWindow] %T", failure.c_str());
+	SU::FreeTChar(remotePath);
+}
+
+void FTPWindow::ShowRemoteUploadSummary(RemoteUploadBatch * batch) {
+	if (!batch)
+		return;
+
+	OutMsg("[FTPWindow] Directory upload completed: %d file(s), %d failed item(s).", batch->completedCount, (int)batch->failures.size());
+	if (!batch->targetPath.empty())
+		m_ftpSession->GetDirectory(batch->targetPath.c_str());
+	if (batch->failures.empty()) {
+		::MessageBox(m_hwnd, TEXT("Directory upload completed."), TEXT("Directory upload"), MB_OK | MB_ICONINFORMATION);
+		return;
+	}
+
+	TCHAR message[160]{};
+	SU::TSprintf(message, 160, TEXT("Directory upload completed with %d failed item(s). See Output for details."), (int)batch->failures.size());
+	::MessageBox(m_hwnd, message, TEXT("Directory upload"), MB_OK | MB_ICONWARNING);
 }
 
 FileObject * FTPWindow::GetRemoteDropTarget(POINTL point, int * itemIndex) {
@@ -2030,7 +2127,8 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			break; }
 		case QueueOperation::QueueTypeConnect:
 		case QueueOperation::QueueTypeDisconnect:
-		case QueueOperation::QueueTypeDirectoryGet: {
+		case QueueOperation::QueueTypeDirectoryGet:
+		case QueueOperation::QueueTypeRemoteUploadScan: {
 			if (!isStart)
 				m_remoteBusyCursor = false;
 			break; }
@@ -2073,6 +2171,30 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			OutMsg("[FTPWindow] Disconnected.");
 			OnDisconnect(code);
 			result = 1;
+			break; }
+		case QueueOperation::QueueTypeRemoteUploadScan: {
+			QueueRemoteUploadScan * scan = (QueueRemoteUploadScan*)queueOp;
+			if (isStart) {
+				OutMsg("[FTPWindow] Scanning remote directories for upload conflicts...");
+				break;
+			}
+			if (queueResult == -1) {
+				OutErr("[FTPWindow] Unable to scan remote directories for upload conflicts");
+				ShowOperationFailure(queueOp);
+				OnError(queueOp, code, data, isStart);
+				break;
+			}
+
+			RemoteUploadPlan * plan = scan->ReleasePlan();
+			if (ConfirmRemoteUploadCollisions(plan) != 0) {
+				OutMsg("[FTPWindow] Directory upload cancelled.");
+				delete plan;
+				break;
+			}
+			if (m_ftpSession->QueueRemoteUploadPlan(plan) != 0) {
+				OutErr("[FTPWindow] Unable to queue directory upload");
+				::MessageBox(m_hwnd, TEXT("Unable to queue the directory upload."), TEXT("Directory upload failed"), MB_OK | MB_ICONERROR);
+			}
 			break; }
 		case QueueOperation::QueueTypeDirectoryGet: {
 			QueueGetDir * dirop = (QueueGetDir*)queueOp;
@@ -2134,9 +2256,14 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			break; }
 		case QueueOperation::QueueTypeUpload: {
 			QueueUpload * opuld = (QueueUpload*)queueOp;
+			RemoteUploadBatch * batch = (RemoteUploadBatch*)data;
 			if (isStart)
 				break;
 			if (queueResult == -1) {
+				if (batch) {
+					RecordRemoteUploadFailure(batch, TEXT("Upload file"), queueOp);
+					break;
+				}
 				OutErr("[FTPWindow] Upload of %T failed", opuld->GetLocalPath());
 				ShowOperationFailure(queueOp);
 				OnError(queueOp, code, data, isStart);
@@ -2144,6 +2271,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			}
 
 			OutMsg("[FTPWindow] Upload of %T succeeded.", SU::Utf8ToTChar(opuld->GetExternalPath()));
+			if (batch) {
+				batch->completedCount++;
+				break;
+			}
 
 			char path[MAX_PATH];
 			strcpy(path, opuld->GetExternalPath());
@@ -2154,6 +2285,21 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			*name = 0;	//truncate path
 
 			m_ftpSession->GetDirectory(path);
+			break; }
+		case QueueOperation::QueueTypeEnsureDirectory: {
+			QueueEnsureDirectory * ensure = (QueueEnsureDirectory*)queueOp;
+			RemoteUploadBatch * batch = (RemoteUploadBatch*)data;
+			if (isStart)
+				break;
+			if (queueResult == -1) {
+				RecordRemoteUploadFailure(batch, TEXT("Create directory"), queueOp);
+				break;
+			}
+			OutMsg("[FTPWindow] Ready directory %T", SU::Utf8ToTChar(ensure->GetDirectoryPath()));
+			break; }
+		case QueueOperation::QueueTypeRemoteUploadComplete: {
+			if (!isStart && queueResult == 0)
+				ShowRemoteUploadSummary(((QueueRemoteUploadComplete*)queueOp)->GetBatch());
 			break; }
 		case QueueOperation::QueueTypeDirectoryCreate: {
 			QueueCreateDir * opmkdir = (QueueCreateDir*)queueOp;
@@ -2288,20 +2434,7 @@ int FTPWindow::OnError(QueueOperation * /*queueOp*/, int /*code*/, void * /*data
 }
 
 int FTPWindow::ShowOperationFailure(QueueOperation * queueOp) {
-	const TCHAR * message = TEXT("The remote server rejected the operation. It may be a permission or path problem.");
-	if (queueOp) {
-		switch(queueOp->GetFailureKind()) {
-			case RemoteFailurePermissionDenied:
-				message = TEXT("Permission denied by the remote server.");
-				break;
-			case RemoteFailureNotFound:
-				message = TEXT("The remote file or directory no longer exists.");
-				break;
-			default:
-				break;
-		}
-	}
-
+	const TCHAR * message = GetRemoteFailureMessage(queueOp ? queueOp->GetFailureKind() : RemoteFailureUnknown);
 	::MessageBox(m_hwnd, message, TEXT("Remote operation failed"), MB_OK | MB_ICONERROR);
 	return 0;
 }

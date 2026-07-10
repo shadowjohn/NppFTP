@@ -32,14 +32,29 @@ int main()
 	assert(plan.GetItems()[1].isDirectory);
 	assert(!plan.GetItems()[2].isDirectory);
 	assert(!plan.GetItems()[3].isDirectory);
+	assert(plan.GetItems()[0].remotePath == "/var/www/site");
+	assert(plan.GetItems()[1].remotePath == "/var/www/site/assets");
+	assert(plan.GetItems()[2].remotePath == "/var/www/site/index.html");
+	assert(plan.GetItems()[3].remotePath == "/var/www/site/assets/app.js");
+	assert(!plan.GetItems()[0].remoteDirectoryExists);
+	assert(!plan.GetItems()[1].remoteDirectoryExists);
 	plan.GetItems()[2].selected = false;
 	assert(!plan.GetItems()[2].selected);
 	assert(plan.GetItems()[3].selected);
 
-	FTPFile listed{};
-	lstrcpynA(listed.filePath, "/var/www/site/index.html", MAX_PATH);
-	listed.fileType = FTPTypeFile;
-	assert(plan.ApplyRemoteDirectoryListing("/var/www/site", &listed, 1) == 0);
+	FTPFile targetListing{};
+	lstrcpynA(targetListing.filePath, "/var/www/site", MAX_PATH);
+	targetListing.fileType = FTPTypeLink;
+	assert(plan.ApplyRemoteDirectoryListing("/var/www", &targetListing, 1) == 0);
+	assert(plan.GetItems()[0].remoteDirectoryExists);
+
+	FTPFile listed[2]{};
+	lstrcpynA(listed[0].filePath, "/var/www/site/index.html", MAX_PATH);
+	listed[0].fileType = FTPTypeFile;
+	lstrcpynA(listed[1].filePath, "/var/www/site/assets", MAX_PATH);
+	listed[1].fileType = FTPTypeDir;
+	assert(plan.ApplyRemoteDirectoryListing("/var/www/site", listed, 2) == 0);
+	assert(plan.GetItems()[1].remoteDirectoryExists);
 	assert(plan.GetItems()[2].remoteFileExists);
 	assert(!plan.GetItems()[3].remoteFileExists);
 
@@ -48,6 +63,9 @@ int main()
 	listedDirectory.fileType = FTPTypeDir;
 	assert(plan.ApplyRemoteDirectoryListing("/var/www/site/assets", &listedDirectory, 1) == 0);
 	assert(!plan.GetItems()[3].remoteFileExists);
+	listedDirectory.fileType = FTPTypeLink;
+	assert(plan.ApplyRemoteDirectoryListing("/var/www/site/assets", &listedDirectory, 1) == 0);
+	assert(plan.GetItems()[3].remoteFileExists);
 
 	const TCHAR * fixture = TEXT("_build\\tests\\remote_upload_fixture");
 	const TCHAR * assets = TEXT("_build\\tests\\remote_upload_fixture\\assets");
@@ -64,6 +82,7 @@ int main()
 
 	RemoteUploadPlan built;
 	assert(built.Build(fixture, "/var/www") == 0);
+	assert(built.GetTargetPath() == "/var/www");
 	assert(built.GetItems().size() == 4);
 	assert(built.GetItems()[0].isDirectory);
 	assert(built.GetItems()[1].isDirectory);

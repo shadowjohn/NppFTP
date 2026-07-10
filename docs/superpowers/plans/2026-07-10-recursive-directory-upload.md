@@ -4,7 +4,7 @@
 
 **Goal:** Recursively upload local directories into the chosen remote target, merge existing remote directories, prompt for known file collisions, update every file progress row, and show one failure summary.
 
-**Architecture:** Build an owned upload plan, scan only remote directories that the plan enters on m_mainQueue, make overwrite choices on the UI thread, then enqueue ensure-directory and file-upload operations in parent-first order on m_transferQueue. A final no-op operation owns batch state until FTPWindow shows the summary.
+**Architecture:** Build an owned upload plan, list the selected remote target and scan only planned directories known to exist on m_mainQueue, make overwrite choices on the UI thread, then enqueue ensure-directory and file-upload operations in parent-first order on m_transferQueue. A final completion operation keeps batch state alive until FTPWindow shows the summary.
 
 **Tech Stack:** C++11 std::vector/std::basic_string, Win32 FindFirstFile/FindNextFile, FTPClientWrapper, QueueOperation, FTPQueue, assert-based test executables.
 
@@ -219,7 +219,7 @@ git commit -m "feat: queue recursive remote uploads in order"
 - Consumes RemoteUploadPlan, FTPSession scan/queue methods, OverwriteDialog, and RemoteUploadBatch.
 - Produces FTPWindow::BeginRemoteDirectoryUpload, ConfirmRemoteUploadCollisions, RecordRemoteUploadFailure, and ShowRemoteUploadSummary.
 
-- [ ] **Step 1: Add final parent-before-child assertions**
+- [x] **Step 1: Add final parent-before-child assertions**
 
 Add:
 
@@ -230,13 +230,13 @@ assert(plan.GetItems()[2].remotePath == "/var/www/site/index.html");
 assert(plan.GetItems()[3].remotePath == "/var/www/site/assets/app.js");
 ~~~
 
-- [ ] **Step 2: Run focused test**
+- [x] **Step 2: Run focused test**
 
 Run the Task 1 Step 2 command.
 
 Expected: remote_upload_plan_exit=0.
 
-- [ ] **Step 3: Wire directories into the flat browser**
+- [x] **Step 3: Wire directories into the flat browser**
 
 Add:
 
@@ -273,7 +273,9 @@ Run the Task 1 test command, then:
 
 Expected: remote_upload_plan_exit=0 and a successful build. In Notepad++, verify picker and drag directory target rules, existing-directory merge, nested overwrite prompt, Skip, overwrite-all reset, every file progress row, one summary dialog, and denied/missing-path Output.
 
-- [ ] **Step 5: Commit and record**
+Automated focused test and x64 Release build passed on 2026-07-10. The Notepad++ FTP/SFTP mutation checks remain pending in todo.md.
+
+- [x] **Step 5: Commit and record**
 
 ~~~
 git add src/Windows/FTPWindow.h src/Windows/FTPWindow.cpp src/Windows/QueueWindow.cpp tests/remote_upload_plan.cpp todo.md history.md

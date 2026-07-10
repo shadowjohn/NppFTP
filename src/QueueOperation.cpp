@@ -645,9 +645,28 @@ int QueueRemoteUploadScan::Perform() {
 			return m_result;
 	}
 
+	const std::string & targetPath = m_plan->GetTargetPath();
+	if (targetPath.empty()) {
+		m_result = -1;
+		return m_result;
+	}
+	FTPFile * targetFiles = NULL;
+	int targetCount = m_client->GetDir(targetPath.c_str(), &targetFiles);
+	if (targetCount < 0) {
+		m_result = -1;
+		return m_result;
+	}
+	int targetApplyResult = m_plan->ApplyRemoteDirectoryListing(targetPath.c_str(), targetFiles, targetCount);
+	if (targetFiles)
+		m_client->ReleaseDir(targetFiles, targetCount);
+	if (targetApplyResult != 0) {
+		m_result = -1;
+		return m_result;
+	}
+
 	const std::vector<RemoteUploadItem> & items = m_plan->GetItems();
 	for (size_t i = 0; i < items.size(); ++i) {
-		if (!items[i].isDirectory)
+		if (!items[i].isDirectory || !items[i].remoteDirectoryExists)
 			continue;
 
 		FTPFile * files = NULL;

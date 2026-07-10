@@ -460,3 +460,14 @@
 - focused test 新增 selected 狀態與 batch refcount smoke checks，`_build\tests\remote_upload_plan.exe` 輸出 `remote_upload_plan_exit=0`；enqueue 順序由已測 planner vector 與單一 transfer-queue loop 保證，未留下暫時 diagnostic。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`F78F2F490465C0F8E6F7CC91C775D5D563030094D561F70960230E870CACEEF0`。
 - 本筆只完成 queue/session 層，flat browser 的 directory picker/drop 接線、collision prompt、batch summary 與每列 progress 留在下一筆。
+
+## 2026-07-10 Upload remote directories recursively
+
+- flat browser 的 OLE drop 現在接受檔案與本機目錄混合輸入；空白/檔案列仍以上傳到目前 remote directory，目錄列以上傳到該目錄。本機目錄先建立 owned plan，再進 remote preflight 與 ordered transfer queue。
+- preflight 先 LIST 使用者選定且已存在的 target，標出 local root/child 哪些 remote directory 真的存在，只深入掃描存在者。新目錄不需要猜 FTP/FTPS 模糊 550 的意思，也能安全交給 mkdir；若已存在目錄本身無法 LIST，仍停止而不繞過 collision scan。
+- remote 同名 directory 採 merge，不刪除重建；remote link 對 local directory 視為需深入 scan，對 local file 視為 collision，避免沿未掃描 symlink 直接寫入。
+- remote scan 成功後在 UI thread 逐一顯示既有 overwrite dialog；Skip 只取消該檔，Cancel 取消該 local directory，overwrite-all 沿用本次連線狀態並於 disconnect 重設。
+- batch mkdir/upload 失敗逐筆寫 Output，不跳單檔 modal；complete marker 只 refresh 選定 target 一次，並只顯示一個完成或失敗數摘要。`QueueWindow::ProgressQueueItem` 依 operation pointer 更新任意列，不再只允許 index 0。
+- focused test 覆蓋 parent-before-child path、selected、target-first directory detection、file/directory/link collision、fixture enumeration 與 batch refcount，輸出 `remote_upload_plan_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`D4D44E738558D82A76F42E180172AF71ABDF42730004CA9C46C5F6BDA9CFEA5A`。
+- 尚未替使用者連線執行 remote mutation；FTP/SFTP 新/舊目錄 merge、nested collision、symlink、每列 progress 與單一 summary 仍待 Notepad++ 實機 QA。

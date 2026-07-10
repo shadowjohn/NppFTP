@@ -57,8 +57,14 @@ static const char * RemoteFilename(const char * path)
 int RemoteUploadPlan::Build(const TCHAR * localDirectory, const char * remoteParent)
 {
 	m_items.clear();
+	m_targetPath.clear();
 	if (!localDirectory || !remoteParent || lstrlen(localDirectory) <= 0 || lstrlen(localDirectory) >= MAX_PATH)
 		return -1;
+	if (!remoteParent[0] || strlen(remoteParent) >= MAX_PATH)
+		return -1;
+	m_targetPath = remoteParent;
+	while (m_targetPath.size() > 1 && m_targetPath[m_targetPath.size() - 1] == '/')
+		m_targetPath.erase(m_targetPath.size() - 1);
 
 	TCHAR cleanDirectory[MAX_PATH]{};
 	lstrcpyn(cleanDirectory, localDirectory, MAX_PATH);
@@ -92,6 +98,7 @@ int RemoteUploadPlan::AddDirectory(const TCHAR * localPath, const char * remoteP
 	item.isDirectory = true;
 	item.localPath = localPath;
 	item.remotePath = remotePath;
+	item.remoteDirectoryExists = false;
 	item.remoteFileExists = false;
 	item.selected = true;
 
@@ -116,6 +123,7 @@ int RemoteUploadPlan::AddFile(const TCHAR * localPath, const char * remotePath)
 	item.isDirectory = false;
 	item.localPath = localPath;
 	item.remotePath = remotePath;
+	item.remoteDirectoryExists = false;
 	item.remoteFileExists = false;
 	item.selected = true;
 	m_items.push_back(item);
@@ -181,21 +189,31 @@ int RemoteUploadPlan::ApplyRemoteDirectoryListing(const char * directoryPath, co
 
 	for (size_t i = 0; i < m_items.size(); ++i) {
 		RemoteUploadItem & item = m_items[i];
-		if (item.isDirectory || RemoteParentPath(item.remotePath) != directory)
+		if (RemoteParentPath(item.remotePath) != directory)
 			continue;
+		item.remoteDirectoryExists = false;
 		item.remoteFileExists = false;
 		const char * itemName = RemoteFilename(item.remotePath.c_str());
 		for (int j = 0; j < count; ++j) {
-			if (files[j].fileType == FTPTypeDir)
+			bool listedDirectory = files[j].fileType == FTPTypeDir || files[j].fileType == FTPTypeLink;
+			if ((item.isDirectory && !listedDirectory) || (!item.isDirectory && files[j].fileType == FTPTypeDir))
 				continue;
 			const char * listedName = RemoteFilename(files[j].filePath);
 			if (itemName && listedName && strcmp(itemName, listedName) == 0) {
-				item.remoteFileExists = true;
+				if (item.isDirectory)
+					item.remoteDirectoryExists = true;
+				else
+					item.remoteFileExists = true;
 				break;
 			}
 		}
 	}
 	return 0;
+}
+
+const std::string & RemoteUploadPlan::GetTargetPath() const
+{
+	return m_targetPath;
 }
 
 const std::vector<RemoteUploadItem> & RemoteUploadPlan::GetItems() const

@@ -470,13 +470,11 @@ int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 	}
 
 	const std::vector<RemoteUploadItem> & items = plan->GetItems();
-	std::string targetPath = items[0].remotePath;
-	size_t slash = targetPath.find_last_of('/');
-	if (slash == std::string::npos) {
+	std::string targetPath = plan->GetTargetPath();
+	if (targetPath.empty()) {
 		delete plan;
 		return -1;
 	}
-	targetPath = slash == 0 ? "/" : targetPath.substr(0, slash);
 
 	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, targetPath.c_str());
 	QueueRemoteUploadComplete * complete = new QueueRemoteUploadComplete(m_hNotify, batch);

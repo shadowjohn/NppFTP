@@ -69,11 +69,12 @@
 - [x] Add native checkbox-based CHMOD dialog with synchronized octal mode.
 - [x] Add an owned recursive-upload planner with bounded paths and no reparse-point traversal.
 - [x] Add remote scan and parent-first mkdir/upload queue operations with disconnect-safe batch ownership.
-- [ ] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
+- [x] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
 - [x] Show actionable single-operation mutation failures.
-- [ ] Show one failure summary for recursive uploads.
+- [x] Show one failure summary for recursive uploads.
 - [ ] Run manual Notepad++ QA for flat-list menus, F2, picker/drop targets, Skip, Cancel, and session overwrite-all reset.
 - [ ] Run manual SFTP/FTP QA for permission-denied, missing-path, and generic operation failure messages.
+- [ ] Run real-server recursive-upload QA for FTP/SFTP target routing, new/existing directory merge, symlinks, nested collisions, every progress row, and one batch summary.
 
 ## 6. Localization
 

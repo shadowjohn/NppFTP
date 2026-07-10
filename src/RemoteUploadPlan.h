@@ -12,6 +12,7 @@ struct RemoteUploadItem {
 	bool isDirectory;
 	std::basic_string<TCHAR> localPath;
 	std::string remotePath;
+	bool remoteDirectoryExists;
 	bool remoteFileExists;
 	bool selected;
 };
@@ -22,6 +23,7 @@ public:
 	int AddDirectory(const TCHAR * localPath, const char * remotePath);
 	int AddFile(const TCHAR * localPath, const char * remotePath);
 	int ApplyRemoteDirectoryListing(const char * directoryPath, const FTPFile * files, int count);
+	const std::string & GetTargetPath() const;
 	const std::vector<RemoteUploadItem> & GetItems() const;
 	std::vector<RemoteUploadItem> & GetItems();
 
@@ -29,6 +31,7 @@ private:
 	int AddDirectoryRecursive(const TCHAR * localDirectory, const char * remoteDirectory);
 
 	std::vector<RemoteUploadItem> m_items;
+	std::string m_targetPath;
 };
 
 struct RemoteUploadBatch {

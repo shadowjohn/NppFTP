@@ -124,6 +124,10 @@ protected:
 	virtual int				PromptRemoteRename(FileObject * fo);
 	virtual int				SelectRemoteUploadFiles(FileObject * target);
 	virtual int				QueueDirectRemoteUploads(FileObject * target, const std::vector<std::basic_string<TCHAR> > & paths);
+	virtual int				BeginRemoteDirectoryUpload(const TCHAR * localDirectory, FileObject * target);
+	virtual int				ConfirmRemoteUploadCollisions(RemoteUploadPlan * plan);
+	virtual void			RecordRemoteUploadFailure(RemoteUploadBatch * batch, const TCHAR * operation, QueueOperation * op);
+	virtual void			ShowRemoteUploadSummary(RemoteUploadBatch * batch);
 	virtual FileObject*		GetRemoteDropTarget(POINTL point, int * itemIndex = NULL);
 	virtual bool			IsRemoteParentItem(int itemIndex);
 
