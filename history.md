@@ -403,3 +403,13 @@
 - 移除 `CI_build.yml` 內舊 upstream Windows/Linux matrix 與 tag release artifact job，只保留 `maintained_windows_x64`。
 - 原因：GitHub Actions run `29007714842` 中 `maintained_windows_x64` 已成功產出 artifact，但舊 matrix 的 Win32 / Linux CMake 路線因 zlib 下載 checksum mismatch 拖紅整個 workflow。
 - 決策：P0 先只保證 `v0.30.22-3wa.1` 需要的 Windows x64 Release build；舊平台不要在第一版 release 前搶修。
+
+## 2026-07-10 Design flat remote file operations
+
+- 核准將 flat remote browser 補成實用的檔案操作面：目錄、檔案、空白區各自有精簡右鍵選單；`F2` 更名；CHMOD 改用 Owner / Group / Other 九格權限勾選與三位八進位值同步的原生對話框。
+- 上傳目標規則：拖到空白或檔案就傳到目前目錄，拖到目錄就傳進該目錄；檔案選擇視窗可多選。
+- 單檔覆蓋依目標目錄目前的 flat-list cache 判斷；`Skip` 只略過該檔，`Don't ask again this session (overwrite all)` 僅在按 Overwrite 時生效，斷線後重設。刻意不為單檔上傳增加遠端 preflight。
+- 本機目錄可遞迴上傳；遠端同名目錄採合併，不刪除遠端內容重建。因遞迴子目錄需要在上傳前找出同名檔，目錄上傳會做受限的遠端掃描，再依既有 queue 順序先建父目錄、後傳檔案，讓 queue 顯示每個檔案的進度。
+- 失敗提示：單一 CHMOD / 更名 / 刪除 / 建立 / 上傳失敗要跳出結果提示並記到 Output；遞迴上傳逐筆寫 Output，結束只跳一個摘要。SFTP 可顯示權限不足或檔案不存在；FTP/FTPS 若只有模糊 server rejection（常見 550），必須如實顯示不確定原因，不能硬猜。
+- 下一刀另做多國語系選擇，預設正體中文；本刀新增 UI 文字先維持英文，避免把 i18n 與檔案操作風險混在同一組變更。
+- 詳細規格：`docs/superpowers/specs/2026-07-10-remote-file-operations-design.md`。

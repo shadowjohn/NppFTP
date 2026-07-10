@@ -62,6 +62,18 @@
 - [x] Keep labels ASCII in source; track localized labels only as a separate resource/i18n task.
 - [ ] Run manual Notepad++ QA for resize, icons, metadata columns, header drag, double-click, typed dir/file, and unknown path.
 
+## 5. Flat remote file operations
+
+- [ ] Add flat-list context menus, keyboard F2 rename, and current-directory blank-area commands.
+- [ ] Add multi-file picker and drag/drop target routing with session-only overwrite confirmation.
+- [ ] Add native checkbox-based CHMOD dialog with synchronized octal mode.
+- [ ] Add recursive local-directory upload, safe remote-directory merge, and per-file queue progress.
+- [ ] Show actionable mutation failures, with a single summary for recursive uploads.
+
+## 6. Localization
+
+- [ ] Add UI language selection in a separate slice; default to Traditional Chinese.
+
 ## Not now
 
 - [ ] Do not rewrite the whole FTP window before the flat browser works.
