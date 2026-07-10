@@ -40,7 +40,7 @@
 - Produces RemoteUploadItem, RemoteUploadPlan::Build, AddDirectory, AddFile, ApplyRemoteDirectoryListing, and GetItems.
 - Consumed by scan and queue work in Task 2.
 
-- [ ] **Step 1: Write the failing order test**
+- [x] **Step 1: Write the failing order test**
 
 Create tests/remote_upload_plan.cpp:
 
@@ -66,17 +66,17 @@ int main()
 }
 ~~~
 
-- [ ] **Step 2: Compile test and verify it fails**
+- [x] **Step 2: Compile test and verify it fails**
 
 Run:
 
 ~~~
-cmd.exe /C "call \"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat\" -arch=x64 && cl /nologo /EHsc /DUNICODE /D_UNICODE /D_WIN32 /DWIN32 /I. /I.\src /Fo_build\tests\remote_upload_plan.obj /Fe_build\tests\remote_upload_plan.exe tests\remote_upload_plan.cpp src\RemoteUploadPlan.cpp shlwapi.lib && _build\tests\remote_upload_plan.exe"
+cmd.exe /C "call \"C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat\" -arch=x64 && cl /nologo /EHsc /DUNICODE /D_UNICODE /D_WIN32 /DWIN32 /I. /I.\src /Fo_build\tests\ /Fe_build\tests\remote_upload_plan.exe tests\remote_upload_plan.cpp src\RemoteUploadPlan.cpp shlwapi.lib && _build\tests\remote_upload_plan.exe"
 ~~~
 
 Expected: compile failure because RemoteUploadPlan does not exist.
 
-- [ ] **Step 3: Implement the owned plan**
+- [x] **Step 3: Implement the owned plan**
 
 Use this public model:
 
@@ -107,13 +107,13 @@ Build clears m_items, gets the local basename with PathFindFileName, joins it to
 
 ApplyRemoteDirectoryListing compares listed FTPFile names with plan file basenames below directoryPath. Mark matching file items remoteFileExists=true and never mark directories as overwrite candidates.
 
-- [ ] **Step 4: Add collision test and verify green**
+- [x] **Step 4: Add collision test and verify green**
 
 Add a synthetic FTPFile for /var/www/site/index.html, apply it, and assert only that file has remoteFileExists. Run the Step 2 command.
 
 Expected: remote_upload_plan_exit=0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~
 git add src/RemoteUploadPlan.h src/RemoteUploadPlan.cpp tests/remote_upload_plan.cpp

@@ -441,3 +441,12 @@
 - TDD：先 include 尚不存在的 `RemoteFailure.h`，確認 focused test 以 C1083 紅燈；補 enum 與最小傳遞鏈後 `_build\tests\remote_browser_utils.exe` 輸出 `remote_browser_utils_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`C49F7D3632B6E49F85C76B374FBA2868F667C76453123768DF285B72AE55C2C1`。
 - SFTP 權限不足、SFTP 路徑不存在，以及 FTP/FTPS generic rejection 的實際 modal 仍待 Notepad++ 實機 QA。
+
+## 2026-07-10 Add remote directory upload plan
+
+- 新增 owned `RemoteUploadPlan` / `RemoteUploadItem`，以 Win32 `FindFirstFile` / `FindNextFile` 枚舉本機目錄，將本機名稱轉成 UTF-8 remote path，所有 local/remote path 都限制在 `MAX_PATH` 內。
+- `AddDirectory` 永遠插在第一個檔案前，因此即使檔案系統枚舉順序不同，結果仍維持父目錄、子目錄、檔案的 queue 前置順序。
+- 安全邊界：root 或子項目只要是 `FILE_ATTRIBUTE_REPARSE_POINT` 就不跟隨，避免 junction / symlink 走出使用者拖入的目錄樹或形成循環。
+- `ApplyRemoteDirectoryListing` 只將同一 remote parent 下的同名非目錄項目標成 collision；同名 remote directory 不會被當成檔案覆蓋候選。
+- TDD：先確認缺少 `RemoteUploadPlan.h/.cpp` 的 C1083 紅燈；補實作後，手動順序、synthetic `FTPFile` collision 與 `_build\tests` 巢狀 fixture 均通過，輸出 `remote_upload_plan_exit=0`。另修正原計畫不能對多 source 共用單一 `/Fo...obj` 的 MSVC 指令。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll` 與 `_build\NppFTP-0.30.22-win64.zip`；ZIP SHA256：`DBC2AF958831E0FA98187F6DF874B9EB10F5F5327B1DBA9F9BEAAEFA0CF11F71`。

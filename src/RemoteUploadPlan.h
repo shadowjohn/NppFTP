@@ -1,0 +1,34 @@
+#ifndef REMOTEUPLOADPLAN_H
+#define REMOTEUPLOADPLAN_H
+
+#include <windows.h>
+#include <tchar.h>
+#include <string>
+#include <vector>
+
+#include "FTPFile.h"
+
+struct RemoteUploadItem {
+	bool isDirectory;
+	std::basic_string<TCHAR> localPath;
+	std::string remotePath;
+	bool remoteFileExists;
+	bool selected;
+};
+
+class RemoteUploadPlan {
+public:
+	int Build(const TCHAR * localDirectory, const char * remoteParent);
+	int AddDirectory(const TCHAR * localPath, const char * remotePath);
+	int AddFile(const TCHAR * localPath, const char * remotePath);
+	int ApplyRemoteDirectoryListing(const char * directoryPath, const FTPFile * files, int count);
+	const std::vector<RemoteUploadItem> & GetItems() const;
+	std::vector<RemoteUploadItem> & GetItems();
+
+private:
+	int AddDirectoryRecursive(const TCHAR * localDirectory, const char * remoteDirectory);
+
+	std::vector<RemoteUploadItem> m_items;
+};
+
+#endif //REMOTEUPLOADPLAN_H
