@@ -131,7 +131,7 @@ protected:
 	virtual FileObject*		GetRemoteDropTarget(POINTL point, int * itemIndex = NULL);
 	virtual bool			IsRemoteParentItem(int itemIndex);
 
-	static LRESULT CALLBACK	RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK	RemoteDirEditProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR subclassId, DWORD_PTR data);
 	static LRESULT CALLBACK	RemoteListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR subclassId, DWORD_PTR data);
 
 	//virtual int				UploadOtherFile(FileObject * parent);
@@ -163,8 +163,8 @@ protected:
 	HWND					m_remoteSearchEdit;
 	HWND					m_remoteDirLabel;
 	HWND					m_remoteDirCombo;
+	HWND					m_remoteDirEdit;
 	HWND					m_remoteList;
-	WNDPROC					m_remoteDirComboProc;
 	char					m_remotePendingPath[MAX_PATH];
 
 	HMENU					m_popupProfile;

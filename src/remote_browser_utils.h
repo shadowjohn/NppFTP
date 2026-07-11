@@ -19,6 +19,13 @@ static inline bool remote_browser_wants_key(const MSG *message)
 	return message && message->message == WM_KEYDOWN && message->wParam == VK_F2;
 }
 
+static inline HWND remote_browser_combo_edit(HWND combo)
+{
+	COMBOBOXINFO info{};
+	info.cbSize = sizeof(info);
+	return combo && GetComboBoxInfo(combo, &info) ? info.hwndItem : NULL;
+}
+
 static inline bool remote_browser_matches_filter(const TCHAR *name, const TCHAR *filter)
 {
 	if (!name)
@@ -34,6 +41,22 @@ static inline void remote_browser_clear_text(TCHAR *buffer, size_t bufferCount)
 		buffer[0] = 0;
 }
 
+static inline void remote_browser_format_system_time(const SYSTEMTIME &value, TCHAR *buffer, size_t bufferCount)
+{
+	remote_browser_clear_text(buffer, bufferCount);
+	if (!buffer || bufferCount == 0)
+		return;
+
+#ifdef _MSC_VER
+	_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%04u-%02u-%02u %02u:%02u:%02u"),
+		value.wYear, value.wMonth, value.wDay, value.wHour, value.wMinute, value.wSecond);
+#else
+	_sntprintf(buffer, bufferCount, TEXT("%04u-%02u-%02u %02u:%02u:%02u"),
+		value.wYear, value.wMonth, value.wDay, value.wHour, value.wMinute, value.wSecond);
+	buffer[bufferCount - 1] = 0;
+#endif
+}
+
 static inline void remote_browser_format_size(bool isDir, long size, TCHAR *buffer, size_t bufferCount)
 {
 	remote_browser_clear_text(buffer, bufferCount);
@@ -41,9 +64,19 @@ static inline void remote_browser_format_size(bool isDir, long size, TCHAR *buff
 		return;
 
 #ifdef _MSC_VER
-	_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%ld"), size);
+	if (size < 1024)
+		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%ld B"), size);
+	else if (size < 1024 * 1024)
+		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%.2f KB"), (double)size / 1024.0);
+	else
+		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%.2f MB"), (double)size / (1024.0 * 1024.0));
 #else
-	_sntprintf(buffer, bufferCount, TEXT("%ld"), size);
+	if (size < 1024)
+		_sntprintf(buffer, bufferCount, TEXT("%ld B"), size);
+	else if (size < 1024 * 1024)
+		_sntprintf(buffer, bufferCount, TEXT("%.2f KB"), (double)size / 1024.0);
+	else
+		_sntprintf(buffer, bufferCount, TEXT("%.2f MB"), (double)size / (1024.0 * 1024.0));
 	buffer[bufferCount - 1] = 0;
 #endif
 }

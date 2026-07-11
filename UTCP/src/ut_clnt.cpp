@@ -965,7 +965,7 @@ int CUT_WSClient::Send(CUT_DataSource & source)
         return OnError(UTE_SOCK_NOT_OPEN);
 
     int         len = 0;
-    char        buf[WSC_BUFFER_SIZE];
+    char        buf[WSC_TRANSFER_BUFFER_SIZE];
     long        bytesSent = 0;
 
     // Open data source for reading
@@ -976,10 +976,10 @@ int CUT_WSClient::Send(CUT_DataSource & source)
 
     // Send the file
   do{
-        if((len = source.Read(buf, sizeof(buf)-1)) <= 0)
+        if((len = source.Read(buf, sizeof(buf))) <= 0)
             break;
 
-        if( Send(buf, len) == 0){
+        if(SendBlob((LPBYTE)buf, len) != len){
             error = UTE_SOCK_SEND_ERROR;
             break;
         }

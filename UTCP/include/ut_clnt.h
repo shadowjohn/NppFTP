@@ -57,6 +57,7 @@ Add OpenSSL secure functionality
 #endif
 
 #define WSC_BUFFER_SIZE     256
+#define WSC_TRANSFER_BUFFER_SIZE (64 * 1024)
 
 
 class CUT_Socket

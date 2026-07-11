@@ -43,12 +43,12 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 
 - 上方顯示目前 FTP profile 與目前路徑。
 - `Quick search` 可即時過濾目前目錄。
-- `Change dir` 可以手動輸入路徑，也會保留最近使用的幾筆目錄。
-- 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`。
+- `Change dir` 可以手動輸入路徑並按 Enter 切換，也會保留最近使用的幾筆目錄；尚未載入的路徑會直接向伺服器查詢。
+- 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`；Size 使用靠右的人類可讀格式，Modified 固定為 `yyyy-MM-dd HH:mm:ss`。
 - 資料夾與檔案有圖示。
 - 欄位標題可拖曳調整順序。
 - 點入目錄或開檔時會有 wait cursor 回饋。
-- `Change dir` 按 Enter 時，已知目錄會切換，已知檔案會開啟；未知路徑不做事，不跳錯誤。
+- `Change dir` 按 Enter 時，已知目錄會切換，已知檔案會開啟；未載入路徑也會嘗試從伺服器讀取，操作期間顯示 wait cursor。
 
 這樣做不是為了少顯示資訊，而是讓常用操作變短：看目前在哪、搜尋目前資料夾、輸入路徑跳轉、打開檔案，都可以在同一個小面板內完成。
 
@@ -75,6 +75,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - FTP PASV data connection 預設連回 control peer，避免被惡意 PASV endpoint 帶走。
 - 修正 `CUT_StrMethods::RemoveCRLF` unsigned underflow。
 - 修正 SFTP directory listing path composition overflow。
+- FTP 上傳 buffer 由 255 bytes 調整為 64 KB，並補上 partial-send 保護，降低大量小型 send 與進度 callback 的負擔。
 - 預設 profile password/passphrase 改用 Windows DPAPI 儲存。
 - GitHub Actions pin 到 commit SHA，並設定明確 workflow permissions。
 - 增加 FTP multiline response 與 directory listing 上限，避免惡意伺服器造成 DoS。
@@ -91,7 +92,8 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 新增目前路徑、快速搜尋、Change dir combo。
 - 新增單層目錄清單、資料夾/檔案圖示、metadata 欄位與 header drag/drop。
 - 支援 double-click 進目錄與下載開檔。
-- 支援 typed path：已知目錄切換、已知檔案開啟、未知路徑 no-op。
+- 支援 typed path：已知目錄切換、已知檔案開啟，未載入目錄會向伺服器查詢後切換。
+- Size 顯示為 B / KB / MB 並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
 - 修正 dock resize / splitter resize 後 flat browser 沒跟著重排的問題。
 
 ## Build
@@ -138,7 +140,7 @@ build.bat
 - Notepad++ 內安裝 `_build\Release\NppFTP.dll`。
 - 測 resize、icons、metadata columns、header drag/drop。
 - 測 double-click 目錄/檔案。
-- 測 `Change dir` 已知目錄、已知檔案、未知路徑 no-op。
+- 測不同 FTP / FTPS / SFTP server 的深層 Change dir 與大型檔案傳輸。
 
 ## Build Status
 

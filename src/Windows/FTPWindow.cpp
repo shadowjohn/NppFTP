@@ -61,11 +61,11 @@ static const TCHAR * GetRemoteFailureMessage(RemoteFailureKind failure)
 	}
 }
 
-static void InsertRemoteListColumn(HWND list, int index, const TCHAR * text, int width)
+static void InsertRemoteListColumn(HWND list, int index, const TCHAR * text, int width, int format = LVCFMT_LEFT)
 {
 	LVCOLUMN lvc{};
 	lvc.mask = LVCF_FMT | LVCF_WIDTH | LVCF_TEXT;
-	lvc.fmt = LVCFMT_LEFT;
+	lvc.fmt = format;
 	lvc.cx = width;
 	lvc.pszText = (TCHAR*)text;
 	ListView_InsertColumn(list, index, &lvc);
@@ -101,19 +101,7 @@ static void FormatRemoteModifiedTime(FILETIME modified, TCHAR * buffer, size_t b
 	if (!SystemTimeToTzSpecificLocalTime(NULL, &utc, &local))
 		local = utc;
 
-	TCHAR dateText[32]{};
-	TCHAR timeText[32]{};
-	if (!GetDateFormat(LOCALE_USER_DEFAULT, DATE_SHORTDATE, &local, NULL, dateText, 32))
-		return;
-	if (!GetTimeFormat(LOCALE_USER_DEFAULT, 0, &local, NULL, timeText, 32))
-		return;
-
-#ifdef _MSC_VER
-	_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%s %s"), dateText, timeText);
-#else
-	_sntprintf(buffer, bufferCount, TEXT("%s %s"), dateText, timeText);
-	buffer[bufferCount - 1] = 0;
-#endif
+	remote_browser_format_system_time(local, buffer, bufferCount);
 }
 
 static int InsertRemoteListObject(HWND list, TreeImageList * imageList, FileObject * fo, const TCHAR * text, bool showDetails)
@@ -164,8 +152,8 @@ FTPWindow::FTPWindow() :
 	m_remoteSearchEdit(NULL),
 	m_remoteDirLabel(NULL),
 	m_remoteDirCombo(NULL),
+	m_remoteDirEdit(NULL),
 	m_remoteList(NULL),
-	m_remoteDirComboProc(NULL),
 	m_popupRemoteFile(NULL),
 	m_popupRemoteDir(NULL),
 	m_popupRemoteBlank(NULL),
@@ -480,13 +468,14 @@ int FTPWindow::CreateRemoteBrowser() {
 
 	Edit_LimitText(m_remoteSearchEdit, MAX_PATH - 1);
 	SendMessage(m_remoteDirCombo, CB_LIMITTEXT, MAX_PATH - 1, 0);
-	SetWindowLongPtr(m_remoteDirCombo, GWLP_USERDATA, (LONG_PTR)this);
-	m_remoteDirComboProc = (WNDPROC)SetWindowLongPtr(m_remoteDirCombo, GWLP_WNDPROC, (LONG_PTR)FTPWindow::RemoteDirComboProc);
+	m_remoteDirEdit = remote_browser_combo_edit(m_remoteDirCombo);
+	if (!m_remoteDirEdit || !SetWindowSubclass(m_remoteDirEdit, FTPWindow::RemoteDirEditProc, 1, (DWORD_PTR)this))
+		return -1;
 	SetWindowSubclass(m_remoteList, FTPWindow::RemoteListProc, 1, 0);
 
 	ListView_SetExtendedListViewStyle(m_remoteList, LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP);
 	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_NAME, TEXT("Name"), 160);
-	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_SIZE, TEXT("Size"), 70);
+	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_SIZE, TEXT("Size"), 70, LVCFMT_RIGHT);
 	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_MODIFIED, TEXT("Modified"), 130);
 	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_TYPE, TEXT("Type"), 60);
 	InsertRemoteListColumn(m_remoteList, REMOTE_COLUMN_PERMISSIONS, TEXT("Permissions"), 95);
@@ -495,6 +484,8 @@ int FTPWindow::CreateRemoteBrowser() {
 }
 
 int FTPWindow::DestroyRemoteBrowser() {
+	if (m_remoteDirEdit)
+		RemoveWindowSubclass(m_remoteDirEdit, FTPWindow::RemoteDirEditProc, 1);
 	if (m_remoteList)
 		RemoveWindowSubclass(m_remoteList, FTPWindow::RemoteListProc, 1);
 	HWND controls[] = { m_remoteHostLabel, m_remotePathLabel, m_remoteSearchLabel, m_remoteSearchEdit, m_remoteDirLabel, m_remoteDirCombo, m_remoteList };
@@ -509,8 +500,8 @@ int FTPWindow::DestroyRemoteBrowser() {
 	m_remoteSearchEdit = NULL;
 	m_remoteDirLabel = NULL;
 	m_remoteDirCombo = NULL;
+	m_remoteDirEdit = NULL;
 	m_remoteList = NULL;
-	m_remoteDirComboProc = NULL;
 
 	return 0;
 }
@@ -678,7 +669,7 @@ int FTPWindow::NavigateRemotePathFromCombo() {
 
 	FileObject * targetObj = m_ftpSession->FindPathObject(target);
 	if (!targetObj)
-		return 0;
+		return NavigateRemotePath(target);
 
 	AddRemoteRecentDir(target);
 	if (targetObj->isDir())
@@ -966,16 +957,18 @@ FileObject * FTPWindow::GetRemoteDropTarget(POINTL point, int * itemIndex) {
 	return fo && fo->isDir() ? fo : m_remoteCurrentDir;
 }
 
-LRESULT CALLBACK FTPWindow::RemoteDirComboProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	FTPWindow * window = (FTPWindow*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+LRESULT CALLBACK FTPWindow::RemoteDirEditProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR data) {
+	FTPWindow * window = (FTPWindow*)data;
 	if (window && uMsg == WM_KEYDOWN && wParam == VK_RETURN) {
 		window->NavigateRemotePathFromCombo();
 		return 0;
 	}
 
-	if (window && window->m_remoteDirComboProc)
-		return CallWindowProc(window->m_remoteDirComboProc, hwnd, uMsg, wParam, lParam);
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	LRESULT result = DefSubclassProc(hwnd, uMsg, wParam, lParam);
+	MSG * key = (MSG*)lParam;
+	if (uMsg == WM_GETDLGCODE && key && key->message == WM_KEYDOWN && key->wParam == VK_RETURN)
+		result |= DLGC_WANTALLKEYS;
+	return result;
 }
 
 LRESULT CALLBACK FTPWindow::RemoteListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) {

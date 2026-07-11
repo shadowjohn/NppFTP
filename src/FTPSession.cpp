@@ -250,7 +250,6 @@ int FTPSession::GetDirectoryHierarchy(const char * inputDir) {
 	// examined in the below vector.
 	std::vector<char*> parentDirs;
 
-	int childCount;
 	char currentPath[MAX_PATH];
 	FileObject* currentFileObj = m_rootObject;
 
@@ -263,7 +262,6 @@ int FTPSession::GetDirectoryHierarchy(const char * inputDir) {
 
 		if (currentFileObj) {
 
-			childCount = currentFileObj->GetChildCount();
 			currentFileObj = currentFileObj->GetChildByName(pathEntry);
 
 			if (currentFileObj) {
@@ -285,15 +283,6 @@ int FTPSession::GetDirectoryHierarchy(const char * inputDir) {
 				}
 			}
 
-			// Cannot find the child. Check if it is because I have no
-			// information about the child, or that I cannot find the child.
-			if (!currentFileObj) {
-
-				// If I have child data, but I cannot find the child, then
-				// I will stop here and will not queue the operation.
-				if (childCount)
-					return 1;
-			}
 		}
 
 		if (!parentDirs.size()) {

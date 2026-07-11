@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 static bool receivedF2 = false;
+static bool receivedEnter = false;
 
 static LRESULT CALLBACK ParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -20,6 +21,18 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM 
 {
 	LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
 	if (message == WM_GETDLGCODE && remote_browser_wants_key((MSG*)lParam))
+		result |= DLGC_WANTALLKEYS;
+	return result;
+}
+
+static LRESULT CALLBACK ComboEditProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR)
+{
+	if (message == WM_KEYDOWN && wParam == VK_RETURN)
+		receivedEnter = true;
+
+	LRESULT result = DefSubclassProc(hwnd, message, wParam, lParam);
+	MSG * key = (MSG*)lParam;
+	if (message == WM_GETDLGCODE && key && key->message == WM_KEYDOWN && key->wParam == VK_RETURN)
 		result |= DLGC_WANTALLKEYS;
 	return result;
 }
@@ -50,6 +63,22 @@ int main()
 	key.wParam = VK_F2;
 	assert(IsDialogMessage(parent, &key));
 	assert(receivedF2);
+
+	HWND combo = CreateWindow(TEXT("COMBOBOX"), TEXT(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWN,
+		0, 0, 200, 120, parent, NULL, windowClass.hInstance, NULL);
+	assert(combo);
+	HWND comboEdit = remote_browser_combo_edit(combo);
+	assert(comboEdit);
+	assert(comboEdit != combo);
+	assert(SetWindowSubclass(comboEdit, ComboEditProc, 1, 0));
+	SetFocus(comboEdit);
+
+	MSG enter{};
+	enter.hwnd = comboEdit;
+	enter.message = WM_KEYDOWN;
+	enter.wParam = VK_RETURN;
+	assert(IsDialogMessage(parent, &enter));
+	assert(receivedEnter);
 
 	DestroyWindow(parent);
 	printf("remote_list_keyboard_exit=0\n");

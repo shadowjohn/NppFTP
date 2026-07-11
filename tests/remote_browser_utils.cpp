@@ -15,12 +15,26 @@ int main()
 	assert(!remote_browser_matches_filter(NULL, TEXT("zip")));
 
 	TCHAR text[64]{};
+	remote_browser_format_size(false, 512, text, 64);
+	assert(_tcscmp(text, TEXT("512 B")) == 0);
 	remote_browser_format_size(false, 1536, text, 64);
-	assert(_tcscmp(text, TEXT("1536")) == 0);
+	assert(_tcscmp(text, TEXT("1.50 KB")) == 0);
+	remote_browser_format_size(false, 18864384, text, 64);
+	assert(_tcscmp(text, TEXT("17.99 MB")) == 0);
 	remote_browser_format_size(true, 1536, text, 64);
 	assert(_tcscmp(text, TEXT("")) == 0);
 	remote_browser_format_size(false, -1, text, 64);
 	assert(_tcscmp(text, TEXT("")) == 0);
+
+	SYSTEMTIME modified{};
+	modified.wYear = 2026;
+	modified.wMonth = 7;
+	modified.wDay = 11;
+	modified.wHour = 21;
+	modified.wMinute = 1;
+	TCHAR modifiedText[32]{};
+	remote_browser_format_system_time(modified, modifiedText, 32);
+	assert(_tcscmp(modifiedText, TEXT("2026-07-11 21:01:00")) == 0);
 
 	remote_browser_type_text(false, false, TEXT("fzers.zip"), text, 64);
 	assert(_tcscmp(text, TEXT("ZIP")) == 0);
