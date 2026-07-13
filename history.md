@@ -484,3 +484,9 @@
 - 新增 `copyNppFTPdllToRealENV.bat`，將 repo 相對路徑 `_build\Release\NppFTP.dll` 覆蓋到 `C:\Program Files\Notepad++\plugins\NppFTP\NppFTP.dll`。
 - 腳本先確認 build output 與正式 plugin 目錄存在，使用 `copy /Y /B` 覆蓋，再以 `fc /B` 驗證內容一致；失敗時提示關閉 Notepad++ 並以系統管理員身分執行。
 - 腳本不自動要求 UAC、不建立缺少的正式目錄，也未由自動驗證直接修改目前安裝中的 plugin。
+
+## 2026-07-13 Fix local TortoiseGit pull SSH mismatch
+
+- 根因：repo-local `core.sshCommand` 指向標準 PuTTY `plink.exe`，但 TortoiseGit 2.19.1 對自己的 `TortoiseGitPlink.exe` 環境設定 `GIT_SSH_VARIANT=ssh`；環境 variant 優先，Git 因而把 OpenSSH 的 `-o` 參數傳給不支援它的標準 plink。
+- repo-local SSH command 改用 `TortoiseGitPlink.exe`，保留原有 PPK 參數，不修改 global Git 設定，也不把個人金鑰路徑寫入追蹤檔。
+- 驗證：標準 PuTTY plink 對 `-o` 回 `unknown option`，TortoiseGitPlink 可接受；以 TortoiseGit 同等 `GIT_SSH` / `GIT_SSH_VARIANT=ssh` 環境執行原 pull command 成功，回 `Already up to date`、exit 0。
