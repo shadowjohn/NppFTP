@@ -21,6 +21,7 @@
 
 #include "Encryption.h"
 #include "InputDialog.h"
+#include "RecentDirs.h"
 #include <algorithm>
 
 const char * FTPProfile::ProfilesElement = "Profiles";
@@ -110,6 +111,7 @@ FTPProfile::FTPProfile(const TCHAR * name, const FTPProfile* other) :
 
 	m_keyFile = SU::DupString(other->m_keyFile);
 	m_passphrase = SU::strdup(other->m_passphrase);
+	m_recentDirs = other->m_recentDirs;
 
 	m_cache->SetEnvironment(m_hostname, m_username, m_port);
 
@@ -421,6 +423,20 @@ int FTPProfile::SetInitialDir(const char * dir) {
 	return 0;
 }
 
+int FTPProfile::AddRecentDir(const char * dir) {
+	return recent_dirs_add(m_recentDirs, dir, 8);
+}
+
+int FTPProfile::GetRecentDirCount() const {
+	return (int)m_recentDirs.size();
+}
+
+const char * FTPProfile::GetRecentDir(int index) const {
+	if (index < 0 || index >= GetRecentDirCount())
+		return NULL;
+	return m_recentDirs[index].c_str();
+}
+
 const TCHAR* FTPProfile::GetKeyFile() const {
 	return m_keyFile;
 }
@@ -703,6 +719,17 @@ FTPProfile* FTPProfile::LoadProfile(const TiXmlElement * profileElem) {
 		else
 			profile->m_initialDir = SU::strdup(attrstr);
 
+		std::vector<std::string> savedRecentDirs;
+		const TiXmlElement * recentDirsElem = profileElem->FirstChildElement("RecentDirs");
+		for (const TiXmlElement * recentDirElem = recentDirsElem ? recentDirsElem->FirstChildElement("Dir") : NULL;
+			recentDirElem; recentDirElem = recentDirElem->NextSiblingElement("Dir")) {
+			attrstr = recentDirElem->Attribute("path");
+			if (attrstr)
+				savedRecentDirs.push_back(attrstr);
+		}
+		for (size_t i = savedRecentDirs.size(); i > 0; i--)
+			profile->AddRecentDir(savedRecentDirs[i - 1].c_str());
+
 		attrstr = profileElem->Attribute("keyFile");
 		if (!attrstr)
 			profile->m_keyFile = SU::DupString(TEXT(""));
@@ -795,6 +822,16 @@ TiXmlElement* FTPProfile::SaveProfile() const {
 	profileElem->SetAttribute("listParams", m_ftpListParams);
 
 	profileElem->SetAttribute("initialDir", m_initialDir);
+
+	if (!m_recentDirs.empty()) {
+		TiXmlElement * recentDirsElem = new TiXmlElement("RecentDirs");
+		for (size_t i = 0; i < m_recentDirs.size(); i++) {
+			TiXmlElement * recentDirElem = new TiXmlElement("Dir");
+			recentDirElem->SetAttribute("path", m_recentDirs[i].c_str());
+			recentDirsElem->LinkEndChild(recentDirElem);
+		}
+		profileElem->LinkEndChild(recentDirsElem);
+	}
 
 	char * utf8keyfile = SU::TCharToUtf8(m_keyFile);
 	profileElem->SetAttribute("keyFile", utf8keyfile);

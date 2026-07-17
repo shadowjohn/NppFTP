@@ -22,6 +22,8 @@
 #include "FTPClientWrapper.h"
 #include "FTPCache.h"
 
+#include <string>
+
 class FTPProfile;
 typedef std::vector<FTPProfile*> vProfile;
 typedef std::vector<TCHAR*> vString;
@@ -77,6 +79,9 @@ public:
 
 	const char*				GetInitialDir() const;
 	int						SetInitialDir(const char * dir);
+	int						AddRecentDir(const char * dir);
+	int						GetRecentDirCount() const;
+	const char*				GetRecentDir(int index) const;
 
 	const TCHAR*			GetKeyFile() const;
 	int						SetKeyFile(const TCHAR * keyFile);
@@ -150,6 +155,7 @@ private:
 	char*					m_ftpListParams = nullptr;
 
 	char*					m_initialDir = nullptr;
+	std::vector<std::string>	m_recentDirs;
 
 	vString					m_asciiTypes;
 	vString					m_binTypes;

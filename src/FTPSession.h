@@ -41,7 +41,7 @@ public:
 	int						TerminateSession();
 
 	bool					IsConnected() const;
-	const FTPProfile*		GetCurrentProfile();
+	FTPProfile*				GetCurrentProfile();
 
 	int						Connect();
 

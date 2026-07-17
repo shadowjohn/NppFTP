@@ -114,8 +114,10 @@ protected:
 	virtual int				ShowRemoteBrowser(bool show);
 	virtual int				SetRemoteCurrentDir(FileObject * dir, bool refresh);
 	virtual int				FillRemoteList();
+	virtual int				RestoreRemoteListFocus(FileObject * file);
 	virtual int				UpdateRemotePathControls();
 	virtual int				AddRemoteRecentDir(const char * path);
+	virtual int				LoadRemoteRecentDirs(const TCHAR * prefix);
 	virtual int				NavigateRemotePathFromCombo();
 	virtual int				NavigateRemotePath(const char * path);
 	virtual int				ActivateRemoteListSelection();
@@ -166,6 +168,8 @@ protected:
 	HWND					m_remoteDirEdit;
 	HWND					m_remoteList;
 	char					m_remotePendingPath[MAX_PATH];
+	FileObject*				m_remotePendingFocusParent;
+	char					m_remotePendingFocusPath[MAX_PATH];
 
 	HMENU					m_popupProfile;
 	HMENU					m_popupSettings;

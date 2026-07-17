@@ -46,7 +46,8 @@
 - [x] Add a change-directory combo box with recent paths and manual entry.
 - [x] Show the current directory as a flat list: `..`, folders, files.
 - [x] Wire double-click folder navigation and file open/download.
-- [ ] Persist only a small recent-directory list per profile.
+- [x] Persist only a small recent-directory list per profile.
+- [x] Show prefix-matching recent directories while typing in Change dir.
 
 ## 4.1 PSPad-style remote browser polish
 
@@ -74,7 +75,7 @@
 - [x] Show actionable single-operation mutation failures.
 - [x] Show one failure summary for recursive uploads.
 - [x] Route F2 rename through Notepad++ modeless-dialog key handling.
-- [ ] Preserve flat-list focus after a successful mutation refresh: focus the renamed item after rename, the same item after CHMOD, and the new file after creation; select it and scroll it into view.
+- [x] Preserve flat-list focus after a successful mutation refresh: focus the renamed item after rename, the same item after CHMOD, and the new file after creation; select it and scroll it into view.
 - [ ] Run manual Notepad++ QA for flat-list menus, F2, picker/drop targets, Skip, Cancel, and session overwrite-all reset.
 - [ ] Run manual SFTP/FTP QA for permission-denied, missing-path, and generic operation failure messages.
 - [ ] Run real-server recursive-upload QA for FTP/SFTP target routing, new/existing directory merge, symlinks, nested collisions, every progress row, and one batch summary.

@@ -43,7 +43,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 
 - 上方顯示目前 FTP profile 與目前路徑。
 - `Quick search` 可即時過濾目前目錄。
-- `Change dir` 可以手動輸入路徑並按 Enter 切換；目前會在記憶體中保留最近 8 筆目錄，尚未載入的路徑會直接向伺服器查詢。
+- `Change dir` 可以手動輸入路徑並按 Enter 切換；每個 profile 會保存最近 8 筆成功進入的目錄，重複目錄會移到最前方，手打時會顯示符合前綴的下拉建議；尚未載入的路徑會直接向伺服器查詢。
 - 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`；Size 使用靠右的人類可讀格式，Modified 固定為 `yyyy-MM-dd HH:mm:ss`。
 - 資料夾與檔案有圖示。
 - 欄位標題可拖曳調整順序。
@@ -105,6 +105,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 支援拖放檔案與目錄、遞迴目錄上傳、遠端目錄安全合併、同名檔覆寫選擇與逐檔進度。
 - SFTP 可區分 permission denied 與 path not found；FTP / FTPS 無法確定原因時保留 generic rejection，避免亂猜。
 - 單一操作失敗顯示提示並寫入 Output；遞迴上傳只在完成時顯示一個摘要。
+- rename、CHMOD、建立檔案成功並刷新後，會保留目標列的選取、鍵盤 focus 與可見位置。
 
 ## Build
 
@@ -161,8 +162,6 @@ copyNppFTPdllToRealENV.bat
 
 目前主線尚未開發：
 
-- 將最近 8 筆遠端目錄依 profile 寫入 settings；目前只保留在記憶體中。
-- rename / CHMOD / new file 成功並 refresh 後，恢復原項目或新項目的 selection、focus 與可見位置。
 - UI 語系選擇；預設語系規劃為正體中文。
 
 已開發、仍需要實機手動 QA：
@@ -170,6 +169,8 @@ copyNppFTPdllToRealENV.bat
 - Notepad++ 內安裝 `_build\Release\NppFTP.dll`。
 - 測 resize、icons、metadata columns、header drag/drop、double-click / Enter 與 typed path。
 - 測右鍵選單、F2、picker / drop target、Skip / Cancel / session overwrite-all。
+- 測 rename、CHMOD、new file 成功 refresh 後，目標列仍被選取、取得鍵盤 focus 並捲回可見位置。
+- 測 recent dirs 依 profile 分開保存、重啟後仍在、重複目錄會移到最前方，以及 Change dir 手打前綴會展開匹配下拉。
 - 測 FTP / FTPS / SFTP 的 permission / missing-path / generic failure 提示。
 - 測 FTP / SFTP recursive upload 的新舊目錄合併、nested collision、symlink、逐檔 progress 與單一摘要。
 

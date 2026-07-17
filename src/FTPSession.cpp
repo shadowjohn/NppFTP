@@ -165,7 +165,7 @@ bool FTPSession::IsConnected() const {
 	return m_running;
 }
 
-const FTPProfile* FTPSession::GetCurrentProfile() {
+FTPProfile* FTPSession::GetCurrentProfile() {
 	return m_currentProfile;
 }
 

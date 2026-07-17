@@ -2,6 +2,8 @@
 #define REMOTE_BROWSER_UTILS_H
 
 #include <ctype.h>
+#include <windows.h>
+#include <commctrl.h>
 #include <shlwapi.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,6 +26,16 @@ static inline HWND remote_browser_combo_edit(HWND combo)
 	COMBOBOXINFO info{};
 	info.cbSize = sizeof(info);
 	return combo && GetComboBoxInfo(combo, &info) ? info.hwndItem : NULL;
+}
+
+static inline int remote_browser_focus_list_item(HWND list, int item)
+{
+	if (!list || item < 0)
+		return -1;
+	ListView_SetItemState(list, -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+	ListView_SetItemState(list, item, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+	ListView_EnsureVisible(list, item, FALSE);
+	return 0;
 }
 
 static inline bool remote_browser_matches_filter(const TCHAR *name, const TCHAR *filter)

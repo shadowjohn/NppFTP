@@ -62,7 +62,14 @@ int main()
 	item.mask = LVIF_TEXT;
 	item.pszText = (TCHAR*)TEXT("folder");
 	assert(ListView_InsertItem(list, &item) == 0);
+	item.iItem = 1;
+	item.pszText = (TCHAR*)TEXT("file.txt");
+	assert(ListView_InsertItem(list, &item) == 1);
 	ListView_SetItemState(list, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+	assert(remote_browser_focus_list_item(list, 1) == 0);
+	assert(ListView_GetNextItem(list, -1, LVNI_SELECTED) == 1);
+	assert((ListView_GetItemState(list, 1, LVIS_FOCUSED) & LVIS_FOCUSED) != 0);
+	assert(ListView_GetItemState(list, 0, LVIS_SELECTED | LVIS_FOCUSED) == 0);
 	SetFocus(list);
 
 	MSG key{};

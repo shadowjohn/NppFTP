@@ -504,3 +504,17 @@
 - 將剩餘項目明確分成「尚未開發」與「已開發但待實機 QA」：目前主線未開發只剩 recent dirs 依 profile 持久化、mutation refresh 後恢復 focus、UI 語系選擇。
 - 移除指向 upstream 的 AppVeyor / release badges，改用本 fork 的 maintained Windows x64 workflow 與 pre-release badges。
 - 文件-only 變更，未重跑 build；執行 `git diff --check` 驗證格式。
+
+## 2026-07-17 Restore flat-list focus after a mutation refresh
+
+- rename、CHMOD、new file 排入既有的後續 directory refresh 時，記住目標 remote path 與 parent；該 directory 資料重建後，會選取目標列、設為鍵盤 focus，並捲回可見範圍。
+- 伺服器回報 mutation 失敗、使用者切換到其他目錄、或 disconnect 時，會清掉待回復狀態，避免舊操作搶走目前畫面焦點。
+- TDD：先讓真實 Win32 ListView test 因缺少 `remote_browser_focus_list_item()` 編譯紅燈；補最小 native helper 後 `_build\\tests\\remote_list_keyboard.exe` 輸出 `remote_list_keyboard_exit=0`。
+- `_build\\tests\\remote_browser_utils.exe` 同樣通過；`.\\build.bat -Arch x64 -Config Release` 通過，ZIP SHA256：`EEF498613274C9947D4891A45321F4B8F33E515A390B58801B2174DB79F61058`。
+
+## 2026-07-17 Persist profile recent directories with prefix suggestions
+
+- 每個 `FTPProfile` 現在保存最多 8 筆 remote directory；重複路徑會移到最前方，不新增重複項。資料寫入既有 `NppFTP.xml` 的 profile `<RecentDirs>`，空列表不輸出，舊設定檔可直接讀取。
+- Change dir 改為只在實際成功切到目前 remote directory 後才記錄，未知/失敗路徑不會污染 recent；連線時載入該 profile 的清單，手打時以輸入前綴過濾並自動展開原生 ComboBox 下拉。
+- TDD：`tests\\recent_dirs.cpp` 先因缺少 recent helper 編譯紅燈，再驗證 move-to-front、去重、8 筆上限與 prefix match；`_build\\tests\\recent_dirs.exe` 輸出 `recent_dirs_exit=0`。
+- `.\\build.bat -Arch x64 -Config Release` 通過，ZIP SHA256：`899CB2C896BDBE897165ABEA4A6411E2570D6D9D34814B1F51BB69DE49235A6E`。profile 切換、重啟後資料與 ComboBox 實際互動仍待 Notepad++ 實機 QA。

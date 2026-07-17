@@ -26,6 +26,7 @@
 #include "MessageDialog.h"
 #include "OverwriteDialog.h"
 #include "Npp/Notepad_plus_msgs.h"
+#include "RecentDirs.h"
 #include "remote_browser_utils.h"
 
 #include "Commands.h"
@@ -145,6 +146,7 @@ FTPWindow::FTPWindow() :
 	m_overwriteAll(false),
 	m_currentSelection(NULL),
 	m_remoteCurrentDir(NULL),
+	m_remotePendingFocusParent(NULL),
 	m_localFileExists(false),
 	m_remoteHostLabel(NULL),
 	m_remotePathLabel(NULL),
@@ -168,6 +170,7 @@ FTPWindow::FTPWindow() :
 	m_currentDragObject(NULL)
 {
 	m_remotePendingPath[0] = 0;
+	m_remotePendingFocusPath[0] = 0;
 	m_exStyle = 0;
 	m_style = 0;
 
@@ -569,6 +572,8 @@ int FTPWindow::SetRemoteCurrentDir(FileObject * dir, bool refresh) {
 	m_remoteCurrentDir = dir;
 	m_currentSelection = dir;
 	m_remotePendingPath[0] = 0;
+	m_remotePendingFocusParent = NULL;
+	m_remotePendingFocusPath[0] = 0;
 	UpdateRemotePathControls();
 	FillRemoteList();
 	SetToolbarState();
@@ -607,6 +612,25 @@ int FTPWindow::FillRemoteList() {
 	return 0;
 }
 
+int FTPWindow::RestoreRemoteListFocus(FileObject * file) {
+	if (!file || !m_remoteList)
+		return -1;
+
+	int count = ListView_GetItemCount(m_remoteList);
+	for (int i = 0; i < count; i++) {
+		LVITEM item{};
+		item.iItem = i;
+		item.mask = LVIF_PARAM;
+		if (ListView_GetItem(m_remoteList, &item) && (FileObject*)item.lParam == file) {
+			remote_browser_focus_list_item(m_remoteList, i);
+			m_currentSelection = file;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
 int FTPWindow::UpdateRemotePathControls() {
 	if (!m_remoteCurrentDir)
 		return -1;
@@ -631,22 +655,39 @@ int FTPWindow::UpdateRemotePathControls() {
 }
 
 int FTPWindow::AddRemoteRecentDir(const char * path) {
-	if (!m_remoteDirCombo || !path)
+	if (!m_remoteDirCombo || !m_ftpSession || !path)
 		return -1;
 
-	TCHAR * pathText = SU::Utf8ToTChar(path);
-	if (!pathText)
+	FTPProfile * profile = m_ftpSession->GetCurrentProfile();
+	if (!profile || profile->AddRecentDir(path) != 0)
+		return -1;
+	return LoadRemoteRecentDirs(NULL);
+}
+
+int FTPWindow::LoadRemoteRecentDirs(const TCHAR * prefix) {
+	if (!m_remoteDirCombo || !m_ftpSession)
 		return -1;
 
-	LRESULT existing = SendMessage(m_remoteDirCombo, CB_FINDSTRINGEXACT, (WPARAM)-1, (LPARAM)pathText);
-	if (existing != CB_ERR)
-		SendMessage(m_remoteDirCombo, CB_DELETESTRING, (WPARAM)existing, 0);
-	SendMessage(m_remoteDirCombo, CB_INSERTSTRING, 0, (LPARAM)pathText);
+	char * prefixUtf8 = prefix ? SU::TCharToUtf8(prefix) : NULL;
+	if (prefix && !prefixUtf8)
+		return -1;
 
-	while (SendMessage(m_remoteDirCombo, CB_GETCOUNT, 0, 0) > 8)
-		SendMessage(m_remoteDirCombo, CB_DELETESTRING, 8, 0);
+	SendMessage(m_remoteDirCombo, CB_RESETCONTENT, 0, 0);
+	FTPProfile * profile = m_ftpSession->GetCurrentProfile();
+	if (profile) {
+		for (int i = 0; i < profile->GetRecentDirCount(); i++) {
+			const char * path = profile->GetRecentDir(i);
+			if (!recent_dirs_matches(path, prefixUtf8 ? prefixUtf8 : ""))
+				continue;
+			TCHAR * pathText = SU::Utf8ToTChar(path);
+			if (pathText) {
+				SendMessage(m_remoteDirCombo, CB_ADDSTRING, 0, (LPARAM)pathText);
+				SU::FreeTChar(pathText);
+			}
+		}
+	}
 
-	SU::FreeTChar(pathText);
+	SU::FreeChar(prefixUtf8);
 	return 0;
 }
 
@@ -671,7 +712,6 @@ int FTPWindow::NavigateRemotePathFromCombo() {
 	if (!targetObj)
 		return NavigateRemotePath(target);
 
-	AddRemoteRecentDir(target);
 	if (targetObj->isDir())
 		return SetRemoteCurrentDir(targetObj, true);
 
@@ -693,7 +733,6 @@ int FTPWindow::NavigateRemotePath(const char * path) {
 		return -1;
 	}
 
-	AddRemoteRecentDir(target);
 	FileObject * targetObj = m_ftpSession->FindPathObject(target);
 	if (targetObj && targetObj->isDir())
 		return SetRemoteCurrentDir(targetObj, true);
@@ -1132,6 +1171,13 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				case IDC_REMOTE_DIR: {
 					if (HIWORD(wParam) == CBN_SELENDOK)
 						NavigateRemotePathFromCombo();
+					else if (HIWORD(wParam) == CBN_EDITUPDATE) {
+						TCHAR prefix[MAX_PATH]{};
+						GetWindowText(m_remoteDirCombo, prefix, MAX_PATH);
+						LoadRemoteRecentDirs(prefix);
+						if (prefix[0] && SendMessage(m_remoteDirCombo, CB_GETCOUNT, 0, 0) > 0)
+							SendMessage(m_remoteDirCombo, CB_SHOWDROPDOWN, TRUE, 0);
+					}
 					result = TRUE;
 					break; }
 				case IDM_POPUP_QUEUE_ABORT: {
@@ -2333,6 +2379,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			if (isStart)
 				break;
 			if (queueResult == -1) {
+				if (strcmp(m_remotePendingFocusPath, opmkfile->GetFilePath()) == 0) {
+					m_remotePendingFocusParent = NULL;
+					m_remotePendingFocusPath[0] = 0;
+				}
 				OutErr("[FTPWindow] Unable to create file %T", SU::Utf8ToTChar(opmkfile->GetFilePath()));
 				ShowOperationFailure(queueOp);
 				break;	//failure
@@ -2355,6 +2405,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			if (isStart)
 				break;
 			if (queueResult == -1) {
+				if (strcmp(m_remotePendingFocusPath, oprename->GetNewPath()) == 0) {
+					m_remotePendingFocusParent = NULL;
+					m_remotePendingFocusPath[0] = 0;
+				}
 				OutErr("[FTPWindow] Unable to rename file %T", SU::Utf8ToTChar(oprename->GetFilePath()));
 				ShowOperationFailure(queueOp);
 				break;	//failure
@@ -2366,6 +2420,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			if (isStart)
 				break;
 			if (queueResult == -1) {
+				if (strcmp(m_remotePendingFocusPath, opchmod->GetFilePath()) == 0) {
+					m_remotePendingFocusParent = NULL;
+					m_remotePendingFocusPath[0] = 0;
+				}
 				OutErr("Unable to chmod file %T", SU::Utf8ToTChar(opchmod->GetFilePath()));
 				ShowOperationFailure(queueOp);
 				break;	//failure
@@ -2404,6 +2462,9 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count) {
 	bool isCurrentRemoteDir = (parent == m_remoteCurrentDir);
 	bool isPendingRemoteDir = (m_remotePendingPath[0] != 0 && strcmp(parent->GetPath(), m_remotePendingPath) == 0);
+	bool restorePendingFocus = (parent == m_remotePendingFocusParent);
+	if (isCurrentRemoteDir)
+		m_currentSelection = parent;
 
 	parent->SetRefresh(false);
 	parent->RemoveAllChildren(false);
@@ -2421,6 +2482,14 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	} else if (isCurrentRemoteDir) {
 		FillRemoteList();
 		UpdateRemotePathControls();
+	}
+
+	if (restorePendingFocus) {
+		FileObject * file = m_ftpSession->FindPathObject(m_remotePendingFocusPath);
+		if (isCurrentRemoteDir && file && file->GetParent() == parent)
+			RestoreRemoteListFocus(file);
+		m_remotePendingFocusParent = NULL;
+		m_remotePendingFocusPath[0] = 0;
 	}
 
 	return 0;
@@ -2481,6 +2550,7 @@ int FTPWindow::OnConnect(int code) {
 	m_treeview.EnsureObjectVisible(last);
 	TreeView_Select(m_treeview.GetHWND(), last->GetData(), TVGN_CARET);
 	ShowRemoteBrowser(true);
+	LoadRemoteRecentDirs(NULL);
 	SetRemoteCurrentDir(last, false);
 	m_ftpSession->GetDirectory(last->GetPath());
 
@@ -2502,6 +2572,8 @@ int FTPWindow::OnDisconnect(int /*code*/) {
 	m_currentDropObject = NULL;
 	m_remoteCurrentDir = NULL;
 	m_remotePendingPath[0] = 0;
+	m_remotePendingFocusParent = NULL;
+	m_remotePendingFocusPath[0] = 0;
 	m_remoteBusyCursor = false;
 	m_overwriteAll = false;
 	ShowRemoteBrowser(false);
@@ -2599,6 +2671,8 @@ int FTPWindow::CreateFile(FileObject * parent) {
 	if (res == -1)
 		return -1;
 
+	m_remotePendingFocusParent = parent;
+	lstrcpynA(m_remotePendingFocusPath, path, MAX_PATH);
 	m_ftpSession->GetDirectory(parent->GetPath());
 
 	return 0;
@@ -2632,6 +2706,8 @@ int FTPWindow::Rename(FileObject* fo, const TCHAR* newName) {
 	if (res == -1)
 		return -1;
 
+	m_remotePendingFocusParent = fo->GetParent();
+	lstrcpynA(m_remotePendingFocusPath, path, MAX_PATH);
 	m_ftpSession->GetDirectory(fo->GetParent()->GetPath());
 
 	return 0;
@@ -2716,6 +2792,8 @@ int FTPWindow::Chmod(FileObject * fo) {
 	if (res == -1)
 		return -1;
 
+	m_remotePendingFocusParent = fo->GetParent();
+	lstrcpynA(m_remotePendingFocusPath, fo->GetPath(), MAX_PATH);
 	m_ftpSession->GetDirectory(fo->GetParent()->GetPath());
 
 	return 0;
