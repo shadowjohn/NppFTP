@@ -16,7 +16,7 @@ enum RemoteOverwriteDecision {
 
 static inline bool remote_browser_wants_key(const MSG *message)
 {
-	return message && message->message == WM_KEYDOWN && message->wParam == VK_F2;
+	return message && message->message == WM_KEYDOWN && (message->wParam == VK_F2 || message->wParam == VK_RETURN);
 }
 
 static inline HWND remote_browser_combo_edit(HWND combo)

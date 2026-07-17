@@ -490,3 +490,10 @@
 - 根因：repo-local `core.sshCommand` 指向標準 PuTTY `plink.exe`，但 TortoiseGit 2.19.1 對自己的 `TortoiseGitPlink.exe` 環境設定 `GIT_SSH_VARIANT=ssh`；環境 variant 優先，Git 因而把 OpenSSH 的 `-o` 參數傳給不支援它的標準 plink。
 - repo-local SSH command 改用 `TortoiseGitPlink.exe`，保留原有 PPK 參數，不修改 global Git 設定，也不把個人金鑰路徑寫入追蹤檔。
 - 驗證：標準 PuTTY plink 對 `-o` 回 `unknown option`，TortoiseGitPlink 可接受；以 TortoiseGit 同等 `GIT_SSH` / `GIT_SSH_VARIANT=ssh` 環境執行原 pull command 成功，回 `Already up to date`、exit 0。
+
+## 2026-07-17 Activate focused remote items with Enter
+
+- flat remote list 原本已有 `NM_RETURN` 與 double-click 共用的 `ActivateRemoteListSelection`，但 modeless key gate 只放行 F2，Enter 會先被 `IsDialogMessage` 吃掉。
+- 最小修正是在既有 `remote_browser_wants_key` 同時放行 `VK_RETURN`；目錄仍走 `SetRemoteCurrentDir`，檔案仍走 cache download/open，不新增第二套 activation 邏輯。
+- TDD：focused Win32 test 建立並選取真實 ListView item；修正前 Enter 無法產生 `NM_RETURN`，修正後輸出 `remote_list_keyboard_exit=0`。
+- `.\build.bat -Arch x64 -Config Release` 通過；ZIP SHA256：`8443B07043388B7E2CD5EAB5D249AA772651D51E3EED8AA4DE3B0253FE9470BB`。Notepad++ 實機仍待複驗。

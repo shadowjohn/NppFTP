@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 static bool receivedF2 = false;
+static bool receivedListEnter = false;
 static bool receivedEnter = false;
 
 static LRESULT CALLBACK ParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -13,6 +14,8 @@ static LRESULT CALLBACK ParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 		NMHDR * header = (NMHDR*)lParam;
 		if (header->code == LVN_KEYDOWN && ((NMLVKEYDOWN*)lParam)->wVKey == VK_F2)
 			receivedF2 = true;
+		if (header->code == NM_RETURN)
+			receivedListEnter = true;
 	}
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
@@ -55,6 +58,11 @@ int main()
 		0, 0, 200, 200, parent, NULL, windowClass.hInstance, NULL);
 	assert(list);
 	assert(SetWindowSubclass(list, ListProc, 1, 0));
+	LVITEM item{};
+	item.mask = LVIF_TEXT;
+	item.pszText = (TCHAR*)TEXT("folder");
+	assert(ListView_InsertItem(list, &item) == 0);
+	ListView_SetItemState(list, 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
 	SetFocus(list);
 
 	MSG key{};
@@ -63,6 +71,9 @@ int main()
 	key.wParam = VK_F2;
 	assert(IsDialogMessage(parent, &key));
 	assert(receivedF2);
+	key.wParam = VK_RETURN;
+	assert(IsDialogMessage(parent, &key));
+	assert(receivedListEnter);
 
 	HWND combo = CreateWindow(TEXT("COMBOBOX"), TEXT(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWN,
 		0, 0, 200, 120, parent, NULL, windowClass.hInstance, NULL);
