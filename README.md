@@ -43,11 +43,12 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 
 - 上方顯示目前 FTP profile 與目前路徑。
 - `Quick search` 可即時過濾目前目錄。
-- `Change dir` 可以手動輸入路徑並按 Enter 切換，也會保留最近使用的幾筆目錄；尚未載入的路徑會直接向伺服器查詢。
+- `Change dir` 可以手動輸入路徑並按 Enter 切換；目前會在記憶體中保留最近 8 筆目錄，尚未載入的路徑會直接向伺服器查詢。
 - 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`；Size 使用靠右的人類可讀格式，Modified 固定為 `yyyy-MM-dd HH:mm:ss`。
 - 資料夾與檔案有圖示。
 - 欄位標題可拖曳調整順序。
 - 點入目錄或開檔時會有 wait cursor 回饋。
+- 清單焦點在目錄或檔案時，按 Enter 與 double-click 相同：進入目錄或下載至 cache 後開啟編輯。
 - `Change dir` 按 Enter 時，已知目錄會切換，已知檔案會開啟；未載入路徑也會嘗試從伺服器讀取，操作期間顯示 wait cursor。
 
 這樣做不是為了少顯示資訊，而是讓常用操作變短：看目前在哪、搜尋目前資料夾、輸入路徑跳轉、打開檔案，都可以在同一個小面板內完成。
@@ -62,7 +63,9 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 | 資料夾 | **Upload files...**：可一次選取多個本機檔案上傳；**CHMOD**；重新命名（`F2`）；刪除。 |
 | 清單空白處 | 重新整理目前目錄、建立資料夾、建立空白檔案、上傳檔案。 |
 
-同名上傳時會詢問覆寫、略過或取消；刪除檔案與資料夾前也會再次確認。
+同名上傳時會詢問覆寫、略過或取消，也可在本次連線選擇後續直接覆寫；刪除檔案與資料夾前會再次確認。
+
+本機檔案與目錄也可直接拖入清單：拖到目錄會上傳到該目錄，拖到檔案或空白處會上傳到目前目錄。目錄採遞迴上傳，會先建立父目錄、合併已存在的遠端目錄，再逐檔顯示 queue progress；junction / symlink 等 reparse point 不會被跟隨。
 
 ## 這輪維護做了什麼
 
@@ -91,10 +94,17 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 保留舊 tree code，先讓新 flat browser 可用再逐步替換。
 - 新增目前路徑、快速搜尋、Change dir combo。
 - 新增單層目錄清單、資料夾/檔案圖示、metadata 欄位與 header drag/drop。
-- 支援 double-click 進目錄與下載開檔。
+- 支援 double-click 或 Enter 進目錄與下載開檔。
 - 支援 typed path：已知目錄切換、已知檔案開啟，未載入目錄會向伺服器查詢後切換。
 - Size 顯示為 B / KB / MB 並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
 - 修正 dock resize / splitter resize 後 flat browser 沒跟著重排的問題。
+
+遠端檔案操作：
+
+- 新增檔案、目錄、空白處三組右鍵選單，支援 Edit、CHMOD、F2 rename、delete、refresh、new file / directory 與 multi-file upload。
+- 支援拖放檔案與目錄、遞迴目錄上傳、遠端目錄安全合併、同名檔覆寫選擇與逐檔進度。
+- SFTP 可區分 permission denied 與 path not found；FTP / FTPS 無法確定原因時保留 generic rejection，避免亂猜。
+- 單一操作失敗顯示提示並寫入 Output；遞迴上傳只在完成時顯示一個摘要。
 
 ## Build
 
@@ -118,6 +128,18 @@ build.bat
 
 `build_scripts.ps1` 會檢查 Visual Studio、CMake、Perl 等環境；OpenSSL / zlib / libssh 仍走既有 third-party build 流程，並保留 hash 驗證。
 
+### 安裝與本機測試
+
+Release 使用者：下載 zip、解壓 `NppFTP.dll`，放到 `Notepad++\plugins\NppFTP\NppFTP.dll`，再重新啟動 Notepad++。
+
+本機開發完成後，可關閉 Notepad++，再以系統管理員身分執行：
+
+```bat
+copyNppFTPdllToRealENV.bat
+```
+
+腳本會把 `_build\Release\NppFTP.dll` 覆蓋到 `C:\Program Files\Notepad++\plugins\NppFTP\NppFTP.dll`，並以 binary compare 驗證結果。
+
 ## 專案紀錄
 
 - `history.md`：重要修正、踩雷、決策、build hash。
@@ -132,17 +154,28 @@ build.bat
 
 - 安全加固第一輪。
 - Windows baseline build。
-- PSPad-like flat remote browser 第一輪。
-- README 與維護紀錄整理。
+- PSPad-like flat remote browser、鍵盤操作與 metadata 顯示。
+- 右鍵檔案操作、CHMOD、multi-file / recursive directory upload 與失敗提示。
+- Windows x64 GitHub Actions build；`v*` tag 會自動建立 GitHub pre-release。
+- README、第三方來源 ledger 與維護紀錄整理。
 
-還需要實機手動 QA：
+目前主線尚未開發：
+
+- 將最近 8 筆遠端目錄依 profile 寫入 settings；目前只保留在記憶體中。
+- rename / CHMOD / new file 成功並 refresh 後，恢復原項目或新項目的 selection、focus 與可見位置。
+- UI 語系選擇；預設語系規劃為正體中文。
+
+已開發、仍需要實機手動 QA：
 
 - Notepad++ 內安裝 `_build\Release\NppFTP.dll`。
-- 測 resize、icons、metadata columns、header drag/drop。
-- 測 double-click 目錄/檔案。
-- 測不同 FTP / FTPS / SFTP server 的深層 Change dir 與大型檔案傳輸。
+- 測 resize、icons、metadata columns、header drag/drop、double-click / Enter 與 typed path。
+- 測右鍵選單、F2、picker / drop target、Skip / Cancel / session overwrite-all。
+- 測 FTP / FTPS / SFTP 的 permission / missing-path / generic failure 提示。
+- 測 FTP / SFTP recursive upload 的新舊目錄合併、nested collision、symlink、逐檔 progress 與單一摘要。
+
+暫不做：vendor 第三方 tarball、加入新 UI library、為了移除舊 tree code 而重寫整個 FTP window。只有離線 build 或上游來源不穩時，才考慮自養第三方 archive mirror。
 
 ## Build Status
 
-[![Appveyor build status](https://ci.appveyor.com/api/projects/status/github/ashkulz/nppftp?branch=master&svg=true)](https://ci.appveyor.com/project/ashkulz/nppftp)
-[![GitHub release](https://img.shields.io/github/release/ashkulz/NppFTP.svg)](https://github.com/ashkulz/NppFTP/releases)
+[![Maintained Windows x64 build](https://github.com/shadowjohn/NppFTP/actions/workflows/CI_build.yml/badge.svg?branch=master)](https://github.com/shadowjohn/NppFTP/actions/workflows/CI_build.yml)
+[![GitHub pre-release](https://img.shields.io/github/v/release/shadowjohn/NppFTP?include_prereleases)](https://github.com/shadowjohn/NppFTP/releases)

@@ -497,3 +497,10 @@
 - 最小修正是在既有 `remote_browser_wants_key` 同時放行 `VK_RETURN`；目錄仍走 `SetRemoteCurrentDir`，檔案仍走 cache download/open，不新增第二套 activation 邏輯。
 - TDD：focused Win32 test 建立並選取真實 ListView item；修正前 Enter 無法產生 `NM_RETURN`，修正後輸出 `remote_list_keyboard_exit=0`。
 - `.\build.bat -Arch x64 -Config Release` 通過；ZIP SHA256：`8443B07043388B7E2CD5EAB5D249AA772651D51E3EED8AA4DE3B0253FE9470BB`。Notepad++ 實機仍待複驗。
+
+## 2026-07-17 Refresh README status and remaining work
+
+- README 補上 Enter activation、flat-list 右鍵操作、CHMOD、拖放與 recursive upload、失敗提示、GitHub pre-release workflow，以及 `copyNppFTPdllToRealENV.bat` 安裝方式。
+- 將剩餘項目明確分成「尚未開發」與「已開發但待實機 QA」：目前主線未開發只剩 recent dirs 依 profile 持久化、mutation refresh 後恢復 focus、UI 語系選擇。
+- 移除指向 upstream 的 AppVeyor / release badges，改用本 fork 的 maintained Windows x64 workflow 與 pre-release badges。
+- 文件-only 變更，未重跑 build；執行 `git diff --check` 驗證格式。
