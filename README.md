@@ -45,10 +45,12 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - `Quick search` 可即時過濾目前目錄。
 - `Change dir` 可以手動輸入路徑並按 Enter 切換；每個 profile 會保存最近 8 筆成功進入的目錄，重複目錄會移到最前方，手打時會顯示符合前綴的下拉建議；尚未載入的路徑會直接向伺服器查詢。
 - 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`；Size 使用靠右的人類可讀格式，Modified 固定為 `yyyy-MM-dd HH:mm:ss`。
+- 點欄位標題可排序 `Name`、`Size`、`Modified`、`Type`、`Permissions`：首次為遞增、再次點同欄改為遞減；一次只顯示一個箭頭。`..` 固定在第 0 列，資料夾永遠排在檔案前；Size 依原始 64-bit 值比較，名稱依系統 locale、不分大小寫比較。
 - 資料夾與檔案有圖示。
 - 欄位標題可拖曳調整順序。
 - 點入目錄或開檔時會有 wait cursor 回饋。
 - 清單焦點在目錄或檔案時，按 Enter 與 double-click 相同：進入目錄或下載至 cache 後開啟編輯。
+- 清單焦點按 Backspace 會先向伺服器 LIST 上層目錄，成功後才切換；root 沒有上層時不動。進入失敗或舊的延遲回應不會覆蓋目前清單、選取或 wait cursor。
 - `Change dir` 按 Enter 時，已知目錄會切換，已知檔案會開啟；未載入路徑也會嘗試從伺服器讀取，操作期間顯示 wait cursor。
 
 這樣做不是為了少顯示資訊，而是讓常用操作變短：看目前在哪、搜尋目前資料夾、輸入路徑跳轉、打開檔案，都可以在同一個小面板內完成。
@@ -59,9 +61,10 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 
 | 位置 | 可用操作 |
 | --- | --- |
-| 檔案 | **Edit**：下載至 cache 並在 Notepad++ 開啟；**CHMOD**；重新命名（`F2`）；刪除。 |
-| 資料夾 | **Upload files...**：可一次選取多個本機檔案上傳；**CHMOD**；重新命名（`F2`）；刪除。 |
+| 檔案 | **Edit**：下載至 cache 並在 Notepad++ 開啟；**CHMOD**；重新命名（`F2`）；刪除；建立資料夾／空白檔案（建立在目前目錄）。 |
+| 資料夾 | **Upload files...**：可一次選取多個本機檔案上傳；**CHMOD**；重新命名（`F2`）；刪除；建立資料夾／空白檔案（建立在該資料夾）。 |
 | 清單空白處 | 重新整理目前目錄、建立資料夾、建立空白檔案、上傳檔案。 |
+| `..` | 不顯示會變更遠端資料的右鍵選單。 |
 
 同名上傳時會詢問覆寫、略過或取消，也可在本次連線選擇後續直接覆寫；刪除檔案與資料夾前會再次確認。
 
@@ -95,8 +98,10 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 新增目前路徑、快速搜尋、Change dir combo。
 - 新增單層目錄清單、資料夾/檔案圖示、metadata 欄位與 header drag/drop。
 - 支援 double-click 或 Enter 進目錄與下載開檔。
+- Backspace 會以 server LIST 確認上層目錄後再切換；目錄載入失敗或較舊請求晚到時保留現有畫面。
 - 支援 typed path：已知目錄切換、已知檔案開啟，未載入目錄會向伺服器查詢後切換。
 - FTP / SFTP 檔案大小與傳輸進度保留超過 2 GB 的 64-bit 值；Size 使用 B / KB / MB / GB / TB、兩位小數並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
+- 支援五欄 view-only 排序；重新整理或 mutation refresh 後仍以目前排序顯示，並依 remote path 找回目標列的 focus。
 - 修正 dock resize / splitter resize 後 flat browser 沒跟著重排的問題。
 
 遠端檔案操作：
@@ -173,6 +178,7 @@ copyNppFTPdllToRealENV.bat
 - 測 recent dirs 依 profile 分開保存、重啟後仍在、重複目錄會移到最前方，以及 Change dir 手打前綴會展開匹配下拉。
 - 測 FTP / FTPS / SFTP 的 permission / missing-path / generic failure 提示。
 - 測 FTP / SFTP recursive upload 的新舊目錄合併、nested collision、symlink、逐檔 progress 與單一摘要。
+- 測 Backspace 的檔案／資料夾／root、空目錄與 denied/missing 目錄、快速 A→B 導覽，以及 FTP/FTPS 與 SFTP 的五欄排序和右鍵建立目標。
 
 暫不做：vendor 第三方 tarball、加入新 UI library、為了移除舊 tree code 而重寫整個 FTP window。只有離線 build 或上游來源不穩時，才考慮自養第三方 archive mirror。
 

@@ -1,5 +1,14 @@
 # NppFTP 接續紀錄
 
+## 2026-07-18 Flat remote list navigation, context targets, and sorting
+
+- Flat list 的 Backspace 現在先對上層做 LIST，只有最新且成功的請求才切換目前目錄；root 是 no-op。失敗或 stale completion 保留目前路徑、清單、選取與 wait cursor。
+- 檔案／空白列的建立資料夾或空白檔案維持在目前目錄；從資料夾列建立時改在該資料夾內。`..` 不提供 mutation menu。
+- Name、Size、Modified、Type、Permissions 支援單一欄位 asc/desc 排序與原生箭頭；`..` 固定第 0 列、資料夾固定在檔案前，Size 依原始 64-bit 值比較。
+- 本輪重新編譯並通過：`file_size_64_exit=0`、`remote_browser_utils_exit=0`、`remote_list_keyboard_exit=0`、`remote_list_sort_exit=0`、`utcp_transfer_buffer_exit=0`、`recent_dirs_exit=0`、`remote_refresh_source_contract_exit=0`。
+- `build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll`（4,716,032 bytes）與 `_build\NppFTP-0.30.22-win64.zip`（2,159,225 bytes）；ZIP SHA256：`AA5A5B4991E54E6427D4DAF2DA545FB945CF21F426F4B86AB7E1355C1502AF74`。
+- `copyNppFTPdllToRealENV.bat` 在非系統管理員環境因 `C:\Program Files` Access is denied 失敗，未覆蓋既有 plugin DLL；FTP/FTPS、SFTP 與 Notepad++ 實機 acceptance matrix 仍待執行。
+
 ## 2026-07-18 Add 64-bit file size support
 
 - FTP / SFTP 檔案大小與傳輸進度現在會保留超過 2 GB 的 64-bit 值。
