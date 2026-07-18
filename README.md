@@ -163,6 +163,7 @@ copyNppFTPdllToRealENV.bat
 - PSPad-like flat remote browser、鍵盤操作與 metadata 顯示。
 - 右鍵檔案操作、CHMOD、multi-file / recursive directory upload 與失敗提示。
 - Windows x64 GitHub Actions build；`v*` tag 會自動建立 GitHub pre-release。
+- Windows x64 DLL 已在 Notepad++ 實機載入；FTP 清單正確顯示 `5.00 GB`，確認超過 4 GB 的 64-bit 檔案大小路徑。
 - README、第三方來源 ledger 與維護紀錄整理。
 
 目前主線尚未開發：
@@ -171,7 +172,6 @@ copyNppFTPdllToRealENV.bat
 
 已開發、仍需要實機手動 QA：
 
-- Notepad++ 內安裝 `_build\Release\NppFTP.dll`。
 - 測 resize、icons、metadata columns、header drag/drop、double-click / Enter 與 typed path。
 - 測右鍵選單、F2、picker / drop target、Skip / Cancel / session overwrite-all。
 - 測 rename、CHMOD、new file 成功 refresh 後，目標列仍被選取、取得鍵盤 focus 並捲回可見位置。
