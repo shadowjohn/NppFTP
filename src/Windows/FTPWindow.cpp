@@ -2507,7 +2507,7 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	//The treeview is out of sync here, make sure no GUI calls go between this function and the next call
 	m_treeview.UpdateFileObject(parent);
 	m_treeview.FillTreeDirectory(parent);
-	m_treeview.ExpandDirectory(parent);
+	m_treeview.ExpandDirectory(parent, NULL, updateVisibleUi);
 
 	if (isPendingRemoteDir) {
 		SetRemoteCurrentDir(parent, false);

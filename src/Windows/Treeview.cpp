@@ -375,7 +375,7 @@ int Treeview::CollapseDirectory(FileObject* dir)
 	return -1;
 }
 
-int Treeview::ExpandDirectory(FileObject * dir, FileObject* selectSubItem) {
+int Treeview::ExpandDirectory(FileObject * dir, FileObject* selectSubItem, bool selectTreeItem) {
 	void* dat = dir->GetData();
 	if (!dat)
 		return 0;
@@ -389,6 +389,8 @@ int Treeview::ExpandDirectory(FileObject * dir, FileObject* selectSubItem) {
 	if (visible == TRUE) {
 		TreeView_Expand(m_hwnd, hti, TVE_EXPAND);
 	}
+	if (!selectTreeItem)
+		return 0;
 
 	if (selectSubItem != NULL && (dat = selectSubItem->GetData())) {
 		curSelectedItem = (HTREEITEM)dat;
