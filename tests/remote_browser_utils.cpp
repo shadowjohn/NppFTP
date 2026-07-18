@@ -7,6 +7,10 @@
 
 int main()
 {
+	assert(remote_browser_create_uses_selected_directory(true, true));
+	assert(!remote_browser_create_uses_selected_directory(true, false));
+	assert(!remote_browser_create_uses_selected_directory(false, false));
+
 	assert(remote_browser_matches_filter(TEXT("index.html"), TEXT("")));
 	assert(remote_browser_matches_filter(TEXT("index.html"), NULL));
 	assert(remote_browser_matches_filter(TEXT("index.html"), TEXT("INDEX")));

@@ -27,6 +27,11 @@ static inline bool remote_browser_directory_result_succeeded(int result)
 	return result != -1;
 }
 
+static inline bool remote_browser_create_uses_selected_directory(bool hasSelection, bool isDirectory)
+{
+	return hasSelection && isDirectory;
+}
+
 static inline bool remote_browser_pending_path_matches(const char *pendingPath, const char *completedPath)
 {
 	return pendingPath && pendingPath[0] && completedPath && strcmp(pendingPath, completedPath) == 0;

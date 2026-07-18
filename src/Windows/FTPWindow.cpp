@@ -1305,13 +1305,19 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					result = TRUE;
 					break; }
 				case IDM_POPUP_REMOTE_NEWDIR: {
-					if (m_remoteCurrentDir)
-						CreateDirectory(m_remoteCurrentDir);
+					bool useSelection = remote_browser_create_uses_selected_directory(
+						m_currentSelection != NULL, m_currentSelection && m_currentSelection->isDir());
+					FileObject * target = useSelection ? m_currentSelection : m_remoteCurrentDir;
+					if (target)
+						CreateDirectory(target);
 					result = TRUE;
 					break; }
 				case IDM_POPUP_REMOTE_NEWFILE: {
-					if (m_remoteCurrentDir)
-						CreateFile(m_remoteCurrentDir);
+					bool useSelection = remote_browser_create_uses_selected_directory(
+						m_currentSelection != NULL, m_currentSelection && m_currentSelection->isDir());
+					FileObject * target = useSelection ? m_currentSelection : m_remoteCurrentDir;
+					if (target)
+						CreateFile(target);
 					result = TRUE;
 					break; }
 				case IDM_POPUP_REFRESHDIR:
@@ -2063,6 +2069,9 @@ int FTPWindow::CreateMenus() {
 	AppendMenu(m_popupRemoteFile, MF_SEPARATOR, 0, NULL);
 	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete file"));
 	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_RENAME, TEXT("&Rename\tF2"));
+	AppendMenu(m_popupRemoteFile, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_NEWDIR, TEXT("Create &directory"));
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_NEWFILE, TEXT("&New file"));
 
 	m_popupRemoteDir = CreatePopupMenu();
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_UPLOADFILES, TEXT("&Upload files..."));
@@ -2070,6 +2079,9 @@ int FTPWindow::CreateMenus() {
 	AppendMenu(m_popupRemoteDir, MF_SEPARATOR, 0, NULL);
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete directory"));
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_RENAME, TEXT("&Rename\tF2"));
+	AppendMenu(m_popupRemoteDir, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_NEWDIR, TEXT("Create &directory"));
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_NEWFILE, TEXT("&New file"));
 
 	m_popupRemoteBlank = CreatePopupMenu();
 	AppendMenu(m_popupRemoteBlank, MF_STRING, IDM_POPUP_REMOTE_REFRESH, TEXT("&Refresh"));
