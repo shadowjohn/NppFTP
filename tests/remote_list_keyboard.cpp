@@ -7,6 +7,7 @@
 static bool receivedF2 = false;
 static bool receivedListEnter = false;
 static bool receivedEnter = false;
+static bool receivedBackspace = false;
 
 static LRESULT CALLBACK ParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -14,6 +15,8 @@ static LRESULT CALLBACK ParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARA
 		NMHDR * header = (NMHDR*)lParam;
 		if (header->code == LVN_KEYDOWN && ((NMLVKEYDOWN*)lParam)->wVKey == VK_F2)
 			receivedF2 = true;
+		if (header->code == LVN_KEYDOWN && ((NMLVKEYDOWN*)lParam)->wVKey == VK_BACK)
+			receivedBackspace = true;
 		if (header->code == NM_RETURN)
 			receivedListEnter = true;
 	}
@@ -81,6 +84,10 @@ int main()
 	key.wParam = VK_RETURN;
 	assert(IsDialogMessage(parent, &key));
 	assert(receivedListEnter);
+	key.wParam = VK_BACK;
+	assert(remote_browser_wants_key(&key));
+	assert(IsDialogMessage(parent, &key));
+	assert(receivedBackspace);
 
 	HWND combo = CreateWindow(TEXT("COMBOBOX"), TEXT(""), WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWN,
 		0, 0, 200, 120, parent, NULL, windowClass.hInstance, NULL);

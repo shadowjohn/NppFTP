@@ -18,7 +18,18 @@ enum RemoteOverwriteDecision {
 
 static inline bool remote_browser_wants_key(const MSG *message)
 {
-	return message && message->message == WM_KEYDOWN && (message->wParam == VK_F2 || message->wParam == VK_RETURN);
+	return message && message->message == WM_KEYDOWN &&
+		(message->wParam == VK_F2 || message->wParam == VK_RETURN || message->wParam == VK_BACK);
+}
+
+static inline bool remote_browser_directory_result_succeeded(int result)
+{
+	return result != -1;
+}
+
+static inline bool remote_browser_pending_path_matches(const char *pendingPath, const char *completedPath)
+{
+	return pendingPath && pendingPath[0] && completedPath && strcmp(pendingPath, completedPath) == 0;
 }
 
 static inline HWND remote_browser_combo_edit(HWND combo)

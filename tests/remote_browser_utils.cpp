@@ -80,6 +80,13 @@ int main()
 	assert(RemoteOverwriteSkip == 2);
 	assert(RemoteFailureUnknown == 0);
 	assert(RemoteFailurePermissionDenied != RemoteFailureNotFound);
+	assert(remote_browser_directory_result_succeeded(0));
+	assert(remote_browser_directory_result_succeeded(12));
+	assert(!remote_browser_directory_result_succeeded(-1));
+	assert(remote_browser_pending_path_matches("/target", "/target"));
+	assert(!remote_browser_pending_path_matches("/newest", "/older"));
+	assert(!remote_browser_pending_path_matches("", "/target"));
+	assert(!remote_browser_pending_path_matches(NULL, "/target"));
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

@@ -20,6 +20,8 @@
 #include "FTPQueue.h"
 #include "file_size_utils.h"
 
+#include <memory>
+
 const int ConditionQueueOps = 0;
 const int ConditionQueueStop = 1;
 const int ConditionQueueAcked = 2;
@@ -90,6 +92,7 @@ int FTPQueue::Deinitialize() {
 }
 
 int FTPQueue::AddQueueOp(QueueOperation * op) {
+	std::unique_ptr<QueueOperation> owned(op);
 	op->SetClient(m_wrapper);
 
 	m_monitor->Enter();
@@ -107,7 +110,7 @@ int FTPQueue::AddQueueOp(QueueOperation * op) {
 	op->SendNotification(QueueOperation::QueueEventAdd);
 
 	m_monitor->Enter();
-		m_queue.push_back(op);
+		m_queue.push_back(owned.release());
 		if (m_queue.size() == 1)
 			m_monitor->Signal(ConditionQueueOps);
 	m_monitor->Exit();

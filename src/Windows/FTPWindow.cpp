@@ -714,7 +714,7 @@ int FTPWindow::NavigateRemotePathFromCombo() {
 		return NavigateRemotePath(target);
 
 	if (targetObj->isDir())
-		return SetRemoteCurrentDir(targetObj, true);
+		return NavigateRemotePath(targetObj->GetPath());
 
 	m_remoteBusyCursor = true;
 	res = m_ftpSession->DownloadFileCache(targetObj->GetPath());
@@ -735,14 +735,16 @@ int FTPWindow::NavigateRemotePath(const char * path) {
 	}
 
 	FileObject * targetObj = m_ftpSession->FindPathObject(target);
-	if (targetObj && targetObj->isDir())
-		return SetRemoteCurrentDir(targetObj, true);
+	if (targetObj && !targetObj->isDir())
+		return -1;
 
 	lstrcpynA(m_remotePendingPath, target, MAX_PATH);
 	m_remoteBusyCursor = true;
-	int res = m_ftpSession->GetDirectoryHierarchy(target);
-	if (res != 0)
+	int res = targetObj ? m_ftpSession->GetDirectory(target) : m_ftpSession->GetDirectoryHierarchy(target);
+	if (res != 0) {
+		m_remotePendingPath[0] = 0;
 		m_remoteBusyCursor = false;
+	}
 	return res;
 }
 
@@ -753,7 +755,7 @@ int FTPWindow::ActivateRemoteListSelection() {
 
 	m_currentSelection = fo;
 	if (fo->isDir())
-		return SetRemoteCurrentDir(fo, true);
+		return NavigateRemotePath(fo->GetPath());
 
 	m_remoteBusyCursor = true;
 	int res = m_ftpSession->DownloadFileCache(fo->GetPath());
@@ -1459,6 +1461,13 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						break; }
 					case LVN_KEYDOWN: {
 						NMLVKEYDOWN * key = (NMLVKEYDOWN*)lParam;
+						if (key->wVKey == VK_BACK) {
+							FileObject * parent = m_remoteCurrentDir ? m_remoteCurrentDir->GetParent() : NULL;
+							if (parent)
+								NavigateRemotePath(parent->GetPath());
+							result = TRUE;
+							break;
+						}
 						if (key->wVKey == VK_F2) {
 							int selected = ListView_GetNextItem(m_remoteList, -1, LVNI_SELECTED);
 							if (selected >= 0 && !IsRemoteParentItem(selected))
@@ -2180,7 +2189,6 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			break; }
 		case QueueOperation::QueueTypeConnect:
 		case QueueOperation::QueueTypeDisconnect:
-		case QueueOperation::QueueTypeDirectoryGet:
 		case QueueOperation::QueueTypeRemoteUploadScan: {
 			if (!isStart)
 				m_remoteBusyCursor = false;
@@ -2254,6 +2262,18 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			if (isStart) {
 				break;
 			}
+			bool pendingNavigation = remote_browser_pending_path_matches(m_remotePendingPath, dirop->GetDirPath());
+
+			if (!remote_browser_directory_result_succeeded(queueResult)) {
+				OutErr("[FTPWindow] Failure retrieving contents of directory %T", SU::Utf8ToTChar(dirop->GetDirPath()));
+				if (pendingNavigation) {
+					m_remotePendingPath[0] = 0;
+					m_remoteBusyCursor = false;
+					const TCHAR * message = GetRemoteFailureMessage(queueOp->GetFailureKind());
+					::MessageBox(m_hwnd, message, TEXT("Unable to enter directory"), MB_OK | MB_ICONERROR);
+				}
+				break;
+			}
 
 			std::vector<FTPDir*> parentDirObjs = dirop->GetParentDirObjs();
 			size_t i;
@@ -2267,18 +2287,23 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 					OnDirectoryRefresh(parent, curFTPDir->files, curFTPDir->count);
 			}
 
-			if (queueResult == -1) {
-				OutErr("[FTPWindow] Failure retrieving contents of directory %T", SU::Utf8ToTChar(dirop->GetDirPath()));
-				//break commented: even if failed, update the treeview etc., count should result in 0 anyway
-				//break;	//failure
-			}
-			OutMsg("[FTPWindow] Loaded directory %T", SU::Utf8ToTChar(dirop->GetDirPath()));
-
 			FTPFile* files = (FTPFile*)queueData;
 			int count = dirop->GetFileCount();
 			FileObject* parent = m_ftpSession->FindPathObject(dirop->GetDirPath());
-			if (parent)
-				OnDirectoryRefresh(parent, files, count);
+			if (!parent) {
+				if (pendingNavigation) {
+					m_remotePendingPath[0] = 0;
+					m_remoteBusyCursor = false;
+					::MessageBox(m_hwnd, GetRemoteFailureMessage(RemoteFailureUnknown),
+						TEXT("Unable to enter directory"), MB_OK | MB_ICONERROR);
+				}
+				break;
+			}
+
+			OutMsg("[FTPWindow] Loaded directory %T", SU::Utf8ToTChar(dirop->GetDirPath()));
+			OnDirectoryRefresh(parent, files, count);
+			if (pendingNavigation)
+				m_remoteBusyCursor = false;
 			break; }
 		case QueueOperation::QueueTypeDownloadHandle:
 		case QueueOperation::QueueTypeDownload: {
