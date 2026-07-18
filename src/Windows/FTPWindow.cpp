@@ -2489,7 +2489,8 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 
 int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count, const char * completedRequestPath) {
 	bool isFinalTarget = (completedRequestPath != NULL);
-	bool updateVisibleUi = remote_browser_refresh_updates_visible_ui(isFinalTarget);
+	bool updateVisibleUi = remote_browser_refresh_updates_visible_ui(
+		isFinalTarget, m_remotePendingPath, completedRequestPath);
 	bool isCurrentRemoteDir = (parent == m_remoteCurrentDir);
 	bool isPendingRemoteDir = remote_browser_completed_request_commits_pending(
 		isFinalTarget, m_remotePendingPath, completedRequestPath);

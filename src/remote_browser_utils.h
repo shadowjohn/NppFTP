@@ -37,9 +37,10 @@ static inline bool remote_browser_completed_request_commits_pending(bool isFinal
 	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, completedRequestPath);
 }
 
-static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget)
+static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget, const char *pendingPath, const char *completedRequestPath)
 {
-	return isFinalTarget;
+	return isFinalTarget && completedRequestPath &&
+		(!pendingPath || pendingPath[0] == 0 || remote_browser_pending_path_matches(pendingPath, completedRequestPath));
 }
 
 static inline HWND remote_browser_combo_edit(HWND combo)
