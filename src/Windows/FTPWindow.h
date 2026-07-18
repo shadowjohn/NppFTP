@@ -115,6 +115,7 @@ protected:
 	virtual int				SetRemoteCurrentDir(FileObject * dir, bool refresh);
 	virtual int				FillRemoteList();
 	virtual int				RestoreRemoteListFocus(FileObject * file);
+	virtual int				UpdateRemoteSortHeader();
 	virtual int				UpdateRemotePathControls();
 	virtual int				AddRemoteRecentDir(const char * path);
 	virtual int				LoadRemoteRecentDirs(const TCHAR * prefix);
@@ -167,6 +168,8 @@ protected:
 	HWND					m_remoteDirCombo;
 	HWND					m_remoteDirEdit;
 	HWND					m_remoteList;
+	int						m_remoteSortColumn;
+	bool					m_remoteSortAscending;
 	char					m_remotePendingPath[MAX_PATH];
 	FileObject*				m_remotePendingFocusParent;
 	char					m_remotePendingFocusPath[MAX_PATH];

@@ -29,8 +29,10 @@
 #include "RecentDirs.h"
 #include "remote_browser_utils.h"
 #include "file_size_utils.h"
+#include "RemoteListSort.h"
 
 #include "Commands.h"
+#include <algorithm>
 #include <commdlg.h>
 #include <commctrl.h>
 #include <windowsx.h>
@@ -157,6 +159,8 @@ FTPWindow::FTPWindow() :
 	m_remoteDirCombo(NULL),
 	m_remoteDirEdit(NULL),
 	m_remoteList(NULL),
+	m_remoteSortColumn(RemoteSortNone),
+	m_remoteSortAscending(true),
 	m_popupRemoteFile(NULL),
 	m_popupRemoteDir(NULL),
 	m_popupRemoteBlank(NULL),
@@ -603,11 +607,32 @@ int FTPWindow::FillRemoteList() {
 	if (parent)
 		InsertRemoteListObject(m_remoteList, &m_treeimagelist, parent, TEXT(".."), false);
 
-	int count = m_remoteCurrentDir->GetChildCount();
-	for (int i = 0; i < count; i++) {
+	std::vector<RemoteListSortItem> items;
+	for (int i = 0; i < m_remoteCurrentDir->GetChildCount(); i++) {
 		FileObject * child = m_remoteCurrentDir->GetChild(i);
-		if (remote_browser_matches_filter(child->GetLocalName(), filter))
-			InsertRemoteListObject(m_remoteList, &m_treeimagelist, child, child->GetLocalName(), true);
+		if (!remote_browser_matches_filter(child->GetLocalName(), filter))
+			continue;
+		RemoteListSortItem item{};
+		item.data = child;
+		item.isDirectory = child->isDir();
+		item.isLink = child->isLink();
+		item.size = child->GetSize();
+		item.modified = child->GetMTime();
+		item.name = child->GetLocalName();
+		item.path = child->GetPath();
+		item.permissions = child->GetMod();
+		items.push_back(item);
+	}
+
+	if (m_remoteSortColumn != RemoteSortNone) {
+		std::sort(items.begin(), items.end(), [this](const RemoteListSortItem &left, const RemoteListSortItem &right) {
+			return remote_list_sort_less(left, right, m_remoteSortColumn, m_remoteSortAscending);
+		});
+	}
+
+	for (size_t i = 0; i < items.size(); i++) {
+		FileObject * child = (FileObject*)items[i].data;
+		InsertRemoteListObject(m_remoteList, &m_treeimagelist, child, child->GetLocalName(), true);
 	}
 
 	return 0;
@@ -630,6 +655,21 @@ int FTPWindow::RestoreRemoteListFocus(FileObject * file) {
 	}
 
 	return -1;
+}
+
+int FTPWindow::UpdateRemoteSortHeader() {
+	HWND header = ListView_GetHeader(m_remoteList);
+	for (int i = REMOTE_COLUMN_NAME; i <= REMOTE_COLUMN_PERMISSIONS; i++) {
+		HDITEM item{};
+		item.mask = HDI_FORMAT;
+		if (!Header_GetItem(header, i, &item))
+			continue;
+		item.fmt &= ~(HDF_SORTUP | HDF_SORTDOWN);
+		if (i == m_remoteSortColumn)
+			item.fmt |= m_remoteSortAscending ? HDF_SORTUP : HDF_SORTDOWN;
+		Header_SetItem(header, i, &item);
+	}
+	return 0;
 }
 
 int FTPWindow::UpdateRemotePathControls() {
@@ -1459,6 +1499,18 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				return DockableWindow::MessageProc(uMsg, wParam, lParam);
 			} else if (nmh.hwndFrom == m_remoteList) {
 				switch(nmh.code) {
+					case LVN_COLUMNCLICK: {
+						NMLISTVIEW * column = (NMLISTVIEW*)lParam;
+						if (m_remoteSortColumn == column->iSubItem)
+							m_remoteSortAscending = !m_remoteSortAscending;
+						else {
+							m_remoteSortColumn = column->iSubItem;
+							m_remoteSortAscending = true;
+						}
+						UpdateRemoteSortHeader();
+						FillRemoteList();
+						result = TRUE;
+						break; }
 					case LVN_ITEMCHANGED: {
 						NMLISTVIEW * nmlv = (NMLISTVIEW*)lParam;
 						if ((nmlv->uChanged & LVIF_STATE) && (nmlv->uNewState & LVIS_SELECTED))
