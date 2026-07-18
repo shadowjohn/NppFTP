@@ -32,9 +32,14 @@ static inline bool remote_browser_pending_path_matches(const char *pendingPath, 
 	return pendingPath && pendingPath[0] && completedPath && strcmp(pendingPath, completedPath) == 0;
 }
 
-static inline bool remote_browser_refresh_commits_pending(bool isFinalTarget, const char *pendingPath, const char *refreshedPath)
+static inline bool remote_browser_completed_request_commits_pending(bool isFinalTarget, const char *pendingPath, const char *completedRequestPath)
 {
-	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, refreshedPath);
+	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, completedRequestPath);
+}
+
+static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget)
+{
+	return isFinalTarget;
 }
 
 static inline HWND remote_browser_combo_edit(HWND combo)

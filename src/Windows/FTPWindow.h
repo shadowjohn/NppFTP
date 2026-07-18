@@ -87,7 +87,7 @@ protected:
 	virtual int				SetToolbarState();
 
 	virtual int				OnEvent(QueueOperation * queueOp, int code, void * data, bool isStart);
-	virtual int				OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count, bool isFinalTarget);
+	virtual int				OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count, const char * completedRequestPath);
 	virtual int				OnError(QueueOperation * queueOp, int code, void * data, bool isStart);
 	virtual int				ShowOperationFailure(QueueOperation * queueOp);
 
