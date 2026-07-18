@@ -154,6 +154,7 @@ int FTPClientWrapperSSL::GetDir(const char * path, FTPFile** files) {
 	int retcode = 0;
 	CUT_DIRINFO di;
 	FTPFile * ftpfiles;
+	*files = NULL;
 
 	//store original directory
 	//commented out: Cwd is not used in NppFTP at the moment
@@ -269,7 +270,7 @@ int FTPClientWrapperSSL::GetDir(const char * path, FTPFile** files) {
 	}
 
 	if (!vfiles.size()) {
-		return OnReturn(-1);
+		return OnReturn(0);
 	}
 
 	ftpfiles = new FTPFile[vfiles.size()];

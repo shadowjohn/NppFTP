@@ -604,7 +604,7 @@ int FTPWindow::FillRemoteList() {
 	GetWindowText(m_remoteSearchEdit, filter, MAX_PATH);
 
 	FileObject * parent = m_remoteCurrentDir->GetParent();
-	if (parent)
+	if (parent && !m_remoteCurrentDir->isRoot())
 		InsertRemoteListObject(m_remoteList, &m_treeimagelist, parent, TEXT(".."), false);
 
 	std::vector<RemoteListSortItem> items;
@@ -1521,7 +1521,7 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						NMLVKEYDOWN * key = (NMLVKEYDOWN*)lParam;
 						if (key->wVKey == VK_BACK) {
 							FileObject * parent = m_remoteCurrentDir ? m_remoteCurrentDir->GetParent() : NULL;
-							if (parent)
+							if (parent && !m_remoteCurrentDir->isRoot())
 								NavigateRemotePath(parent->GetPath());
 							result = TRUE;
 							break;
@@ -2555,9 +2555,9 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 
 int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count, const char * completedRequestPath) {
 	bool isFinalTarget = (completedRequestPath != NULL);
-	bool updateVisibleUi = remote_browser_refresh_updates_visible_ui(
-		isFinalTarget, m_remotePendingPath, completedRequestPath);
 	bool isCurrentRemoteDir = (parent == m_remoteCurrentDir);
+	bool updateVisibleUi = remote_browser_refresh_updates_visible_ui(
+		isFinalTarget, m_remotePendingPath, completedRequestPath, isCurrentRemoteDir);
 	bool isPendingRemoteDir = remote_browser_completed_request_commits_pending(
 		isFinalTarget, m_remotePendingPath, completedRequestPath);
 	if (!isFinalTarget) {
@@ -2589,7 +2589,7 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 		m_treeview.EnsureObjectVisible(parent);
 	m_treeview.UpdateFileObject(parent);
 	m_treeview.FillTreeDirectory(parent);
-	m_treeview.ExpandDirectory(parent, NULL, updateVisibleUi);
+	m_treeview.ExpandDirectory(parent);
 
 	if (isPendingRemoteDir) {
 		SetRemoteCurrentDir(parent, false);

@@ -42,10 +42,12 @@ static inline bool remote_browser_completed_request_commits_pending(bool isFinal
 	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, completedRequestPath);
 }
 
-static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget, const char *pendingPath, const char *completedRequestPath)
+static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget, const char *pendingPath,
+	const char *completedRequestPath, bool isCurrentRemoteDir)
 {
 	return isFinalTarget && completedRequestPath &&
-		(!pendingPath || pendingPath[0] == 0 || remote_browser_pending_path_matches(pendingPath, completedRequestPath));
+		(remote_browser_pending_path_matches(pendingPath, completedRequestPath) ||
+			(isCurrentRemoteDir && (!pendingPath || pendingPath[0] == 0)));
 }
 
 static inline HWND remote_browser_combo_edit(HWND combo)

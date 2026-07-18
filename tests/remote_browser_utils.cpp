@@ -98,10 +98,12 @@ int main()
 	assert(!remote_browser_completed_request_commits_pending(false, pendingB, staleAParent));
 	assert(remote_browser_completed_request_commits_pending(true, pendingB, staleAParent));
 	assert(!remote_browser_completed_request_commits_pending(true, "/dir", "/dir/"));
-	assert(remote_browser_refresh_updates_visible_ui(true, "", "/dir"));
-	assert(remote_browser_refresh_updates_visible_ui(true, "/dir", "/dir"));
-	assert(!remote_browser_refresh_updates_visible_ui(true, "/other", "/dir"));
-	assert(!remote_browser_refresh_updates_visible_ui(false, "", "/dir"));
+	assert(remote_browser_refresh_updates_visible_ui(true, "", "/dir", true));
+	assert(!remote_browser_refresh_updates_visible_ui(true, "", "/dir", false));
+	assert(remote_browser_refresh_updates_visible_ui(true, "/dir", "/dir", false));
+	assert(!remote_browser_refresh_updates_visible_ui(true, "/other", "/dir", true));
+	assert(!remote_browser_refresh_updates_visible_ui(true, "/other", "/dir", false));
+	assert(!remote_browser_refresh_updates_visible_ui(false, "", "/dir", true));
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

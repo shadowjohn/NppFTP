@@ -511,7 +511,7 @@ int QueueGetDir::Perform() {
 		size_t i;
 		for(i=0; i<parentDirs.size(); i++) {
 
-			FTPFile* files;
+			FTPFile* files = NULL;
 			char* currentDir = parentDirs[i];
 			int result = m_client->GetDir(currentDir, &files);
 			if (result == -1)
@@ -525,7 +525,7 @@ int QueueGetDir::Perform() {
 		}
 	}
 
-	FTPFile* files;
+	FTPFile* files = NULL;
 	m_result = m_client->GetDir(m_dirPath, &files);
 
 	if (m_result == -1)
