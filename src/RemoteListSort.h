@@ -53,8 +53,7 @@ static inline bool remote_list_sort_less(const RemoteListSortItem &left,
 	int result = 0;
 	switch (column) {
 		case RemoteSortSize:
-			if (!left.isDirectory)
-				result = left.size < right.size ? -1 : (left.size > right.size ? 1 : 0);
+			result = left.size < right.size ? -1 : (left.size > right.size ? 1 : 0);
 			break;
 		case RemoteSortModified:
 			result = CompareFileTime(&left.modified, &right.modified);
