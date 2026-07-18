@@ -47,8 +47,8 @@ public:
 
 	virtual int				QueueLoop();
 
-	virtual int				OnDataReceived(long received, long total);
-	virtual int				OnDataSent(long sent, long total);
+	virtual int				OnDataReceived(LONGLONG received, LONGLONG total);
+	virtual int				OnDataSent(LONGLONG sent, LONGLONG total);
 
 	static int				QueueThread(FTPQueue* queue);
 private:

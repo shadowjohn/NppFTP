@@ -28,6 +28,7 @@
 #include "Npp/Notepad_plus_msgs.h"
 #include "RecentDirs.h"
 #include "remote_browser_utils.h"
+#include "file_size_utils.h"
 
 #include "Commands.h"
 #include <commdlg.h>
@@ -2006,8 +2007,9 @@ int FTPWindow::GetFileDescriptor(FILEDESCRIPTOR * fd, int index) {
 #define FD_PROGRESSUI 0x00004000
 
 	fd->dwFlags = FD_ATTRIBUTES | FD_CREATETIME | FD_ACCESSTIME | FD_WRITESTIME | FD_FILESIZE | FD_PROGRESSUI;
-	fd->nFileSizeLow = m_currentDropObject->GetSize();
-	fd->nFileSizeHigh = 0;
+	ULARGE_INTEGER size = file_size_parts(m_currentDropObject->GetSize());
+	fd->nFileSizeLow = size.LowPart;
+	fd->nFileSizeHigh = size.HighPart;
 	fd->dwFileAttributes = FILE_ATTRIBUTE_NORMAL;
 	fd->ftCreationTime = m_currentDropObject->GetCTime();
 	fd->ftLastAccessTime = m_currentDropObject->GetATime();

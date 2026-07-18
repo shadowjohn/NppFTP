@@ -74,7 +74,7 @@ Return
     TRUE - allow the receive to continue
     FALSE - abort the receive
 ****************************************************/
-BOOL CUT_WSDataClient::ReceiveFileStatus(long bytesReceived){
+BOOL CUT_WSDataClient::ReceiveFileStatus(LONGLONG bytesReceived){
     return ptrFTPClient->ReceiveFileStatus(bytesReceived);
 }
 /***************************************************
@@ -87,7 +87,7 @@ Return
     TRUE - allow the send to continue
     FALSE - abort the send
 ****************************************************/
-BOOL CUT_WSDataClient::SendFileStatus(long bytesSent){
+BOOL CUT_WSDataClient::SendFileStatus(LONGLONG bytesSent){
     return ptrFTPClient->SendFileStatus(bytesSent);
 }
 
@@ -3040,7 +3040,7 @@ Return
     TRUE - allow the receive to continue
     FALSE - abort the receive
 ****************************************************/
-BOOL CUT_FTPClient::ReceiveFileStatus(long /* bytesReceived */){
+BOOL CUT_FTPClient::ReceiveFileStatus(LONGLONG /* bytesReceived */){
     return !IsAborted();
 }
 /***************************************************
@@ -3053,7 +3053,7 @@ Return
     TRUE - allow the send to continue
     FALSE - abort the send
 ****************************************************/
-BOOL CUT_FTPClient::SendFileStatus(long /* bytesSent */){
+BOOL CUT_FTPClient::SendFileStatus(LONGLONG /* bytesSent */){
     return !IsAborted();
 }
 

@@ -48,7 +48,7 @@ public:
 
 	virtual	int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetAborted(BOOL aborted);
-	virtual int				SetCurrentTotal(long total);
+	virtual int				SetCurrentTotal(LONGLONG total);
 	virtual int				SetExpectedHostname(const char * hostname);
 	virtual int				SetCertificateScope(const char * profileName, const char * profileParent, const char * hostname, int port, int securityMode);
 
@@ -60,10 +60,10 @@ public:
 protected:
 	virtual int				GetResponseCode(CUT_WSClient *ws,LPSTR string = NULL,int maxlen = 0);
 
-	virtual BOOL			ReceiveFileStatus(long bytesReceived);
+	virtual BOOL			ReceiveFileStatus(LONGLONG bytesReceived);
 
 	// Monitor progress and/or cancel the send
-	virtual BOOL			SendFileStatus(long bytesSent);
+	virtual BOOL			SendFileStatus(LONGLONG bytesSent);
 
 	virtual BOOL			IsAborted();
 
@@ -72,7 +72,7 @@ protected:
 
 	BOOL					m_isAborted;
 	ProgressMonitor*		m_progmon;
-	long					m_currentTotal;	//kinda hacky
+	LONGLONG				m_currentTotal;	//kinda hacky
 	vScopedX509*			m_certificates;
 	char*					m_profileName;
 	char*					m_profileParent;

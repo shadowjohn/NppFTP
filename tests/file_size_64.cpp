@@ -4,6 +4,7 @@
 #include "UTCP/include/utstrlst.h"
 #include "src/FTPFile.h"
 #include "src/FileObject.h"
+#include "src/file_size_utils.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -25,6 +26,15 @@ int main()
 	FTPFile file{};
 	file.fileSize = 5368709120LL;
 	assert(file.fileSize == 5368709120LL);
+
+	assert(file_size_progress_percent(2684354560LL, 5368709120LL) == 50.0f);
+	assert(file_size_progress_percent(1LL, -1LL) == -1.0f);
+
+	ULARGE_INTEGER parts = file_size_parts(5368709120LL);
+	assert(parts.HighPart == 1);
+	assert(parts.LowPart == 1073741824);
+	parts = file_size_parts(-1LL);
+	assert(parts.QuadPart == 0);
 
 	printf("file_size_64_exit=0\n");
 	return 0;

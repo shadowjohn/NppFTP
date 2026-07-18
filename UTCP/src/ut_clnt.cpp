@@ -966,7 +966,7 @@ int CUT_WSClient::Send(CUT_DataSource & source)
 
     int         len = 0;
     char        buf[WSC_TRANSFER_BUFFER_SIZE];
-    long        bytesSent = 0;
+    LONGLONG    bytesSent = 0;
 
     // Open data source for reading
     if(source.Open(UTM_OM_READING) == -1)
@@ -1020,7 +1020,7 @@ int CUT_WSClient::Send(CUT_Queue& queue)
 
     int         len = 0;
     char        buf[WSC_BUFFER_SIZE]{};
-    long        bytesSent = 0;
+    LONGLONG    bytesSent = 0;
 
     int   error = UTE_SUCCESS;
 
@@ -1522,7 +1522,7 @@ int CUT_WSClient::Receive(CUT_DataSource & dest, OpenMsgType type, int timeOut, 
     char        data[WSC_BUFFER_SIZE];
     int         count = 0, nSize = sizeof(data);
     int         error = UTE_SUCCESS;
-    long        bytesReceived = 0L;
+    LONGLONG    bytesReceived = 0;
 
     //check to see if the socket is open
     if(m_socket == INVALID_SOCKET)
@@ -1546,7 +1546,7 @@ int CUT_WSClient::Receive(CUT_DataSource & dest, OpenMsgType type, int timeOut, 
             }
 
         if(lMaxToReceive > 0) {
-            nSize = (std::min)((long)sizeof(data), lMaxToReceive - bytesReceived);
+            nSize = (int)(std::min)((LONGLONG)sizeof(data), (LONGLONG)lMaxToReceive - bytesReceived);
             if(nSize == 0)
                 break;
             }
@@ -1609,7 +1609,7 @@ int CUT_WSClient::Receive(CUT_Queue & dest, int timeOut, long lMaxToReceive){
     BYTE        data[WSC_BUFFER_SIZE]{};
     int         count = 0, nSize = sizeof(data);
     int         error = UTE_SUCCESS;
-    long        bytesReceived = 0L;
+    LONGLONG    bytesReceived = 0;
 
     //check to see if the socket is open
     if(m_socket == INVALID_SOCKET)
@@ -1630,7 +1630,7 @@ int CUT_WSClient::Receive(CUT_Queue & dest, int timeOut, long lMaxToReceive){
                 }
             }
 
-        nSize = (std::min)((long)sizeof(data), lMaxToReceive - bytesReceived);
+        nSize = (int)(std::min)((LONGLONG)sizeof(data), (LONGLONG)lMaxToReceive - bytesReceived);
         if(nSize == 0)
             break;
 
@@ -2110,7 +2110,7 @@ Return
     TRUE - allow the receive to continue
     FALSE - abort the receive
 ****************************************************/
-BOOL CUT_WSClient::ReceiveFileStatus(long /*  bytesReceived */ ){
+BOOL CUT_WSClient::ReceiveFileStatus(LONGLONG /*  bytesReceived */ ){
     return !IsAborted();
 }
 /***************************************************
@@ -2123,7 +2123,7 @@ Return
     TRUE - allow the send to continue
     FALSE - abort the send
 ****************************************************/
-BOOL CUT_WSClient::SendFileStatus(long /* bytesSent */ ){
+BOOL CUT_WSClient::SendFileStatus(LONGLONG /* bytesSent */ ){
     return !IsAborted();
 }
 

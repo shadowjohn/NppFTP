@@ -432,10 +432,10 @@ protected:
     virtual int OnError(int error);
 
     // Monitor progress and/or cancel a receive operation
-    virtual BOOL ReceiveFileStatus(long bytesReceived);
+    virtual BOOL ReceiveFileStatus(LONGLONG bytesReceived);
 
     // Monitor progress and/or cancel a send operation
-    virtual BOOL SendFileStatus(long bytesSent);
+    virtual BOOL SendFileStatus(LONGLONG bytesSent);
 
     // Return TRUE if we are going to abort operation
     virtual BOOL IsAborted();

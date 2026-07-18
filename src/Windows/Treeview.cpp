@@ -205,7 +205,7 @@ int Treeview::OnToolTip(const NMTVGETINFOTIP* nmt) {
 	wchar_t txtSize[41]{};
 	if (!fo->isDir())
 	{
-		long fsize = fo->GetSize();
+		LONGLONG fsize = fo->GetSize();
 		if (fsize <= 0) {
 			CUT_Str::stprintf(txtSize, 40, TEXT("Size: 0\n"));
 		}

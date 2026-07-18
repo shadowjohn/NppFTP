@@ -24,8 +24,8 @@ public:
 							ProgressMonitor() {};
 	virtual					~ProgressMonitor() {};
 
-	virtual int				OnDataReceived(long received, long total) = 0;
-	virtual int				OnDataSent(long sent, long total) = 0;
+	virtual int				OnDataReceived(LONGLONG received, LONGLONG total) = 0;
+	virtual int				OnDataSent(LONGLONG sent, LONGLONG total) = 0;
 protected:
 };
 

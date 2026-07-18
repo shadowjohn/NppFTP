@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "FTPQueue.h"
+#include "file_size_utils.h"
 
 const int ConditionQueueOps = 0;
 const int ConditionQueueStop = 1;
@@ -221,7 +222,7 @@ int FTPQueue::QueueLoop() {
 	return 0;
 }
 
-int FTPQueue::OnDataReceived(long received, long total) {
+int FTPQueue::OnDataReceived(LONGLONG received, LONGLONG total) {
 	m_monitor->Enter();
 		if (!m_performing || !m_activeOp) {	//not called from performing thread?
 			m_monitor->Exit();
@@ -230,17 +231,16 @@ int FTPQueue::OnDataReceived(long received, long total) {
 	m_monitor->Exit();
 
 
-	if (total == -1) {
+	if (total <= 0) {
 		m_activeOp->SetProgress(-1.0f);
 	} else {
-		float percentage = (float)received/(float)total * 100.0f;
-		m_activeOp->SetProgress(percentage);
+		m_activeOp->SetProgress(file_size_progress_percent(received, total));
 	}
 	m_activeOp->SendNotification(QueueOperation::QueueEventProgress);
 	return 0;
 }
 
-int FTPQueue::OnDataSent(long sent, long total) {
+int FTPQueue::OnDataSent(LONGLONG sent, LONGLONG total) {
 	m_monitor->Enter();
 		if (!m_performing || !m_activeOp) {	//not called from performing thread?
 			m_monitor->Exit();
@@ -249,11 +249,10 @@ int FTPQueue::OnDataSent(long sent, long total) {
 	m_monitor->Exit();
 
 
-	if (total == -1) {
+	if (total <= 0) {
 		m_activeOp->SetProgress(-1.0f);
 	} else {
-		float percentage = (float)sent/(float)total * 100.0f;
-		m_activeOp->SetProgress(percentage);
+		m_activeOp->SetProgress(file_size_progress_percent(sent, total));
 	}
 	m_activeOp->SendNotification(QueueOperation::QueueEventProgress);
 	return 0;

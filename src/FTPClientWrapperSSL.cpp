@@ -336,9 +336,9 @@ int FTPClientWrapperSSL::SendFile(const TCHAR * localfile, const char * ftpfile)
 	m_client.SetCurrentTotal(-1);
 	HANDLE hFile = ::CreateFile(localfile, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 	if (hFile != INVALID_HANDLE_VALUE) {
-		DWORD lowsize = ::GetFileSize(hFile, NULL);
-
-		m_client.SetCurrentTotal((long)lowsize);
+		LARGE_INTEGER size{};
+		if (::GetFileSizeEx(hFile, &size))
+			m_client.SetCurrentTotal(size.QuadPart);
 		CloseHandle(hFile);
 	}
 
@@ -366,8 +366,9 @@ int FTPClientWrapperSSL::ReceiveFile(const TCHAR * localfile, const char * ftpfi
 int FTPClientWrapperSSL::SendFile(HANDLE hFile, const char * ftpfile) {
 
 	m_client.SetCurrentTotal(-1);
-	DWORD lowsize = ::GetFileSize(hFile, NULL);
-	m_client.SetCurrentTotal((long)lowsize);
+	LARGE_INTEGER size{};
+	if (::GetFileSizeEx(hFile, &size))
+		m_client.SetCurrentTotal(size.QuadPart);
 
 	HandleDataSource hds(hFile, true, false);
 	int retcode = m_client.SendFile(hds, ftpfile);
@@ -578,7 +579,7 @@ int FtpSSLWrapper::SetAborted(BOOL aborted) {
 	return 0;
 }
 
-int FtpSSLWrapper::SetCurrentTotal(long total) {
+int FtpSSLWrapper::SetCurrentTotal(LONGLONG total) {
 	m_currentTotal = total;
 	return 0;
 }
@@ -642,7 +643,7 @@ DWORD FtpSSLWrapper::LastAction() {
 	}
 }
 
-BOOL FtpSSLWrapper::ReceiveFileStatus(long bytesReceived) {
+BOOL FtpSSLWrapper::ReceiveFileStatus(LONGLONG bytesReceived) {
 	BOOL res = CUT_FTPClient::ReceiveFileStatus(bytesReceived);
 	if (res == FALSE)
 		return res;
@@ -653,7 +654,7 @@ BOOL FtpSSLWrapper::ReceiveFileStatus(long bytesReceived) {
 	return res;
 }
 
-BOOL FtpSSLWrapper::SendFileStatus(long bytesSent) {
+BOOL FtpSSLWrapper::SendFileStatus(LONGLONG bytesSent) {
 	BOOL res = CUT_FTPClient::SendFileStatus(bytesSent);
 	if (res == FALSE)
 		return res;

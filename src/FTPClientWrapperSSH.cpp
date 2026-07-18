@@ -296,8 +296,8 @@ int FTPClientWrapperSSH::ReceiveFile(HANDLE hFile, const char * ftpfile) {
 	std::vector<char> _buf(bufsize);
 	char * buf = &_buf[0];
 	DWORD len = 0;
-	long totalReceived = 0;
-	long totalSize = -1;
+	LONGLONG totalReceived = 0;
+	LONGLONG totalSize = -1;
 
 	sfile = sftp_open(m_sftpsession, ftpfile, (O_RDONLY), 0664);	//default rw-rw-r-- permission
 	if (sfile == NULL) {
@@ -309,7 +309,7 @@ int FTPClientWrapperSSH::ReceiveFile(HANDLE hFile, const char * ftpfile) {
 	if (fattr == NULL) {
 		totalSize = -1;
 	} else {
-		totalSize = (long)fattr->size;
+		totalSize = fattr->size <= LLONG_MAX ? (LONGLONG)fattr->size : -1;
 		sftp_attributes_free(fattr);
 	}
 
@@ -347,14 +347,12 @@ int FTPClientWrapperSSH::SendFile(HANDLE hFile, const char * ftpfile) {
 	std::vector<char> _buf(bufsize);
 	char * buf = &_buf[0];
 	DWORD len = 0;
-	long totalSent = 0;
-	long totalSize = -1;
+	LONGLONG totalSent = 0;
+	LONGLONG totalSize = -1;
 
-	DWORD highsize;
-	DWORD lowsize = ::GetFileSize(hFile, &highsize);
-	//totalSize = ((long)highsize)<<32;
-	//totalSize |= lowsize;
-	totalSize = lowsize;
+	LARGE_INTEGER size{};
+	if (::GetFileSizeEx(hFile, &size))
+		totalSize = size.QuadPart;
 
 	sfile = sftp_open(m_sftpsession, ftpfile, (O_WRONLY|O_CREAT|O_TRUNC), 0664);	//default rw-rw-r-- permission
 	if (sfile == NULL) {

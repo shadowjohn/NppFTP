@@ -69,10 +69,10 @@ public:
 
 protected:
     // Monitor progress and/or cancel the receive
-    virtual BOOL    ReceiveFileStatus(long bytesReceived);
+    virtual BOOL    ReceiveFileStatus(LONGLONG bytesReceived);
 
     // Monitor progress and/or cancel the send
-    virtual BOOL    SendFileStatus(long bytesSent);
+    virtual BOOL    SendFileStatus(LONGLONG bytesSent);
 
     virtual int     OnLoadCertificates(SSL_CTX * ctx);
 
@@ -386,10 +386,10 @@ public:
 protected:
 
     // Monitor progress and/or cancel the receive
-    virtual BOOL    ReceiveFileStatus(long bytesReceived);
+    virtual BOOL    ReceiveFileStatus(LONGLONG bytesReceived);
 
     // Monitor progress and/or cancel the send
-    virtual BOOL    SendFileStatus(long bytesSent);
+    virtual BOOL    SendFileStatus(LONGLONG bytesSent);
 };
 
 
