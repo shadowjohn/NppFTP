@@ -96,7 +96,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 新增單層目錄清單、資料夾/檔案圖示、metadata 欄位與 header drag/drop。
 - 支援 double-click 或 Enter 進目錄與下載開檔。
 - 支援 typed path：已知目錄切換、已知檔案開啟，未載入目錄會向伺服器查詢後切換。
-- Size 顯示為 B / KB / MB 並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
+- FTP / SFTP 檔案大小與傳輸進度保留超過 2 GB 的 64-bit 值；Size 使用 B / KB / MB / GB / TB、兩位小數並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
 - 修正 dock resize / splitter resize 後 flat browser 沒跟著重排的問題。
 
 遠端檔案操作：

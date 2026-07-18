@@ -1,5 +1,12 @@
 # NppFTP 接續紀錄
 
+## 2026-07-18 Add 64-bit file size support
+
+- FTP / SFTP 檔案大小與傳輸進度現在會保留超過 2 GB 的 64-bit 值。
+- Size 使用 B / KB / MB / GB / TB、兩位小數並維持靠右顯示。
+- focused regressions：`file_size_64_exit=0`、`remote_browser_utils_exit=0`、`remote_list_keyboard_exit=0`、`utcp_transfer_buffer_exit=0`、`recent_dirs_exit=0`。`recent_dirs.exe` 以 VS x64 與 `/DWIN32_LEAN_AND_MEAN`、`/I .` 相容前置旗標重編後執行。
+- `.\build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll`（4,708,352 bytes）與 `_build\NppFTP-0.30.22-win64.zip`（2,155,585 bytes）；ZIP SHA256：`668AEB810B1C6D20463BED47F14D5508C4FF05F9C5189E43415053DCCF37BA5D`。
+
 ## 2026-07-09 早上：初次理解專案
 
 ### 專案定位
