@@ -3,6 +3,7 @@
 ## Goal
 
 - flat remote list 有焦點時，按 Backspace 回到目前目錄的上一層。
+- 任何目錄導航都先由伺服器確認可列出內容；失敗時保留原畫面並提示。
 - 右鍵點目錄或檔案時，都能直接建立目錄與檔案，並依點擊目標決定建立位置。
 - Name、Size、Modified、Type、Permissions 五個欄位都支援單欄升冪／降冪排序。
 
@@ -11,7 +12,18 @@
 - remote list 的鍵盤 gate 加入 Backspace，避免按鍵先被 Notepad++ 的 modeless dialog 處理吃掉。
 - Backspace 不看目前選取的是檔案或目錄，一律導航到 `m_remoteCurrentDir->GetParent()`。
 - 已在 root、未連線或沒有目前目錄時不執行任何操作。
-- 導航沿用 `SetRemoteCurrentDir(parent, true)`，因此 refresh 與 loading cursor 維持既有流程。
+- Backspace 沿用下節的 directory preflight，loading cursor 維持既有流程。
+
+## Directory Entry Preflight
+
+- 雙擊目錄、目錄按 Enter、Backspace 與 Change dir 都先送出 server `LIST`，不以 cached permission 字串猜測是否可進入。
+- 導航開始時只記錄 pending target 並顯示 loading cursor；目前目錄、清單與選取項目暫時保持不變。
+- 已載入的目錄也必須重新 `LIST`，因此可偵測連線期間被撤銷的權限。
+- 未載入路徑沿用既有 `GetDirectoryHierarchy()`；已知路徑使用既有 `GetDirectory()`，兩者在成功通知後才呼叫 `SetRemoteCurrentDir()`。
+- `QueueTypeDirectoryGet` 失敗時不得呼叫 `OnDirectoryRefresh()`，避免清空既有 cache 或把失敗的 pending target 當成成功導航。
+- pending navigation 失敗時清除 pending target、停止 loading cursor、保留原畫面，並顯示 `Unable to enter directory` 提示。
+- SFTP 沿用既有 failure kind，區分權限不足與路徑不存在；FTP／FTPS 若只有模糊 server rejection，顯示 generic rejection，不猜測原因。
+- 非導航用途的 background refresh 失敗時同樣保留原 cache，但只沿用 Output 記錄，不新增 modal。
 
 ## Context Menu Create Target
 
@@ -46,6 +58,7 @@
 ## Verification
 
 - focused Win32 ListView test 驗證 Backspace 能通過 modeless key gate。
+- focused navigation test 驗證 LIST 成功後才切換、失敗不 refresh、不清空 cache，且只對 pending navigation 顯示失敗提示。
 - focused comparator test 驗證五欄升降冪、目錄優先、中文／英文名稱比較 tie-break，以及 `..` 不進入排序資料。
 - focused target-selection test 驗證目錄、檔案與空白區的建立位置。
 - 執行既有 focused tests 與 x64 Release build，確認 DLL 與 ZIP 正常產生。
