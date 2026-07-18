@@ -2284,7 +2284,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				FileObject* parent;
 				parent = m_ftpSession->FindPathObject(curFTPDir->dirPath);
 				if (parent)
-					OnDirectoryRefresh(parent, curFTPDir->files, curFTPDir->count);
+					OnDirectoryRefresh(parent, curFTPDir->files, curFTPDir->count, false);
 			}
 
 			FTPFile* files = (FTPFile*)queueData;
@@ -2301,7 +2301,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			}
 
 			OutMsg("[FTPWindow] Loaded directory %T", SU::Utf8ToTChar(dirop->GetDirPath()));
-			OnDirectoryRefresh(parent, files, count);
+			OnDirectoryRefresh(parent, files, count, true);
 			if (pendingNavigation)
 				m_remoteBusyCursor = false;
 			break; }
@@ -2486,9 +2486,9 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 	return result;
 }
 
-int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count) {
+int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int count, bool isFinalTarget) {
 	bool isCurrentRemoteDir = (parent == m_remoteCurrentDir);
-	bool isPendingRemoteDir = (m_remotePendingPath[0] != 0 && strcmp(parent->GetPath(), m_remotePendingPath) == 0);
+	bool isPendingRemoteDir = remote_browser_refresh_commits_pending(isFinalTarget, m_remotePendingPath, parent->GetPath());
 	bool restorePendingFocus = (parent == m_remotePendingFocusParent);
 	if (isCurrentRemoteDir)
 		m_currentSelection = parent;

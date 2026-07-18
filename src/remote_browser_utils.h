@@ -32,6 +32,11 @@ static inline bool remote_browser_pending_path_matches(const char *pendingPath, 
 	return pendingPath && pendingPath[0] && completedPath && strcmp(pendingPath, completedPath) == 0;
 }
 
+static inline bool remote_browser_refresh_commits_pending(bool isFinalTarget, const char *pendingPath, const char *refreshedPath)
+{
+	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, refreshedPath);
+}
+
 static inline HWND remote_browser_combo_edit(HWND combo)
 {
 	COMBOBOXINFO info{};

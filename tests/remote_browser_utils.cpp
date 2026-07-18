@@ -87,6 +87,12 @@ int main()
 	assert(!remote_browser_pending_path_matches("/newest", "/older"));
 	assert(!remote_browser_pending_path_matches("", "/target"));
 	assert(!remote_browser_pending_path_matches(NULL, "/target"));
+	const char * staleATarget = "/foo";
+	const char * pendingB = "/";
+	const char * staleAParent = "/";
+	assert(!remote_browser_pending_path_matches(pendingB, staleATarget));
+	assert(!remote_browser_refresh_commits_pending(false, pendingB, staleAParent));
+	assert(remote_browser_refresh_commits_pending(true, pendingB, staleAParent));
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;
