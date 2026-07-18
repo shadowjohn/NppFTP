@@ -2279,13 +2279,15 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			std::vector<FTPDir*> parentDirObjs = dirop->GetParentDirObjs();
 			size_t i;
 
-			for (i=0; i<parentDirObjs.size(); i++) {
-				FTPDir* curFTPDir = parentDirObjs[i];
+			if (pendingNavigation) {
+				for (i=0; i<parentDirObjs.size(); i++) {
+					FTPDir* curFTPDir = parentDirObjs[i];
 
-				FileObject* parent;
-				parent = m_ftpSession->FindPathObject(curFTPDir->dirPath);
-				if (parent)
-					OnDirectoryRefresh(parent, curFTPDir->files, curFTPDir->count, NULL);
+					FileObject* parent;
+					parent = m_ftpSession->FindPathObject(curFTPDir->dirPath);
+					if (parent)
+						OnDirectoryRefresh(parent, curFTPDir->files, curFTPDir->count, NULL);
+				}
 			}
 
 			FTPFile* files = (FTPFile*)queueData;
@@ -2494,6 +2496,20 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	bool isCurrentRemoteDir = (parent == m_remoteCurrentDir);
 	bool isPendingRemoteDir = remote_browser_completed_request_commits_pending(
 		isFinalTarget, m_remotePendingPath, completedRequestPath);
+	if (!isFinalTarget) {
+		for(int i = 0; i < count; i++) {
+			FileObject * child = new FileObject(files+i);
+			if (parent->GetChildByName(child->GetName()))
+				delete child;
+			else
+				parent->AddChild(child);
+		}
+		parent->Sort();
+		return 0;
+	}
+	if (!updateVisibleUi)
+		return 0;
+
 	bool restorePendingFocus = updateVisibleUi && (parent == m_remotePendingFocusParent);
 	if (updateVisibleUi && isCurrentRemoteDir)
 		m_currentSelection = parent;
@@ -2505,6 +2521,8 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	}
 	parent->Sort();
 	//The treeview is out of sync here, make sure no GUI calls go between this function and the next call
+	if (!parent->GetData())
+		m_treeview.EnsureObjectVisible(parent);
 	m_treeview.UpdateFileObject(parent);
 	m_treeview.FillTreeDirectory(parent);
 	m_treeview.ExpandDirectory(parent, NULL, updateVisibleUi);
