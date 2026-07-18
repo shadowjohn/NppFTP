@@ -344,6 +344,25 @@ int CUT_StrMethods::ParseString(LPCWSTR string,LPCWSTR sepChars,int index,long *
     }
     return UTE_ERROR;
 }
+int CUT_StrMethods::ParseString(LPCSTR string, LPCSTR sepChars, int index, LONGLONG *value)
+{
+    char buf[60];
+    if (ParseString(string, sepChars, index, buf, 60) == UTE_SUCCESS) {
+        *value = _strtoi64(buf, NULL, 10);
+        return UTE_SUCCESS;
+    }
+    return UTE_ERROR;
+}
+
+int CUT_StrMethods::ParseString(LPCWSTR string, LPCWSTR sepChars, int index, LONGLONG *value)
+{
+    wchar_t buf[60];
+    if (ParseString(string, sepChars, index, buf, 60) == UTE_SUCCESS) {
+        *value = _wcstoi64(buf, NULL, 10);
+        return UTE_SUCCESS;
+    }
+    return UTE_ERROR;
+}
 
 /***************************************************
 GetParseStringPieces

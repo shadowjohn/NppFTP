@@ -238,7 +238,7 @@ int FTPClientWrapperSSL::GetDir(const char * path, FTPFile** files) {
 */
 
 
-		ftpfile.fileSize = (long)di.fileSize;
+		ftpfile.fileSize = di.fileSize;
 
 		FILETIME time = ConvertFiletime(di.day, di.month, di.year, di.hour, di.minute);
 		ftpfile.atime = time;
@@ -352,7 +352,7 @@ int FTPClientWrapperSSL::ReceiveFile(const TCHAR * localfile, const char * ftpfi
 	if (res == -1)
 		return -1;
 
-	long size = 0;
+	LONGLONG size = 0;
 	m_client.SetCurrentTotal(-1);
 	int sizeres = m_client.GetSize(ftpfile, &size);
 	if (sizeres == UTE_SUCCESS)
@@ -376,7 +376,7 @@ int FTPClientWrapperSSL::SendFile(HANDLE hFile, const char * ftpfile) {
 }
 
 int FTPClientWrapperSSL::ReceiveFile(HANDLE hFile, const char * ftpfile) {
-	long size = 0;
+	LONGLONG size = 0;
 	m_client.SetCurrentTotal(-1);
 	int sizeres = m_client.GetSize(ftpfile, &size);
 	if (sizeres == UTE_SUCCESS)

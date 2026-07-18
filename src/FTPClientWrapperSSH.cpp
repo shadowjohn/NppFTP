@@ -27,6 +27,7 @@
 #include <sys/stat.h> /* mode_t */
 #include <stdio.h>
 #include <stdlib.h>  /* strtoul */
+#include <limits.h>
 
 #ifdef strdup	//undefine strdup from libssh
 #undef strdup
@@ -137,7 +138,7 @@ int FTPClientWrapperSSH::GetDir(const char * path, FTPFile** files) {
 			sftp_attributes_free(sfile);
 			continue;
 		}
-		file.fileSize = (long)sfile->size;
+		file.fileSize = sfile->size <= LLONG_MAX ? (LONGLONG)sfile->size : -1;
 
 		file.mtime = ConvertFiletime(sfile->mtime, sfile->mtime_nseconds);
 		file.atime = ConvertFiletime(sfile->atime, sfile->atime_nseconds);

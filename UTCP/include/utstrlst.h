@@ -59,6 +59,8 @@ public:
         // based on the separation character(s) 
         static int  ParseString(LPCSTR string, LPCSTR sepChars, int index, long *value);
         static int  ParseString(LPCWSTR string, LPCWSTR sepChars, int index, long *value);
+        static int  ParseString(LPCSTR string, LPCSTR sepChars, int index, LONGLONG *value);
+        static int  ParseString(LPCWSTR string, LPCWSTR sepChars, int index, LONGLONG *value);
 
         // Returns the number of components found in the given 
         // string when using the given list of separation characters

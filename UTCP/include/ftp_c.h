@@ -101,7 +101,7 @@ public:
 typedef struct CUT_DIRINFOATag{
     char fileName[MAX_PATH + 1]{};  // file or directory name
     char mod[11]{};                 // unix file mod text
-    long fileSize = 0;              // size of directory or file in bytes
+    LONGLONG fileSize = 0;          // size of directory or file in bytes
     int  day = 0;                   // the day digit of the file date
     int  month = 0;                 // the month digit of the file date
     int  year = 0;                  // the year digit of the file date
@@ -116,7 +116,7 @@ typedef struct CUT_DIRINFOATag{
 typedef struct CUT_DIRINFOTag{
     _TCHAR fileName[MAX_PATH+1]{};  // file or directory name
     _TCHAR mod[11]{};               // unix file mod text
-    long fileSize = 0;              // size of directory or file in bytes
+    LONGLONG fileSize = 0;          // size of directory or file in bytes
     int  day = 0;                   // the day digit of the file date
     int  month = 0;                 // the month digit of the file date
     int  year = 0;                  // the year digit of the file date
@@ -288,9 +288,9 @@ public:
 #endif
 
     // get size of a file
-    virtual int     GetSize(LPCSTR path, long * size);
+    virtual int     GetSize(LPCSTR path, LONGLONG * size);
 #if defined _UNICODE
-    virtual int     GetSize(LPCWSTR path, long * size);
+    virtual int     GetSize(LPCWSTR path, LONGLONG * size);
 #endif
 
     // Send a No Operation command

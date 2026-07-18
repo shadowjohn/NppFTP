@@ -60,7 +60,7 @@ public:
 	virtual int				SetData(void * data);
 	virtual void *			GetData() const;
 
-	virtual long			GetSize() const;
+	virtual LONGLONG		GetSize() const;
 
 	virtual FILETIME		GetCTime() const;
 	virtual FILETIME		GetMTime() const;
@@ -87,7 +87,7 @@ protected:
 	bool					m_needRefresh;
 	void*					m_data;
 
-	long					m_size;
+	LONGLONG				m_size;
 
 	FILETIME				m_ctime;
 	FILETIME				m_mtime;

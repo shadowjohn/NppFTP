@@ -1358,7 +1358,7 @@ int CUT_FTPClient::RmDir(LPCSTR directory){
     return OnError(UTE_SVR_REQUEST_DENIED);
 }
 
-int CUT_FTPClient::GetSize(LPCSTR path, long * size) {
+int CUT_FTPClient::GetSize(LPCSTR path, LONGLONG * size) {
     int     rt;
 
     _snprintf(m_szBuf,sizeof(m_szBuf)-1,"SIZE %s\r\n",path);
@@ -1371,7 +1371,7 @@ int CUT_FTPClient::GetSize(LPCSTR path, long * size) {
         //Response is a single line with "213 SIZE", so can safely substring
         LPCSTR response = GetMultiLineResponse(0);
         response += 4;  //skip "213 "
-        *size = atol(response);
+        *size = _strtoi64(response, NULL, 10);
 
         return OnError(UTE_SUCCESS);
     }
@@ -1379,7 +1379,7 @@ int CUT_FTPClient::GetSize(LPCSTR path, long * size) {
 }
 
 #if defined _UNICODE
-int CUT_FTPClient::GetSize(LPCWSTR path, long * size) {
+int CUT_FTPClient::GetSize(LPCWSTR path, LONGLONG * size) {
     return GetSize(AC(path), size);}
 #endif
 /***************************************

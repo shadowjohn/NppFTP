@@ -499,7 +499,7 @@ void* ProfileObject::GetData() const {
 	return m_data;
 }
 
-long ProfileObject::GetSize() const {
+LONGLONG ProfileObject::GetSize() const {
 	return m_size;
 }
 

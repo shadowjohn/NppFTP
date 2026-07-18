@@ -209,7 +209,7 @@ void * FileObject::GetData() const {
 	return m_data;
 }
 
-long FileObject::GetSize() const {
+LONGLONG FileObject::GetSize() const {
 	return m_size;
 }
 
