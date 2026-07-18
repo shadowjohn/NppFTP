@@ -15,15 +15,19 @@ int main()
 	assert(!remote_browser_matches_filter(NULL, TEXT("zip")));
 
 	TCHAR text[64]{};
-	remote_browser_format_size(false, 512, text, 64);
-	assert(_tcscmp(text, TEXT("512 B")) == 0);
-	remote_browser_format_size(false, 1536, text, 64);
+	remote_browser_format_size(false, 512LL, text, 64);
+	assert(_tcscmp(text, TEXT("512.00 B")) == 0);
+	remote_browser_format_size(false, 1536LL, text, 64);
 	assert(_tcscmp(text, TEXT("1.50 KB")) == 0);
-	remote_browser_format_size(false, 18864384, text, 64);
+	remote_browser_format_size(false, 18864384LL, text, 64);
 	assert(_tcscmp(text, TEXT("17.99 MB")) == 0);
-	remote_browser_format_size(true, 1536, text, 64);
+	remote_browser_format_size(false, 5368709120LL, text, 64);
+	assert(_tcscmp(text, TEXT("5.00 GB")) == 0);
+	remote_browser_format_size(false, 3298534883328LL, text, 64);
+	assert(_tcscmp(text, TEXT("3.00 TB")) == 0);
+	remote_browser_format_size(true, 5368709120LL, text, 64);
 	assert(_tcscmp(text, TEXT("")) == 0);
-	remote_browser_format_size(false, -1, text, 64);
+	remote_browser_format_size(false, -1LL, text, 64);
 	assert(_tcscmp(text, TEXT("")) == 0);
 
 	SYSTEMTIME modified{};

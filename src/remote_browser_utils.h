@@ -69,26 +69,24 @@ static inline void remote_browser_format_system_time(const SYSTEMTIME &value, TC
 #endif
 }
 
-static inline void remote_browser_format_size(bool isDir, long size, TCHAR *buffer, size_t bufferCount)
+static inline void remote_browser_format_size(bool isDir, LONGLONG size, TCHAR *buffer, size_t bufferCount)
 {
 	remote_browser_clear_text(buffer, bufferCount);
 	if (!buffer || bufferCount == 0 || isDir || size < 0)
 		return;
 
+	static const TCHAR *units[] = { TEXT("B"), TEXT("KB"), TEXT("MB"), TEXT("GB"), TEXT("TB") };
+	double value = (double)size;
+	int unit = 0;
+	while (value >= 1024.0 && unit < 4) {
+		value /= 1024.0;
+		unit++;
+	}
+
 #ifdef _MSC_VER
-	if (size < 1024)
-		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%ld B"), size);
-	else if (size < 1024 * 1024)
-		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%.2f KB"), (double)size / 1024.0);
-	else
-		_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%.2f MB"), (double)size / (1024.0 * 1024.0));
+	_sntprintf_s(buffer, bufferCount, _TRUNCATE, TEXT("%.2f %s"), value, units[unit]);
 #else
-	if (size < 1024)
-		_sntprintf(buffer, bufferCount, TEXT("%ld B"), size);
-	else if (size < 1024 * 1024)
-		_sntprintf(buffer, bufferCount, TEXT("%.2f KB"), (double)size / 1024.0);
-	else
-		_sntprintf(buffer, bufferCount, TEXT("%.2f MB"), (double)size / (1024.0 * 1024.0));
+	_sntprintf(buffer, bufferCount, TEXT("%.2f %s"), value, units[unit]);
 	buffer[bufferCount - 1] = 0;
 #endif
 }
