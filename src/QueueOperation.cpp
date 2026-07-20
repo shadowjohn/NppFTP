@@ -54,6 +54,9 @@ int QueueOperation::Terminate() {
 	return 0;
 }
 
+void QueueOperation::OnQueueCanceled() {
+}
+
 int QueueOperation::GetResult() const {
 	return m_result;
 }
@@ -863,6 +866,12 @@ QueueRemoteDownloadFile::~QueueRemoteDownloadFile()
 {
 	if (m_batch)
 		m_batch->Release();
+}
+
+void QueueRemoteDownloadFile::OnQueueCanceled()
+{
+	if (m_batch)
+		m_batch->RecordCanceled(GetExternalPath());
 }
 
 //////////////////////////////////////

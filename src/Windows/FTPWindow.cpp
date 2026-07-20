@@ -1106,14 +1106,21 @@ void FTPWindow::ShowRemoteDownloadSummary(RemoteDownloadBatch * batch) {
 
 	for (size_t i = 0; i < batch->failures.size(); ++i)
 		OutErr("[FTPWindow] %T", batch->failures[i].c_str());
-	OutMsg("[FTPWindow] Directory download completed: %d file(s), %d failed item(s).", batch->completedCount, (int)batch->failures.size());
-	if (batch->failures.empty()) {
-		::MessageBox(m_hwnd, TEXT("Directory download completed."), TEXT("Directory download"), MB_OK | MB_ICONINFORMATION);
+	for (size_t i = 0; i < batch->canceledPaths.size(); ++i) {
+		TCHAR * remotePath = SU::Utf8ToTChar(batch->canceledPaths[i].c_str());
+		OutMsg("[FTPWindow] Download canceled for %T", remotePath ? remotePath : TEXT("(unknown path)"));
+		SU::FreeTChar(remotePath);
+	}
+	OutMsg("[FTPWindow] Directory download finished: %d successful, %d failed, %d canceled.", batch->completedCount,
+		(int)batch->failures.size(), (int)batch->canceledPaths.size());
+	if (batch->failures.empty() && batch->canceledPaths.empty()) {
+		::MessageBox(m_hwnd, TEXT("Directory download finished successfully."), TEXT("Directory download"), MB_OK | MB_ICONINFORMATION);
 		return;
 	}
 
 	TCHAR message[160]{};
-	SU::TSprintf(message, 160, TEXT("Directory download completed with %d failed item(s). See Output for details."), (int)batch->failures.size());
+	SU::TSprintf(message, 160, TEXT("Directory download finished: %d successful, %d failed, %d canceled. See Output for details."),
+		batch->completedCount, (int)batch->failures.size(), (int)batch->canceledPaths.size());
 	::MessageBox(m_hwnd, message, TEXT("Directory download"), MB_OK | MB_ICONWARNING);
 }
 

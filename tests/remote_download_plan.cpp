@@ -190,6 +190,11 @@ int main()
 	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);
 	assert(batch->plan == owned);
 	assert(batch->completedCount == 0);
+	batch->failures.push_back(TEXT("Download failed for /var/www/html/index.html"));
+	batch->RecordCanceled("/var/www/html/assets/app.js");
+	assert(batch->failures.size() == 1);
+	assert(batch->canceledPaths.size() == 1);
+	assert(batch->canceledPaths[0] == "/var/www/html/assets/app.js");
 	batch->AddRef();
 	batch->Release();
 	batch->Release();

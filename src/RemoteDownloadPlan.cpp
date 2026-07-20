@@ -425,3 +425,8 @@ void RemoteDownloadBatch::Release()
 	if (InterlockedDecrement(&m_references) == 0)
 		delete this;
 }
+
+void RemoteDownloadBatch::RecordCanceled(const char * remotePath)
+{
+	canceledPaths.push_back(remotePath ? remotePath : "(unknown path)");
+}

@@ -78,6 +78,8 @@ int FTPQueue::Deinitialize() {
 
 	while (!m_queue.empty()) {
 		//Remove any remaining messages (most notably Progress messages)
+		if (m_queue.front() != m_activeOp)
+			m_queue.front()->OnQueueCanceled();
 		m_queue.front()->ClearPendingNotifications();
 		m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
 		delete m_queue.front();
@@ -137,6 +139,7 @@ int FTPQueue::ClearQueue() {
 			m_queue.pop_front();
 		}
 		while (!m_queue.empty()) {
+			m_queue.front()->OnQueueCanceled();
 			m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
 			delete m_queue.front();
 			m_queue.pop_front();
@@ -165,6 +168,7 @@ int FTPQueue::CancelQueueOp(QueueOperation * op) {
 			//m_queue.pop_front();
 			if (queueop == op) {
 				m_queue.erase(m_queue.begin()+i);
+				queueop->OnQueueCanceled();
 				queueop->SendNotification(QueueOperation::QueueEventRemove);
 				delete queueop;
 				break;

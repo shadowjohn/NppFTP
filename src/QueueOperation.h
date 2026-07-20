@@ -60,6 +60,7 @@ public:
 
 	virtual int				Perform() = 0;
 	virtual int				Terminate();
+	virtual void				OnQueueCanceled();
 
 	virtual int				GetResult() const;
 	virtual void*			GetNotifyData() const;
@@ -224,9 +225,10 @@ protected:
 
 class QueueRemoteDownloadFile : public QueueDownload {
 public:
-							QueueRemoteDownloadFile(HWND hNotify, const char * remote, const TCHAR * local,
+	QueueRemoteDownloadFile(HWND hNotify, const char * remote, const TCHAR * local,
 								Transfer_Mode mode, RemoteDownloadBatch * batch, int notifyCode = 1);
 	virtual					~QueueRemoteDownloadFile();
+	virtual void				OnQueueCanceled();
 
 protected:
 	RemoteDownloadBatch *	m_batch;

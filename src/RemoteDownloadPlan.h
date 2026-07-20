@@ -43,10 +43,12 @@ struct RemoteDownloadBatch {
 	~RemoteDownloadBatch();
 	void AddRef();
 	void Release();
+	void RecordCanceled(const char * remotePath);
 
 	RemoteDownloadPlan * plan;
 	int completedCount;
 	std::vector<std::basic_string<TCHAR> > failures;
+	std::vector<std::string> canceledPaths;
 private:
 	volatile LONG m_references;
 	RemoteDownloadBatch(const RemoteDownloadBatch &);
