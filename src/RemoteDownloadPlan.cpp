@@ -121,6 +121,24 @@ static int CreateLocalDirectory(const TCHAR * path)
 		(attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0 ? 0 : -1;
 }
 
+static bool HasReparsePointAncestor(const TCHAR * path)
+{
+	TCHAR current[MAX_PATH]{};
+	DWORD length = GetFullPathName(path, MAX_PATH, current, NULL);
+	if (length == 0 || length >= MAX_PATH)
+		return true;
+
+	for (;;) {
+		DWORD attributes = GetFileAttributes(current);
+		if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+			return true;
+		if (PathIsRoot(current))
+			return false;
+		if (!PathRemoveFileSpec(current))
+			return true;
+	}
+}
+
 static bool HasRemotePrefix(const std::string & root, const std::string & path)
 {
 	return path == root || (path.size() > root.size() && path.compare(0, root.size(), root) == 0 && path[root.size()] == '/');
@@ -138,7 +156,7 @@ int RemoteDownloadPlan::Build(const TCHAR * localParent, const char * remoteRoot
 
 	DWORD attributes = GetFileAttributes(localParent);
 	if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
-		(attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+		(attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 || HasReparsePointAncestor(localParent))
 		return -1;
 
 	const char * slash = strrchr(m_remoteRoot.c_str(), '/');

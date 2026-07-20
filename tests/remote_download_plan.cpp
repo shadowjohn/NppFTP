@@ -22,6 +22,9 @@ int main()
 	const TCHAR * assets = TEXT("_build\\tests\\remote_download_fixture\\html\\assets");
 	const TCHAR * reparseParent = TEXT("_build\\tests\\remote_download_fixture_junction");
 	const TCHAR * reparseTarget = TEXT("_build\\tests\\remote_download_fixture_junction_target");
+	const TCHAR * ancestorJunction = TEXT("_build\\tests\\remote_download_fixture_ancestor_junction");
+	const TCHAR * ancestorTarget = TEXT("_build\\tests\\remote_download_fixture_ancestor_target");
+	const TCHAR * ancestorSelected = TEXT("_build\\tests\\remote_download_fixture_ancestor_junction\\selected");
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\assets\\app.js"));
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\index.html"));
 	RemoveDirectory(assets);
@@ -29,6 +32,9 @@ int main()
 	RemoveDirectory(parent);
 	RemoveDirectory(reparseParent);
 	RemoveDirectory(reparseTarget);
+	RemoveDirectory(ancestorSelected);
+	RemoveDirectory(ancestorJunction);
+	RemoveDirectory(ancestorTarget);
 	assert(CreateDirectory(TEXT("_build\\tests"), NULL) || GetLastError() == ERROR_ALREADY_EXISTS);
 	assert(CreateDirectory(parent, NULL));
 
@@ -50,6 +56,17 @@ int main()
 	assert(reparse.Build(reparseParent, "/var/www/html") != 0);
 	assert(RemoveDirectory(reparseParent));
 	assert(RemoveDirectory(reparseTarget));
+
+	assert(CreateDirectory(ancestorTarget, NULL));
+	assert(CreateJunction(ancestorJunction, ancestorTarget) == 0);
+	assert(CreateDirectory(ancestorSelected, NULL));
+	DWORD ancestorAttributes = GetFileAttributes(ancestorSelected);
+	assert(ancestorAttributes != INVALID_FILE_ATTRIBUTES && (ancestorAttributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0);
+	RemoteDownloadPlan ancestor;
+	assert(ancestor.Build(ancestorSelected, "/var/www/html") != 0);
+	assert(RemoveDirectory(ancestorSelected));
+	assert(RemoveDirectory(ancestorJunction));
+	assert(RemoveDirectory(ancestorTarget));
 
 	RemoteDownloadPlan plan;
 	assert(plan.Build(parent, "/var/www/html") == 0);
