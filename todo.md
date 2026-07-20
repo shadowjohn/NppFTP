@@ -84,6 +84,14 @@
 
 - [ ] Add UI language selection in a separate slice; default to Traditional Chinese.
 
+## 7. User-directed remote download
+
+- [ ] Route toolbar and flat-list Download commands through a Save As/folder-picker workflow; keep Edit cache-only.
+- [ ] Download a selected remote directory recursively into a same-named local root.
+- [ ] Guard local output paths, skip remote symlinks, and resolve file collisions per batch.
+- [ ] Show per-file queue progress and one directory-download failure summary.
+- [ ] Add focused plan tests and run FTP / FTPS / SFTP manual QA.
+
 ## Not now
 
 - [ ] Do not rewrite the whole FTP window before the flat browser works.

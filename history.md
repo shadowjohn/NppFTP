@@ -534,3 +534,9 @@
 - Change dir 改為只在實際成功切到目前 remote directory 後才記錄，未知/失敗路徑不會污染 recent；連線時載入該 profile 的清單，手打時以輸入前綴過濾並自動展開原生 ComboBox 下拉。
 - TDD：`tests\\recent_dirs.cpp` 先因缺少 recent helper 編譯紅燈，再驗證 move-to-front、去重、8 筆上限與 prefix match；`_build\\tests\\recent_dirs.exe` 輸出 `recent_dirs_exit=0`。
 - `.\\build.bat -Arch x64 -Config Release` 通過，ZIP SHA256：`899CB2C896BDBE897165ABEA4A6411E2570D6D9D34814B1F51BB69DE49235A6E`。profile 切換、重啟後資料與 ComboBox 實際互動仍待 Notepad++ 實機 QA。
+
+## 2026-07-20 Plan user-directed remote downloads
+
+- 將 `Download` 與 `Edit` 明確分工：Download 一律由使用者選擇本機目的地，Edit 才使用 cache 並在 Notepad++ 開啟；單檔用 Save As，目錄選父目錄後建立同名 local root 遞迴下載。
+- 採用與既有 recursive upload 對稱的 scan + plan + transfer batch；下載前先完整列出遠端子樹、檢查本機碰撞，remote symlink 不遞迴，並保護所有 local output path 必須留在選定 root 內。
+- 詳細設計見 `docs/superpowers/specs/2026-07-20-remote-download-design.md`；尚未開始功能實作。
