@@ -174,21 +174,16 @@ int FTPQueue::CancelQueueOp(QueueOperation * op) {
 			}
 		}
 
-		size_t size = m_queue.size();
 		QueueOperation * queueop = NULL;
-		for(size_t i = 0; i < size; i++) {
-			queueop = m_queue.front();
-			//m_queue.pop_front();
+		for(VQueue::iterator it = m_queue.begin(); it != m_queue.end(); ++it) {
+			queueop = *it;
 			if (queueop == op) {
-				m_queue.erase(m_queue.begin()+i);
+				m_queue.erase(it);
 				queueop->OnQueueCanceled();
 				queueop->SendNotification(QueueOperation::QueueEventRemove);
 				delete queueop;
 				break;
 			}
-			// else {
-			//	m_queue.push_back(queueop);
-			//}
 		}
 	m_monitor->Exit();
 

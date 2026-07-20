@@ -588,3 +588,9 @@
 
 - Clear Queue 現在會取消並移除所有尚未執行的普通 operation，但保留 `QueueRemoteDownloadComplete` marker；正在執行的 operation 先放回 queue，接著依原始順序接回 marker，讓 active transfer 完成後再顯示 batch 的 failed/canceled 摘要。沒有 active transfer 時也會重新喚醒 queue 執行 marker。
 - `CancelQueueOp` 對單一 marker 的既有行為不變，不會提前顯示摘要；focused batch test 保持確認同一 batch 的 completed、failed、canceled 三種狀態分離。Unicode/ANSI `remote_download_plan` 皆輸出 `remote_download_plan_exit=0`，`git diff --check` 通過，x64 Release build 成功產出 DLL 與 ZIP。
+
+## 2026-07-20 Fix queued operation cancellation lookup
+
+- `CancelQueueOp` 改以現有 lock 內的 queue iterator 逐筆比較，命中時只 erase 該 operation，再依既有順序呼叫 `OnQueueCanceled`、通知移除並 delete；不再重複拿 front 卻刪除其他索引。
+- running front operation 仍回傳 `-1`、找不到的 operation 不修改 queue，且不改動 Clear Queue 對 download completion marker 的保留邏輯。
+- Unicode/ANSI `remote_download_plan` 回歸、`git diff --check` 與 x64 Release build 通過；尚待真實 queue 驗證 active operation 後的單筆 Remove operation 是否正確取消目標並在摘要列為 canceled。
