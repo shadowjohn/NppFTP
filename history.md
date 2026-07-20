@@ -601,3 +601,8 @@
 - 主工作區重新驗證：`git diff --check` 無錯誤；`remote_download_plan_exit=0`、`remote_browser_utils_exit=0`、`remote_list_keyboard_exit=0`；`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP。
 - 最終 `NppFTP-0.30.22-win64.zip` SHA-256：`32241923D36EB8E63CEDA7F2CDEC65CE45074107ACD8EC1BE97C7E5908815A88`。
 - 真實 FTP / FTPS / SFTP QA 仍待執行：Save As、遞迴資料夾、碰撞選項、scan/transfer failure、進度與摘要、active transfer 後單筆取消，以及 Clear Queue 後摘要。
+
+## 2026-07-20 Manual QA: recursive directory download
+
+- 使用者已於 Notepad++ 實機確認遠端整個目錄可成功遞迴下載到選定本機位置。
+- 碰撞選項、取消／Clear Queue 摘要，以及 FTP / FTPS / SFTP 的其餘實機情境仍維持待驗證。
