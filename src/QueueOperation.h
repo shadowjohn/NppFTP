@@ -21,6 +21,7 @@
 
 #include "FTPClientWrapper.h"
 #include "Monitor.h"
+#include "RemoteDownloadPlan.h"
 #include "RemoteUploadPlan.h"
 
 class FTPQueue;
@@ -48,7 +49,8 @@ public:
 	                 QueueTypeDirectoryGet, QueueTypeDirectoryCreate, QueueTypeDirectoryRemove,
 	                 QueueTypeFileCreate, QueueTypeFileDelete, QueueTypeFileRename, QueueTypeQuote,
 	                 QueueTypeDownloadHandle, QueueTypeCopyFile, QueueTypeFileChmod, QueueTypeNoOp,
-	                 QueueTypeRemoteUploadScan, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete
+	                 QueueTypeRemoteUploadScan, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete,
+	                 QueueTypeRemoteDownloadScan, QueueTypeRemoteDownloadComplete
 	               };
 
 	enum QueueEvent { QueueEventStart=0x01, QueueEventEnd=0x02, QueueEventAdd=0x04, QueueEventRemove=0x08, QueueEventProgress=0x10 };
@@ -174,6 +176,32 @@ protected:
 	RemoteUploadBatch *		m_batch;
 };
 
+class QueueRemoteDownloadScan : public QueueOperation {
+public:
+							QueueRemoteDownloadScan(HWND hNotify, RemoteDownloadPlan * plan, int notifyCode = 0);
+	virtual					~QueueRemoteDownloadScan();
+
+	virtual int				Perform();
+	virtual bool				Equals(const QueueOperation & other);
+	virtual RemoteDownloadPlan * ReleasePlan();
+
+protected:
+	RemoteDownloadPlan *	m_plan;
+};
+
+class QueueRemoteDownloadComplete : public QueueOperation {
+public:
+							QueueRemoteDownloadComplete(HWND hNotify, RemoteDownloadBatch * batch, int notifyCode = 0);
+	virtual					~QueueRemoteDownloadComplete();
+
+	virtual int				Perform();
+	virtual bool				Equals(const QueueOperation & other);
+	virtual RemoteDownloadBatch * GetBatch() const;
+
+protected:
+	RemoteDownloadBatch *	m_batch;
+};
+
 /*
 notifyCode: 0: Automatic location. 1: User specified location
 */
@@ -192,6 +220,16 @@ protected:
 	char*					m_externalFile;
 	TCHAR*					m_localFile;
 	Transfer_Mode			m_tMode;
+};
+
+class QueueRemoteDownloadFile : public QueueDownload {
+public:
+							QueueRemoteDownloadFile(HWND hNotify, const char * remote, const TCHAR * local,
+								Transfer_Mode mode, RemoteDownloadBatch * batch, int notifyCode = 1);
+	virtual					~QueueRemoteDownloadFile();
+
+protected:
+	RemoteDownloadBatch *	m_batch;
 };
 
 class QueueDownloadHandle : public QueueOperation {

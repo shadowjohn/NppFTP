@@ -38,4 +38,19 @@ private:
 	std::string m_remoteRoot;
 };
 
+struct RemoteDownloadBatch {
+	RemoteDownloadBatch(RemoteDownloadPlan * downloadPlan);
+	~RemoteDownloadBatch();
+	void AddRef();
+	void Release();
+
+	RemoteDownloadPlan * plan;
+	int completedCount;
+	std::vector<std::basic_string<TCHAR> > failures;
+private:
+	volatile LONG m_references;
+	RemoteDownloadBatch(const RemoteDownloadBatch &);
+	RemoteDownloadBatch & operator=(const RemoteDownloadBatch &);
+};
+
 #endif //REMOTEDOWNLOADPLAN_H

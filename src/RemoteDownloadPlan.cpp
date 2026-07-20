@@ -350,3 +350,26 @@ void RemoteDownloadPlan::AddFailure(const TCHAR * message)
 {
 	m_failures.push_back(message ? message : TEXT("Remote download plan failure."));
 }
+
+RemoteDownloadBatch::RemoteDownloadBatch(RemoteDownloadPlan * downloadPlan) :
+	plan(downloadPlan),
+	completedCount(0),
+	m_references(1)
+{
+}
+
+RemoteDownloadBatch::~RemoteDownloadBatch()
+{
+	delete plan;
+}
+
+void RemoteDownloadBatch::AddRef()
+{
+	InterlockedIncrement(&m_references);
+}
+
+void RemoteDownloadBatch::Release()
+{
+	if (InterlockedDecrement(&m_references) == 0)
+		delete this;
+}

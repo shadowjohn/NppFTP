@@ -489,6 +489,48 @@ int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 	return 0;
 }
 
+int FTPSession::ScanRemoteDownloadPlan(RemoteDownloadPlan * plan) {
+	if (!plan)
+		return -1;
+	if (!m_running || !m_mainQueue) {
+		delete plan;
+		return -1;
+	}
+
+	QueueRemoteDownloadScan * scan = new QueueRemoteDownloadScan(m_hNotify, plan);
+	m_mainQueue->AddQueueOp(scan);
+	return 0;
+}
+
+int FTPSession::QueueRemoteDownloadPlan(RemoteDownloadPlan * plan) {
+	if (!plan)
+		return -1;
+	if (!m_running || !m_transferQueue || !m_currentProfile || plan->GetItems().empty() ||
+		!plan->GetItems()[0].isDirectory) {
+		delete plan;
+		return -1;
+	}
+
+	RemoteDownloadBatch * batch = new RemoteDownloadBatch(plan);
+	batch->failures = plan->GetFailures();
+	const std::vector<RemoteDownloadItem> & items = plan->GetItems();
+	for (size_t i = 0; i < items.size(); ++i) {
+		const RemoteDownloadItem & item = items[i];
+		if (!item.selected || item.isDirectory || item.isLink)
+			continue;
+
+		const TCHAR * localName = PU::FindLocalFilename(item.localPath.c_str());
+		if (!localName)
+			localName = item.localPath.c_str();
+		Transfer_Mode mode = m_currentProfile->GetFileTransferMode(localName);
+		QueueRemoteDownloadFile * download = new QueueRemoteDownloadFile(m_hNotify, item.remotePath.c_str(), item.localPath.c_str(), mode, batch, 1);
+		m_transferQueue->AddQueueOp(download);
+	}
+	m_transferQueue->AddQueueOp(new QueueRemoteDownloadComplete(m_hNotify, batch));
+	batch->Release();
+	return 0;
+}
+
 int FTPSession::CopyFile(const char* sourcefile, const char* target, int code) {
 	if (!m_running)
 		return -1;

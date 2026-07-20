@@ -540,3 +540,9 @@
 - 將 `Download` 與 `Edit` 明確分工：Download 一律由使用者選擇本機目的地，Edit 才使用 cache 並在 Notepad++ 開啟；單檔用 Save As，目錄選父目錄後建立同名 local root 遞迴下載。
 - 採用與既有 recursive upload 對稱的 scan + plan + transfer batch；下載前先完整列出遠端子樹、檢查本機碰撞，remote symlink 不遞迴，並保護所有 local output path 必須留在選定 root 內。
 - 詳細設計見 `docs/superpowers/specs/2026-07-20-remote-download-design.md`；尚未開始功能實作。
+
+## 2026-07-20 Queue recursive remote downloads
+
+- 新增 remote download scan、file queue、complete marker 與 ref-counted batch；scan 在 main queue 完整列出 selected non-link directories，transfer queue 只排 selected non-link files。
+- batch 會保留 plan 及 pre-scan failure，讓下一刀 UI 可在下載完成時統一顯示結果；每個 transfer operation 與 complete marker 各自持有 reference，保護 queue 清除時的生命週期。
+- TDD：先以 `RemoteDownloadBatch` 尚未宣告確認 focused test 編譯紅燈；完成後 `_build\\tests\\remote_download_plan.exe` 輸出 `remote_download_plan_exit=0`，`build.bat -Arch x64 -Config Release` 通過。

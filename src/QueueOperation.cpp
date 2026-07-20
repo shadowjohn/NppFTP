@@ -787,6 +787,118 @@ RemoteUploadBatch * QueueRemoteUploadComplete::GetBatch() const {
 
 //////////////////////////////////////
 
+QueueRemoteDownloadScan::QueueRemoteDownloadScan(HWND hNotify, RemoteDownloadPlan * plan, int notifyCode) :
+	QueueOperation(QueueTypeRemoteDownloadScan, hNotify, notifyCode, plan),
+	m_plan(plan)
+{
+}
+
+QueueRemoteDownloadScan::~QueueRemoteDownloadScan()
+{
+	delete m_plan;
+}
+
+int QueueRemoteDownloadScan::Perform()
+{
+	if (!m_plan) {
+		m_result = -1;
+		return m_result;
+	}
+	if (m_doConnect && !m_client->IsConnected()) {
+		m_result = m_client->Connect();
+		if (m_result == -1)
+			return m_result;
+	}
+
+	for (size_t i = 0; i < m_plan->GetItems().size(); ++i) {
+		const RemoteDownloadItem & item = m_plan->GetItems()[i];
+		if (!item.selected || item.isLink || !item.isDirectory || item.scanned)
+			continue;
+
+		FTPFile * files = NULL;
+		int count = m_client->GetDir(item.remotePath.c_str(), &files);
+		if (count < 0) {
+			m_result = -1;
+			return m_result;
+		}
+		int applyResult = m_plan->ApplyRemoteDirectoryListing(item.remotePath.c_str(), files, count);
+		if (files)
+			m_client->ReleaseDir(files, count);
+		if (applyResult != 0) {
+			m_result = -1;
+			return m_result;
+		}
+		m_plan->GetItems()[i].scanned = true;
+	}
+
+	m_result = 0;
+	return m_result;
+}
+
+bool QueueRemoteDownloadScan::Equals(const QueueOperation & other)
+{
+	return QueueOperation::Equals(other);
+}
+
+RemoteDownloadPlan * QueueRemoteDownloadScan::ReleasePlan()
+{
+	RemoteDownloadPlan * plan = m_plan;
+	m_plan = NULL;
+	m_notifyData = NULL;
+	return plan;
+}
+
+//////////////////////////////////////
+
+QueueRemoteDownloadFile::QueueRemoteDownloadFile(HWND hNotify, const char * remote, const TCHAR * local,
+	Transfer_Mode mode, RemoteDownloadBatch * batch, int notifyCode) :
+	QueueDownload(hNotify, remote, local, mode, notifyCode, batch),
+	m_batch(batch)
+{
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueRemoteDownloadFile::~QueueRemoteDownloadFile()
+{
+	if (m_batch)
+		m_batch->Release();
+}
+
+//////////////////////////////////////
+
+QueueRemoteDownloadComplete::QueueRemoteDownloadComplete(HWND hNotify, RemoteDownloadBatch * batch, int notifyCode) :
+	QueueOperation(QueueTypeRemoteDownloadComplete, hNotify, notifyCode, batch),
+	m_batch(batch)
+{
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueRemoteDownloadComplete::~QueueRemoteDownloadComplete()
+{
+	if (m_batch)
+		m_batch->Release();
+}
+
+int QueueRemoteDownloadComplete::Perform()
+{
+	m_result = 0;
+	return m_result;
+}
+
+bool QueueRemoteDownloadComplete::Equals(const QueueOperation & other)
+{
+	return QueueOperation::Equals(other);
+}
+
+RemoteDownloadBatch * QueueRemoteDownloadComplete::GetBatch() const
+{
+	return m_batch;
+}
+
+//////////////////////////////////////
+
 QueueRemoveDir::QueueRemoveDir(HWND hNotify, const char * dirPath, int notifyCode, void * notifyData) :
 	QueueOperation(QueueTypeDirectoryRemove, hNotify, notifyCode, notifyData)
 {

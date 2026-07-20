@@ -126,6 +126,14 @@ int main()
 	plan.GetLocalFileCollisions(collisions);
 	assert(collisions.size() == 1 && collisions[0] == 1);
 
+	RemoteDownloadPlan * owned = new RemoteDownloadPlan;
+	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);
+	assert(batch->plan == owned);
+	assert(batch->completedCount == 0);
+	batch->AddRef();
+	batch->Release();
+	batch->Release();
+
 	HANDLE nestedFile = CreateFile(plan.GetItems()[3].localPath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	assert(nestedFile != INVALID_HANDLE_VALUE);
 	CloseHandle(nestedFile);

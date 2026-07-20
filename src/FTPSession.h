@@ -58,6 +58,8 @@ public:
 	int						UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code = 1);
 	int						ScanRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						QueueRemoteUploadPlan(RemoteUploadPlan * plan);
+	int						ScanRemoteDownloadPlan(RemoteDownloadPlan * plan);
+	int						QueueRemoteDownloadPlan(RemoteDownloadPlan * plan);
 
 	int						CopyFile(const char* sourcefile, const char* target,  int code=0);
 
