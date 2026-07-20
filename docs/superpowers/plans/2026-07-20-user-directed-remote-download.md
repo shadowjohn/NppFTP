@@ -85,7 +85,7 @@ Run:
 
 ~~~powershell
 $dev = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\Tools\VsDevCmd.bat'
-$command = '"' + $dev + '" -arch=x64 -host_arch=x64 >nul && cl /nologo /std:c++17 /EHsc /DUNICODE /D_UNICODE /D_WIN32 /DWIN32 /I. /I.\src tests\remote_download_plan.cpp src\RemoteDownloadPlan.cpp /Fe:_build\tests\remote_download_plan.exe shlwapi.lib shell32.lib user32.lib'
+$command = '"' + $dev + '" -arch=x64 -host_arch=x64 >nul && cl /nologo /std:c++17 /EHsc /DUNICODE /D_UNICODE /D_WIN32 /DWIN32 /I. /I.\src tests\remote_download_plan.cpp src\RemoteDownloadPlan.cpp /Fo:_build\tests\ /Fe:_build\tests\remote_download_plan.exe shlwapi.lib shell32.lib user32.lib'
 cmd.exe /C $command
 ~~~
 
