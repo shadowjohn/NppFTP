@@ -26,8 +26,12 @@ int main()
 	const TCHAR * ancestorTarget = TEXT("_build\\tests\\remote_download_fixture_ancestor_target");
 	const TCHAR * ancestorSelected = TEXT("_build\\tests\\remote_download_fixture_ancestor_junction\\selected");
 	const TCHAR * nestedReparseTarget = TEXT("_build\\tests\\remote_download_fixture_nested_target");
+	const TCHAR * localDirectoryCollisionRoot = TEXT("_build\\tests\\remote_download_fixture\\collision-root");
+	const TCHAR * localDirectoryCollisionPath = TEXT("_build\\tests\\remote_download_fixture\\collision-root\\report.txt");
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\assets\\app.js"));
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\index.html"));
+	RemoveDirectory(localDirectoryCollisionPath);
+	RemoveDirectory(localDirectoryCollisionRoot);
 	RemoveDirectory(assets);
 	RemoveDirectory(root);
 	RemoveDirectory(parent);
@@ -129,6 +133,33 @@ int main()
 	plan.GetItems()[1].selected = false;
 	assert(!plan.GetItems()[1].selected);
 	plan.GetItems()[1].selected = true;
+
+	RemoteDownloadPlan localDirectoryCollision;
+	assert(localDirectoryCollision.Build(parent, "/var/www/collision-root") == 0);
+	FTPFile localDirectoryCollisionFile{};
+	lstrcpynA(localDirectoryCollisionFile.filePath, "/var/www/collision-root/report.txt", MAX_PATH);
+	localDirectoryCollisionFile.fileType = FTPTypeFile;
+	assert(localDirectoryCollision.ApplyRemoteDirectoryListing("/var/www/collision-root", &localDirectoryCollisionFile, 1) == 0);
+	assert(CreateDirectory(localDirectoryCollision.GetItems()[0].localPath.c_str(), NULL));
+	assert(CreateDirectory(localDirectoryCollision.GetItems()[1].localPath.c_str(), NULL));
+	assert(localDirectoryCollision.PrepareLocalDirectories() == 0);
+	assert(!localDirectoryCollision.GetItems()[1].selected);
+	assert(localDirectoryCollision.GetFailures().size() == 1);
+	assert(RemoveDirectory(localDirectoryCollision.GetItems()[1].localPath.c_str()));
+	assert(RemoveDirectory(localDirectoryCollision.GetItems()[0].localPath.c_str()));
+
+	RemoteDownloadPlan caseCollision;
+	assert(caseCollision.Build(parent, "/var/www/case-root") == 0);
+	FTPFile caseFiles[2]{};
+	lstrcpynA(caseFiles[0].filePath, "/var/www/case-root/Readme.txt", MAX_PATH);
+	caseFiles[0].fileType = FTPTypeFile;
+	lstrcpynA(caseFiles[1].filePath, "/var/www/case-root/readme.txt", MAX_PATH);
+	caseFiles[1].fileType = FTPTypeFile;
+	assert(caseCollision.ApplyRemoteDirectoryListing("/var/www/case-root", caseFiles, 2) == 0);
+	assert(caseCollision.GetItems().size() == 3);
+	assert(caseCollision.GetItems()[1].selected);
+	assert(!caseCollision.GetItems()[2].selected);
+	assert(caseCollision.GetFailures().size() == 1);
 
 	RemoteDownloadPlan * owned = new RemoteDownloadPlan;
 	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);

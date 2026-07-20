@@ -1011,6 +1011,11 @@ void FTPWindow::ShowRemoteUploadSummary(RemoteUploadBatch * batch) {
 int FTPWindow::PromptRemoteDownload(FileObject * fo) {
 	if (!fo || !m_ftpSession || !m_ftpSession->IsConnected())
 		return -1;
+	if (fo->isLink()) {
+		OutErr("[FTPWindow] Download skipped: remote symbolic link %T", fo->GetLocalName());
+		::MessageBox(m_hwnd, TEXT("Remote symbolic links cannot be downloaded."), TEXT("Download"), MB_OK | MB_ICONWARNING);
+		return -1;
+	}
 	if (fo->isDir()) {
 		TCHAR parent[MAX_PATH]{};
 		if (PU::BrowseDirectory(parent, MAX_PATH, m_hwnd) != 0)

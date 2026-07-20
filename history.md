@@ -561,3 +561,9 @@
 - 驗證命令與結果：`& .\_build\tests\remote_download_plan.exe` -> `remote_download_plan_exit=0`；`& .\_build\tests\remote_browser_utils.exe` -> `remote_browser_utils_exit=0`；`& .\_build\tests\remote_list_keyboard.exe` -> `remote_list_keyboard_exit=0`；`.\build.bat -Arch x64 -Config Release` -> `NppFTP.vcxproj -> D:\mytools\NppFTP\_build\Release\NppFTP.dll` 且 `NppFTP-0.30.22-win64.zip generated.`；`git diff --check` 無 whitespace error。
 - `Get-FileHash .\_build\NppFTP-0.30.22-win64.zip -Algorithm SHA256`：`FD8CF21084DA8D101641748B99903EE42579F8363AFD634AFB16397BB01A0BD9`。
 - 尚未執行真實 FTP / FTPS / SFTP server QA；仍需驗證 Save As、資料夾遞迴、碰撞選擇、scan failure、queue progress 與完成摘要。
+
+## 2026-07-20 Harden remote download conflicts
+
+- `Download...` 在進入檔案或目錄流程前直接拒絕 remote symbolic link，寫入 Output 並提示使用者；`Edit` 維持既有 cache-open 行為。
+- planner 現在會取消本機目錄撞到預定檔案目的地的項目，並在同一份 remote listing 出現大小寫不同但映射到相同 Windows 路徑時取消後者，避免兩次傳輸寫入同一目的地。
+- focused `remote_download_plan` test 以 `/Fo:_build\tests\` 編譯並輸出 `remote_download_plan_exit=0`，`git diff --check` 通過，`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP；仍待真實 FTP / FTPS / SFTP 的下載流程 QA。

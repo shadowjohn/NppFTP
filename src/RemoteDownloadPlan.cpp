@@ -281,8 +281,26 @@ int RemoteDownloadPlan::ApplyRemoteDirectoryListing(const char * directoryPath, 
 			AddFailure(TEXT("Skipped unknown remote download item."));
 			continue;
 		}
-		if (AddItem(files[i].fileType == FTPTypeDir, false, remotePath.c_str()) != 0)
+		std::basic_string<TCHAR> localPath;
+		if (GetLocalPath(remotePath.c_str(), localPath) != 0) {
 			AddFailure(TEXT("Skipped remote download path outside the local root."));
+			continue;
+		}
+		bool duplicate = false;
+		for (size_t j = 0; j < m_items.size(); ++j) {
+			if (_tcsicmp(m_items[j].localPath.c_str(), localPath.c_str()) == 0) {
+				duplicate = true;
+				break;
+			}
+		}
+		if (AddItem(files[i].fileType == FTPTypeDir, false, remotePath.c_str()) != 0) {
+			AddFailure(TEXT("Skipped remote download path outside the local root."));
+			continue;
+		}
+		if (duplicate) {
+			m_items.back().selected = false;
+			AddFailure(TEXT("Skipped remote name conflicting with a local path."));
+		}
 	}
 	return 0;
 }
@@ -312,6 +330,9 @@ int RemoteDownloadPlan::PrepareLocalDirectories()
 		DWORD attributes = GetFileAttributes(item.localPath.c_str());
 		if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
 			AddFailure((std::basic_string<TCHAR>(TEXT("Local reparse point blocks file: ")) + item.localPath).c_str());
+			item.selected = false;
+		} else if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+			AddFailure((std::basic_string<TCHAR>(TEXT("Local directory blocks file: ")) + item.localPath).c_str());
 			item.selected = false;
 		}
 	}
