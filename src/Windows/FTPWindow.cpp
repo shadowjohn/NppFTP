@@ -1008,6 +1008,110 @@ void FTPWindow::ShowRemoteUploadSummary(RemoteUploadBatch * batch) {
 	::MessageBox(m_hwnd, message, TEXT("Directory upload"), MB_OK | MB_ICONWARNING);
 }
 
+int FTPWindow::PromptRemoteDownload(FileObject * fo) {
+	if (!fo || !m_ftpSession || !m_ftpSession->IsConnected())
+		return -1;
+	if (fo->isDir()) {
+		TCHAR parent[MAX_PATH]{};
+		if (PU::BrowseDirectory(parent, MAX_PATH, m_hwnd) != 0)
+			return 0;
+		return BeginRemoteDirectoryDownload(parent, fo);
+	}
+
+	TCHAR target[MAX_PATH]{};
+	lstrcpyn(target, fo->GetLocalName(), MAX_PATH);
+	if (PU::GetSaveFilename(target, MAX_PATH, m_hwnd) != 0)
+		return 0;
+	return m_ftpSession->DownloadFile(fo->GetPath(), target, false, 1);
+}
+
+int FTPWindow::BeginRemoteDirectoryDownload(const TCHAR * localParent, FileObject * target) {
+	if (!localParent || !target || !target->isDir() || !m_ftpSession)
+		return -1;
+
+	RemoteDownloadPlan * plan = new RemoteDownloadPlan;
+	if (plan->Build(localParent, target->GetPath()) != 0) {
+		OutErr("[FTPWindow] Unable to prepare local directory %T", localParent);
+		::MessageBox(m_hwnd, TEXT("Unable to prepare the local download folder."), TEXT("Directory download failed"), MB_OK | MB_ICONERROR);
+		delete plan;
+		return -1;
+	}
+
+	m_remoteBusyCursor = true;
+	int result = m_ftpSession->ScanRemoteDownloadPlan(plan);
+	if (result != 0)
+		m_remoteBusyCursor = false;
+	return result;
+}
+
+int FTPWindow::ConfirmRemoteDownloadCollisions(RemoteDownloadPlan * plan) {
+	if (!plan || plan->PrepareLocalDirectories() != 0)
+		return -1;
+
+	std::vector<size_t> collisions;
+	plan->GetLocalFileCollisions(collisions);
+	std::vector<RemoteDownloadItem> & items = plan->GetItems();
+	bool overwriteAll = false;
+	bool skipAll = false;
+	for (size_t i = 0; i < collisions.size(); ++i) {
+		RemoteDownloadItem & item = items[collisions[i]];
+		if (overwriteAll)
+			continue;
+		if (skipAll) {
+			item.selected = false;
+			continue;
+		}
+
+		const TCHAR * localName = PU::FindLocalFilename(item.localPath.c_str());
+		if (!localName)
+			localName = item.localPath.c_str();
+		OverwriteDialog dialog;
+		dialog.Create(m_hwnd, localName);
+		if (dialog.GetDecision() == RemoteOverwriteCancel)
+			return 1;
+		if (dialog.GetDecision() == RemoteOverwriteSkip) {
+			item.selected = false;
+			skipAll = dialog.GetApplyToAll();
+		} else if (dialog.GetApplyToAll()) {
+			overwriteAll = true;
+		}
+	}
+	return 0;
+}
+
+void FTPWindow::RecordRemoteDownloadFailure(RemoteDownloadBatch * batch, QueueOperation * op) {
+	if (!batch || !op)
+		return;
+
+	TCHAR * remotePath = NULL;
+	if (op->GetType() == QueueOperation::QueueTypeDownload)
+		remotePath = SU::Utf8ToTChar(((QueueDownload*)op)->GetExternalPath());
+	const TCHAR * displayPath = remotePath ? remotePath : TEXT("(unknown path)");
+	std::basic_string<TCHAR> failure(TEXT("Download failed for "));
+	failure.append(displayPath);
+	failure.append(TEXT(": "));
+	failure.append(GetRemoteFailureMessage(op->GetFailureKind()));
+	batch->failures.push_back(failure);
+	SU::FreeTChar(remotePath);
+}
+
+void FTPWindow::ShowRemoteDownloadSummary(RemoteDownloadBatch * batch) {
+	if (!batch)
+		return;
+
+	for (size_t i = 0; i < batch->failures.size(); ++i)
+		OutErr("[FTPWindow] %T", batch->failures[i].c_str());
+	OutMsg("[FTPWindow] Directory download completed: %d file(s), %d failed item(s).", batch->completedCount, (int)batch->failures.size());
+	if (batch->failures.empty()) {
+		::MessageBox(m_hwnd, TEXT("Directory download completed."), TEXT("Directory download"), MB_OK | MB_ICONINFORMATION);
+		return;
+	}
+
+	TCHAR message[160]{};
+	SU::TSprintf(message, 160, TEXT("Directory download completed with %d failed item(s). See Output for details."), (int)batch->failures.size());
+	::MessageBox(m_hwnd, message, TEXT("Directory download"), MB_OK | MB_ICONWARNING);
+}
+
 FileObject * FTPWindow::GetRemoteDropTarget(POINTL point, int * itemIndex) {
 	if (itemIndex)
 		*itemIndex = -1;
@@ -1278,22 +1382,10 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				}
 
 				case IDM_POPUP_DOWNLOADFILE:
+				case IDM_POPUP_DLDTOLOCATION:
+				case IDM_POPUP_REMOTE_DOWNLOAD:
 				case IDB_BUTTON_TOOLBAR_DOWNLOAD: {
-					SHORT state = GetKeyState(VK_CONTROL);
-					if (!(state & 0x8000)) {
-						m_ftpSession->DownloadFileCache(m_currentSelection->GetPath());
-						result = TRUE;
-						break;
-					}
-					//else fallthrough
-					}
-				case IDM_POPUP_DLDTOLOCATION: {
-					TCHAR target[MAX_PATH];
-					lstrcpy(target, m_currentSelection->GetLocalName());
-					int res = PU::GetSaveFilename(target, MAX_PATH, m_hwnd);
-					if (res == 0) {
-						m_ftpSession->DownloadFile(m_currentSelection->GetPath(), target, false);
-					}
+					PromptRemoteDownload(m_currentSelection);
 					result = TRUE;
 					break; }
 				case IDM_POPUP_UPLOADFILE:
@@ -2117,6 +2209,7 @@ int FTPWindow::CreateMenus() {
 
 	m_popupRemoteFile = CreatePopupMenu();
 	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_EDIT, TEXT("&Edit"));
+	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_DOWNLOAD, TEXT("&Download..."));
 	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_CHMOD, TEXT("&CHMOD"));
 	AppendMenu(m_popupRemoteFile, MF_SEPARATOR, 0, NULL);
 	AppendMenu(m_popupRemoteFile, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete file"));
@@ -2127,6 +2220,7 @@ int FTPWindow::CreateMenus() {
 
 	m_popupRemoteDir = CreatePopupMenu();
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_UPLOADFILES, TEXT("&Upload files..."));
+	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_DOWNLOAD, TEXT("&Download..."));
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_CHMOD, TEXT("&CHMOD"));
 	AppendMenu(m_popupRemoteDir, MF_SEPARATOR, 0, NULL);
 	AppendMenu(m_popupRemoteDir, MF_STRING, IDM_POPUP_REMOTE_DELETE, TEXT("&Delete directory"));
@@ -2145,7 +2239,6 @@ int FTPWindow::CreateMenus() {
 	//Create context menu for files in folder window
 	m_popupFile = CreatePopupMenu();
 	AppendMenu(m_popupFile,MF_STRING,IDM_POPUP_DOWNLOADFILE,TEXT("&Download file"));
-	AppendMenu(m_popupFile,MF_STRING,IDM_POPUP_DLDTOLOCATION,TEXT("&Save file as..."));
 	AppendMenu(m_popupFile,MF_SEPARATOR,0,0);
 	AppendMenu(m_popupFile,MF_STRING,IDM_POPUP_RENAMEFILE,TEXT("&Rename File"));
 	AppendMenu(m_popupFile,MF_STRING,IDM_POPUP_DELETEFILE,TEXT("D&elete File"));
@@ -2226,7 +2319,7 @@ int FTPWindow::SetToolbarState() {
 		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_REFRESH, false);
 		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_OPENDIR, false);
 	} else {
-		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_DOWNLOAD, !m_currentSelection->isDir());
+		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_DOWNLOAD, true);
 		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_UPLOAD, m_localFileExists);	//m_currentSelection->isDir());
 		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_REFRESH, m_currentSelection->isDir());
 		m_toolbar.Enable(IDB_BUTTON_TOOLBAR_OPENDIR, true);
@@ -2253,7 +2346,8 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			break; }
 		case QueueOperation::QueueTypeConnect:
 		case QueueOperation::QueueTypeDisconnect:
-		case QueueOperation::QueueTypeRemoteUploadScan: {
+		case QueueOperation::QueueTypeRemoteUploadScan:
+		case QueueOperation::QueueTypeRemoteDownloadScan: {
 			if (!isStart)
 				m_remoteBusyCursor = false;
 			break; }
@@ -2321,6 +2415,38 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				::MessageBox(m_hwnd, TEXT("Unable to queue the directory upload."), TEXT("Directory upload failed"), MB_OK | MB_ICONERROR);
 			}
 			break; }
+		case QueueOperation::QueueTypeRemoteDownloadScan: {
+			QueueRemoteDownloadScan * scan = (QueueRemoteDownloadScan*)queueOp;
+			if (isStart) {
+				OutMsg("[FTPWindow] Scanning remote directories for download...");
+				break;
+			}
+			if (queueResult == -1) {
+				OutErr("[FTPWindow] Unable to scan remote directories for download");
+				ShowOperationFailure(queueOp);
+				OnError(queueOp, code, data, isStart);
+				break;
+			}
+
+			RemoteDownloadPlan * plan = scan->ReleasePlan();
+			if (ConfirmRemoteDownloadCollisions(plan) != 0) {
+				OutMsg("[FTPWindow] Directory download cancelled.");
+				delete plan;
+				break;
+			}
+			if (plan->GetItems().empty() || !plan->GetItems()[0].selected) {
+				const std::vector<std::basic_string<TCHAR> > & failures = plan->GetFailures();
+				for (size_t i = 0; i < failures.size(); ++i)
+					OutErr("[FTPWindow] %T", failures[i].c_str());
+				::MessageBox(m_hwnd, TEXT("Unable to prepare the local download folder."), TEXT("Directory download failed"), MB_OK | MB_ICONERROR);
+				delete plan;
+				break;
+			}
+			if (m_ftpSession->QueueRemoteDownloadPlan(plan) != 0) {
+				OutErr("[FTPWindow] Unable to queue directory download");
+				::MessageBox(m_hwnd, TEXT("Unable to queue the directory download."), TEXT("Directory download failed"), MB_OK | MB_ICONERROR);
+			}
+			break; }
 		case QueueOperation::QueueTypeDirectoryGet: {
 			QueueGetDir * dirop = (QueueGetDir*)queueOp;
 			if (isStart) {
@@ -2375,25 +2501,27 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 		case QueueOperation::QueueTypeDownloadHandle:
 		case QueueOperation::QueueTypeDownload: {
 			QueueDownload * opdld = (QueueDownload*)queueOp;
+			RemoteDownloadBatch * batch = queueOp->GetType() == QueueOperation::QueueTypeDownload ? (RemoteDownloadBatch*)data : NULL;
 			if (isStart)
 				break;
 			if (queueResult == -1) {
-				OutErr("[FTPWindow] Download of %T failed", SU::Utf8ToTChar(opdld->GetExternalPath()));
-				OnError(queueOp, code, data, isStart);
+				if (batch)
+					RecordRemoteDownloadFailure(batch, queueOp);
+				else {
+					OutErr("[FTPWindow] Download of %T failed", SU::Utf8ToTChar(opdld->GetExternalPath()));
+					ShowOperationFailure(queueOp);
+				}
 				break;	//failure
 			}
 
 			if (queueOp->GetType() == QueueOperation::QueueTypeDownload) {
-				if (code == 0) {
-					//Download to cache: Open file
+				if (batch) {
+					batch->completedCount++;
+				} else if (code == 0) {
 					OutMsg("[FTPWindow] Download of %T succeeded, opening file.", SU::Utf8ToTChar(opdld->GetExternalPath()));
 					::SendMessage(m_hNpp, NPPM_DOOPEN, (WPARAM)0, (LPARAM)opdld->GetLocalPath());
 				} else {
-					//Download to other location: Ask
-					int ret = ::MessageBox(m_hNpp, TEXT("The download is complete. Do you wish to open the file?"), TEXT("Download complete"), MB_YESNO);
-					if (ret == IDYES) {
-						::SendMessage(m_hNpp, NPPM_DOOPEN, (WPARAM)0, (LPARAM)opdld->GetLocalPath());
-					}
+					OutMsg("[FTPWindow] Download of %T succeeded.", SU::Utf8ToTChar(opdld->GetExternalPath()));
 				}
 			} else {
 				OutMsg("[FTPWindow] Download of %T succeeded.", SU::Utf8ToTChar(opdld->GetExternalPath()));
@@ -2445,6 +2573,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 		case QueueOperation::QueueTypeRemoteUploadComplete: {
 			if (!isStart && queueResult == 0)
 				ShowRemoteUploadSummary(((QueueRemoteUploadComplete*)queueOp)->GetBatch());
+			break; }
+		case QueueOperation::QueueTypeRemoteDownloadComplete: {
+			if (!isStart && queueResult == 0)
+				ShowRemoteDownloadSummary(((QueueRemoteDownloadComplete*)queueOp)->GetBatch());
 			break; }
 		case QueueOperation::QueueTypeDirectoryCreate: {
 			QueueCreateDir * opmkdir = (QueueCreateDir*)queueOp;

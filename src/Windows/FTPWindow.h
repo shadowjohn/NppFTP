@@ -124,6 +124,11 @@ protected:
 	virtual int				ActivateRemoteListSelection();
 	virtual FileObject*		GetRemoteListSelection();
 	virtual int				OnRemoteListSelectionChanged();
+	virtual int				PromptRemoteDownload(FileObject * fo);
+	virtual int				BeginRemoteDirectoryDownload(const TCHAR * localParent, FileObject * target);
+	virtual int				ConfirmRemoteDownloadCollisions(RemoteDownloadPlan * plan);
+	virtual void			RecordRemoteDownloadFailure(RemoteDownloadBatch * batch, QueueOperation * op);
+	virtual void			ShowRemoteDownloadSummary(RemoteDownloadBatch * batch);
 	virtual int				PromptRemoteRename(FileObject * fo);
 	virtual int				SelectRemoteUploadFiles(FileObject * target);
 	virtual int				QueueDirectRemoteUploads(FileObject * target, const std::vector<std::basic_string<TCHAR> > & paths);

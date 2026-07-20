@@ -73,6 +73,7 @@
 #define IDM_POPUP_REMOTE_REFRESH		10037
 #define IDM_POPUP_REMOTE_NEWDIR		10038
 #define IDM_POPUP_REMOTE_NEWFILE		10039
+#define IDM_POPUP_REMOTE_DOWNLOAD		10040
 //Range for profile items in popupmenu. Go over 1000 profiles and the menu will not work anymore
 #define IDM_POPUP_PROFILE_FIRST		11000
 #define IDM_POPUP_PROFILE_MAX		12000

@@ -8,7 +8,7 @@ OverwriteDialog::OverwriteDialog() :
 	Dialog(IDD_DIALOG_OVERWRITE),
 	m_remoteName(SU::DupString(TEXT(""))),
 	m_decision(RemoteOverwriteCancel),
-	m_overwriteAll(false)
+	m_applyToAll(false)
 {
 }
 
@@ -22,7 +22,7 @@ int OverwriteDialog::Create(HWND parent, const TCHAR *remoteName)
 	SU::FreeTChar(m_remoteName);
 	m_remoteName = SU::DupString(remoteName ? remoteName : TEXT(""));
 	m_decision = RemoteOverwriteCancel;
-	m_overwriteAll = false;
+	m_applyToAll = false;
 	return Dialog::Create(parent, true, TEXT("File exists"));
 }
 
@@ -31,9 +31,14 @@ RemoteOverwriteDecision OverwriteDialog::GetDecision() const
 	return m_decision;
 }
 
+bool OverwriteDialog::GetApplyToAll() const
+{
+	return m_applyToAll;
+}
+
 bool OverwriteDialog::GetOverwriteAll() const
 {
-	return m_overwriteAll;
+	return m_decision == RemoteOverwriteOverwrite && m_applyToAll;
 }
 
 INT_PTR OverwriteDialog::DlgMsgProc(UINT message, WPARAM wParam, LPARAM lParam)
@@ -42,17 +47,17 @@ INT_PTR OverwriteDialog::DlgMsgProc(UINT message, WPARAM wParam, LPARAM lParam)
 		switch (LOWORD(wParam)) {
 			case IDC_BUTTON_OVERWRITE:
 				m_decision = RemoteOverwriteOverwrite;
-				m_overwriteAll = Button_GetCheck(GetDlgItem(m_hwnd, IDC_CHECK_OVERWRITE_ALL)) == BST_CHECKED;
+				m_applyToAll = Button_GetCheck(GetDlgItem(m_hwnd, IDC_CHECK_OVERWRITE_ALL)) == BST_CHECKED;
 				EndDialog(m_hwnd, 1);
 				return TRUE;
 			case IDC_BUTTON_SKIP:
 				m_decision = RemoteOverwriteSkip;
-				m_overwriteAll = false;
+				m_applyToAll = Button_GetCheck(GetDlgItem(m_hwnd, IDC_CHECK_OVERWRITE_ALL)) == BST_CHECKED;
 				EndDialog(m_hwnd, 1);
 				return TRUE;
 			case IDB_BUTTON_CANCEL:
 				m_decision = RemoteOverwriteCancel;
-				m_overwriteAll = false;
+				m_applyToAll = false;
 				EndDialog(m_hwnd, 2);
 				return TRUE;
 		}

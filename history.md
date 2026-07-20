@@ -546,3 +546,10 @@
 - 新增 remote download scan、file queue、complete marker 與 ref-counted batch；scan 在 main queue 完整列出 selected non-link directories，transfer queue 只排 selected non-link files。
 - batch 會保留 plan 及 pre-scan failure，讓下一刀 UI 可在下載完成時統一顯示結果；每個 transfer operation 與 complete marker 各自持有 reference，保護 queue 清除時的生命週期。
 - TDD：先以 `RemoteDownloadBatch` 尚未宣告確認 focused test 編譯紅燈；完成後 `_build\\tests\\remote_download_plan.exe` 輸出 `remote_download_plan_exit=0`，`build.bat -Arch x64 -Config Release` 通過。
+
+## 2026-07-20 Route downloads to local Save As or folder selection
+
+- flat remote file/directory menus、legacy Download/Save file as command 與 toolbar Download 現在共用使用者選擇目的地的下載流程；檔案走 Windows Save As，目錄選父目錄後遞迴下載。
+- `Edit`、Enter 與 double-click 仍使用 cache download 後在 Notepad++ 開啟；使用者選擇儲存位置的單檔下載完成後只寫 Output，不再詢問或開啟檔案。
+- download batch 的碰撞對話框可對 Overwrite 或 Skip 套用至其餘檔案；目錄掃描、local preparation、逐檔失敗會在完成時以單一摘要及 Output 詳情呈現。
+- 驗證：加入 selected Skip-path assertion 後重新編譯 focused test，輸出 `remote_download_plan_exit=0`；`build.bat -Arch x64 -Config Release` 通過並產出 DLL 與 ZIP。

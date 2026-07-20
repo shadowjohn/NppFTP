@@ -11,6 +11,7 @@ public:
 
 	int Create(HWND parent, const TCHAR *remoteName);
 	RemoteOverwriteDecision GetDecision() const;
+	bool GetApplyToAll() const;
 	bool GetOverwriteAll() const;
 
 protected:
@@ -21,7 +22,7 @@ protected:
 
 	TCHAR *m_remoteName;
 	RemoteOverwriteDecision m_decision;
-	bool m_overwriteAll;
+	bool m_applyToAll;
 };
 
 #endif //OVERWRITEDIALOG_H

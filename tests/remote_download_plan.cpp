@@ -125,6 +125,10 @@ int main()
 	std::vector<size_t> collisions;
 	plan.GetLocalFileCollisions(collisions);
 	assert(collisions.size() == 1 && collisions[0] == 1);
+	assert(plan.GetItems()[1].selected);
+	plan.GetItems()[1].selected = false;
+	assert(!plan.GetItems()[1].selected);
+	plan.GetItems()[1].selected = true;
 
 	RemoteDownloadPlan * owned = new RemoteDownloadPlan;
 	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);
