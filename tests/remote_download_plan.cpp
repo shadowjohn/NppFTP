@@ -25,6 +25,7 @@ int main()
 	const TCHAR * ancestorJunction = TEXT("_build\\tests\\remote_download_fixture_ancestor_junction");
 	const TCHAR * ancestorTarget = TEXT("_build\\tests\\remote_download_fixture_ancestor_target");
 	const TCHAR * ancestorSelected = TEXT("_build\\tests\\remote_download_fixture_ancestor_junction\\selected");
+	const TCHAR * nestedReparseTarget = TEXT("_build\\tests\\remote_download_fixture_nested_target");
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\assets\\app.js"));
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\index.html"));
 	RemoveDirectory(assets);
@@ -35,6 +36,7 @@ int main()
 	RemoveDirectory(ancestorSelected);
 	RemoveDirectory(ancestorJunction);
 	RemoveDirectory(ancestorTarget);
+	RemoveDirectory(nestedReparseTarget);
 	assert(CreateDirectory(TEXT("_build\\tests"), NULL) || GetLastError() == ERROR_ALREADY_EXISTS);
 	assert(CreateDirectory(parent, NULL));
 
@@ -67,6 +69,21 @@ int main()
 	assert(RemoveDirectory(ancestorSelected));
 	assert(RemoveDirectory(ancestorJunction));
 	assert(RemoveDirectory(ancestorTarget));
+
+	RemoteDownloadPlan nestedReparse;
+	assert(nestedReparse.Build(parent, "/var/www/html") == 0);
+	assert(CreateDirectory(root, NULL));
+	assert(CreateDirectory(nestedReparseTarget, NULL));
+	assert(CreateJunction(assets, nestedReparseTarget) == 0);
+	FTPFile nestedReparseFile{};
+	lstrcpynA(nestedReparseFile.filePath, "/var/www/html/assets/app.js", MAX_PATH);
+	nestedReparseFile.fileType = FTPTypeFile;
+	assert(nestedReparse.ApplyRemoteDirectoryListing("/var/www/html/assets", &nestedReparseFile, 1) == 0);
+	assert(nestedReparse.GetItems().size() == 1);
+	assert(nestedReparse.GetFailures().size() == 1);
+	assert(RemoveDirectory(assets));
+	assert(RemoveDirectory(root));
+	assert(RemoveDirectory(nestedReparseTarget));
 
 	RemoteDownloadPlan plan;
 	assert(plan.Build(parent, "/var/www/html") == 0);

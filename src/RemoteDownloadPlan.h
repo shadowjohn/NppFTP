@@ -29,6 +29,7 @@ public:
 
 private:
 	int AddItem(bool isDirectory, bool isLink, const char * remotePath);
+	int GetLocalPath(const char * remotePath, std::basic_string<TCHAR> & localPath) const;
 	void AddFailure(const TCHAR * message);
 
 	std::vector<RemoteDownloadItem> m_items;

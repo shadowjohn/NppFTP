@@ -139,6 +139,24 @@ static bool HasReparsePointAncestor(const TCHAR * path)
 	}
 }
 
+static bool HasExistingReparsePointAncestor(const TCHAR * path)
+{
+	TCHAR current[MAX_PATH]{};
+	DWORD length = GetFullPathName(path, MAX_PATH, current, NULL);
+	if (length == 0 || length >= MAX_PATH)
+		return true;
+
+	for (;;) {
+		DWORD attributes = GetFileAttributes(current);
+		if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
+			return true;
+		if (PathIsRoot(current))
+			return false;
+		if (!PathRemoveFileSpec(current))
+			return true;
+	}
+}
+
 static bool HasRemotePrefix(const std::string & root, const std::string & path)
 {
 	return path == root || (path.size() > root.size() && path.compare(0, root.size(), root) == 0 && path[root.size()] == '/');
@@ -188,13 +206,31 @@ int RemoteDownloadPlan::AddItem(bool isDirectory, bool isLink, const char * remo
 	if (!HasRemotePrefix(m_remoteRoot, normalized))
 		return -1;
 
+	RemoteDownloadItem item{};
+	item.isDirectory = isDirectory;
+	item.isLink = isLink;
+	item.selected = !isLink;
+	item.scanned = !isDirectory;
+	item.remotePath = normalized;
+	if (GetLocalPath(normalized.c_str(), item.localPath) != 0)
+		return -1;
+	m_items.push_back(item);
+	return 0;
+}
+
+int RemoteDownloadPlan::GetLocalPath(const char * remotePath, std::basic_string<TCHAR> & localPath) const
+{
+	if (!remotePath || strlen(remotePath) >= MAX_PATH || !HasRemotePrefix(m_remoteRoot, remotePath))
+		return -1;
+
 	std::vector<std::basic_string<TCHAR> > segments;
-	if (normalized.size() > m_remoteRoot.size()) {
+	std::string path(remotePath);
+	if (path.size() > m_remoteRoot.size()) {
 		size_t offset = m_remoteRoot.size() + 1;
-		while (offset < normalized.size()) {
-			size_t next = normalized.find('/', offset);
+		while (offset < path.size()) {
+			size_t next = path.find('/', offset);
 			std::basic_string<TCHAR> localName;
-			if (Utf8SegmentToLocal(normalized.substr(offset, next == std::string::npos ? std::string::npos : next - offset), localName) != 0)
+			if (Utf8SegmentToLocal(path.substr(offset, next == std::string::npos ? std::string::npos : next - offset), localName) != 0)
 				return -1;
 			segments.push_back(localName);
 			if (next == std::string::npos)
@@ -202,17 +238,7 @@ int RemoteDownloadPlan::AddItem(bool isDirectory, bool isLink, const char * remo
 			offset = next + 1;
 		}
 	}
-
-	RemoteDownloadItem item{};
-	item.isDirectory = isDirectory;
-	item.isLink = isLink;
-	item.selected = !isLink;
-	item.scanned = !isDirectory;
-	item.remotePath = normalized;
-	if (JoinLocalPath(m_localRoot.c_str(), segments, item.localPath) != 0)
-		return -1;
-	m_items.push_back(item);
-	return 0;
+	return JoinLocalPath(m_localRoot.c_str(), segments, localPath);
 }
 
 int RemoteDownloadPlan::ApplyRemoteDirectoryListing(const char * directoryPath, const FTPFile * files, int count)
@@ -221,6 +247,15 @@ int RemoteDownloadPlan::ApplyRemoteDirectoryListing(const char * directoryPath, 
 	if (count < 0 || (count > 0 && !files) || NormalizeRemoteDirectory(directoryPath, directory) != 0 ||
 		!HasRemotePrefix(m_remoteRoot, directory))
 		return -1;
+	std::basic_string<TCHAR> localDirectory;
+	if (GetLocalPath(directory.c_str(), localDirectory) != 0) {
+		AddFailure(TEXT("Skipped remote directory outside the local root."));
+		return 0;
+	}
+	if (HasExistingReparsePointAncestor(localDirectory.c_str())) {
+		AddFailure(TEXT("Skipped remote directory through a local reparse point."));
+		return 0;
+	}
 
 	for (int i = 0; i < count; ++i) {
 		const char * path = files[i].filePath;
