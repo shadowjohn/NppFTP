@@ -594,3 +594,10 @@
 - `CancelQueueOp` 改以現有 lock 內的 queue iterator 逐筆比較，命中時只 erase 該 operation，再依既有順序呼叫 `OnQueueCanceled`、通知移除並 delete；不再重複拿 front 卻刪除其他索引。
 - running front operation 仍回傳 `-1`、找不到的 operation 不修改 queue，且不改動 Clear Queue 對 download completion marker 的保留邏輯。
 - Unicode/ANSI `remote_download_plan` 回歸、`git diff --check` 與 x64 Release build 通過；尚待真實 queue 驗證 active operation 後的單筆 Remove operation 是否正確取消目標並在摘要列為 canceled。
+
+## 2026-07-20 Final remote download verification
+
+- 最終整體 code review 通過；Download/Edit 分流、遞迴掃描、link/path/Unicode 防護、碰撞處理、單筆取消與 Clear Queue 摘要的跨模組行為一致。
+- 主工作區重新驗證：`git diff --check` 無錯誤；`remote_download_plan_exit=0`、`remote_browser_utils_exit=0`、`remote_list_keyboard_exit=0`；`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP。
+- 最終 `NppFTP-0.30.22-win64.zip` SHA-256：`32241923D36EB8E63CEDA7F2CDEC65CE45074107ACD8EC1BE97C7E5908815A88`。
+- 真實 FTP / FTPS / SFTP QA 仍待執行：Save As、遞迴資料夾、碰撞選項、scan/transfer failure、進度與摘要、active transfer 後單筆取消，以及 Clear Queue 後摘要。
