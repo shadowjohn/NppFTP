@@ -161,6 +161,19 @@ int main()
 	assert(!caseCollision.GetItems()[2].selected);
 	assert(caseCollision.GetFailures().size() == 1);
 
+	RemoteDownloadPlan unicodeCaseCollision;
+	assert(unicodeCaseCollision.Build(parent, "/var/www/unicode-case-root") == 0);
+	FTPFile unicodeCaseFiles[2]{};
+	lstrcpynA(unicodeCaseFiles[0].filePath, "/var/www/unicode-case-root/\xC3\x84.txt", MAX_PATH);
+	unicodeCaseFiles[0].fileType = FTPTypeFile;
+	lstrcpynA(unicodeCaseFiles[1].filePath, "/var/www/unicode-case-root/\xC3\xA4.txt", MAX_PATH);
+	unicodeCaseFiles[1].fileType = FTPTypeFile;
+	assert(unicodeCaseCollision.ApplyRemoteDirectoryListing("/var/www/unicode-case-root", unicodeCaseFiles, 2) == 0);
+	assert(unicodeCaseCollision.GetItems().size() == 3);
+	assert(unicodeCaseCollision.GetItems()[1].selected);
+	assert(!unicodeCaseCollision.GetItems()[2].selected);
+	assert(unicodeCaseCollision.GetFailures().size() == 1);
+
 	RemoteDownloadPlan * owned = new RemoteDownloadPlan;
 	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);
 	assert(batch->plan == owned);

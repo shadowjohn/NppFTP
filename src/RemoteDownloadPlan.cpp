@@ -4,6 +4,10 @@
 #include <shlwapi.h>
 #include <string.h>
 
+#if _WIN32_WINNT < 0x0600
+extern "C" WINBASEAPI int WINAPI CompareStringOrdinal(LPCWCH left, int leftCount, LPCWCH right, int rightCount, BOOL ignoreCase);
+#endif
+
 static bool IsReservedDeviceName(const TCHAR * name)
 {
 	const TCHAR * extension = _tcschr(name, TEXT('.'));
@@ -162,6 +166,24 @@ static bool HasRemotePrefix(const std::string & root, const std::string & path)
 	return path == root || (path.size() > root.size() && path.compare(0, root.size(), root) == 0 && path[root.size()] == '/');
 }
 
+static bool LocalPathsEqualIgnoreCase(const TCHAR * left, const TCHAR * right)
+{
+#ifdef UNICODE
+	return CompareStringOrdinal(left, -1, right, -1, TRUE) == CSTR_EQUAL;
+#else
+	int leftLength = MultiByteToWideChar(CP_ACP, 0, left, -1, NULL, 0);
+	int rightLength = MultiByteToWideChar(CP_ACP, 0, right, -1, NULL, 0);
+	if (leftLength <= 0 || rightLength <= 0)
+		return false;
+	std::vector<WCHAR> leftWide(leftLength, 0);
+	std::vector<WCHAR> rightWide(rightLength, 0);
+	if (!MultiByteToWideChar(CP_ACP, 0, left, -1, &leftWide[0], leftLength) ||
+		!MultiByteToWideChar(CP_ACP, 0, right, -1, &rightWide[0], rightLength))
+		return false;
+	return CompareStringOrdinal(&leftWide[0], -1, &rightWide[0], -1, TRUE) == CSTR_EQUAL;
+#endif
+}
+
 int RemoteDownloadPlan::Build(const TCHAR * localParent, const char * remoteRoot)
 {
 	m_items.clear();
@@ -288,7 +310,7 @@ int RemoteDownloadPlan::ApplyRemoteDirectoryListing(const char * directoryPath, 
 		}
 		bool duplicate = false;
 		for (size_t j = 0; j < m_items.size(); ++j) {
-			if (_tcsicmp(m_items[j].localPath.c_str(), localPath.c_str()) == 0) {
+			if (LocalPathsEqualIgnoreCase(m_items[j].localPath.c_str(), localPath.c_str())) {
 				duplicate = true;
 				break;
 			}

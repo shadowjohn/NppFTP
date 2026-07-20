@@ -567,3 +567,8 @@
 - `Download...` 在進入檔案或目錄流程前直接拒絕 remote symbolic link，寫入 Output 並提示使用者；`Edit` 維持既有 cache-open 行為。
 - planner 現在會取消本機目錄撞到預定檔案目的地的項目，並在同一份 remote listing 出現大小寫不同但映射到相同 Windows 路徑時取消後者，避免兩次傳輸寫入同一目的地。
 - focused `remote_download_plan` test 以 `/Fo:_build\tests\` 編譯並輸出 `remote_download_plan_exit=0`，`git diff --check` 通過，`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP；仍待真實 FTP / FTPS / SFTP 的下載流程 QA。
+
+## 2026-07-20 Harden Unicode local download collisions
+
+- planner 的 local path case-insensitive 比較改用 Windows `CompareStringOrdinal(..., TRUE)`；非 Unicode `TCHAR` build 先轉成 UTF-16，避免依賴 CRT locale 比較而漏掉 Windows 上會碰撞的 Unicode 名稱。
+- focused test 以 UTF-8 byte escape 餵入 `Ä.txt` 與 `ä.txt`，確認後者會取消選取並記錄 failure；以 `/Fo:_build\tests\` 編譯後輸出 `remote_download_plan_exit=0`，`git diff --check` 與 `build.bat -Arch x64 -Config Release` 皆通過。
