@@ -572,3 +572,8 @@
 
 - planner 的 local path case-insensitive 比較改用 Windows `CompareStringOrdinal(..., TRUE)`；非 Unicode `TCHAR` build 先轉成 UTF-16，避免依賴 CRT locale 比較而漏掉 Windows 上會碰撞的 Unicode 名稱。
 - focused test 以 UTF-8 byte escape 餵入 `Ä.txt` 與 `ä.txt`，確認後者會取消選取並記錄 failure；以 `/Fo:_build\tests\` 編譯後輸出 `remote_download_plan_exit=0`，`git diff --check` 與 `build.bat -Arch x64 -Config Release` 皆通過。
+
+## 2026-07-20 Keep ANSI download paths consistent with UTF-8
+
+- `Utf8SegmentToLocal` 一律先以 `CP_UTF8` 和 `MB_ERR_INVALID_CHARS` 解碼。Unicode build 直接保存 UTF-16；ANSI build 再以 `CP_ACP`、`WC_NO_BEST_FIT_CHARS` 編碼，若需要 default character 或無法編碼就跳過該 remote name 並記錄 failure，絕不把 raw UTF-8 bytes 當成 ANSI local path。
+- `remote_download_plan` 分別以 `/DUNICODE /D_UNICODE` 與 ANSI `TCHAR` 編譯，兩者皆使用 `/Fo:_build\tests\` 並輸出 `remote_download_plan_exit=0`；`git diff --check` 與 `build.bat -Arch x64 -Config Release` 也皆通過。

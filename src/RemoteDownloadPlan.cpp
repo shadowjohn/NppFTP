@@ -44,16 +44,25 @@ static int Utf8SegmentToLocal(const std::string & segment, std::basic_string<TCH
 		segment.find('/') != std::string::npos || segment.find('\\') != std::string::npos)
 		return -1;
 
+	int wideSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), -1, NULL, 0);
+	if (wideSize <= 1 || wideSize >= MAX_PATH)
+		return -1;
+	std::vector<WCHAR> wideBuffer(wideSize, 0);
+	if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), -1, &wideBuffer[0], wideSize))
+		return -1;
+
 #ifdef UNICODE
-	int size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), -1, NULL, 0);
-	if (size <= 1 || size >= MAX_PATH)
-		return -1;
-	std::vector<TCHAR> buffer(size, 0);
-	if (!MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), -1, &buffer[0], size))
-		return -1;
-	localName.assign(&buffer[0]);
+	localName.assign(&wideBuffer[0]);
 #else
-	localName.assign(segment);
+	BOOL usedDefault = FALSE;
+	int localSize = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, &wideBuffer[0], -1, NULL, 0, NULL, &usedDefault);
+	if (localSize <= 1 || localSize >= MAX_PATH || usedDefault)
+		return -1;
+	std::vector<TCHAR> localBuffer(localSize, 0);
+	usedDefault = FALSE;
+	if (!WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, &wideBuffer[0], -1, &localBuffer[0], localSize, NULL, &usedDefault) || usedDefault)
+		return -1;
+	localName.assign(&localBuffer[0]);
 #endif
 
 	return IsLocalNameValid(localName.c_str()) ? 0 : -1;

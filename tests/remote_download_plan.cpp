@@ -169,10 +169,22 @@ int main()
 	lstrcpynA(unicodeCaseFiles[1].filePath, "/var/www/unicode-case-root/\xC3\xA4.txt", MAX_PATH);
 	unicodeCaseFiles[1].fileType = FTPTypeFile;
 	assert(unicodeCaseCollision.ApplyRemoteDirectoryListing("/var/www/unicode-case-root", unicodeCaseFiles, 2) == 0);
+
+#ifdef UNICODE
 	assert(unicodeCaseCollision.GetItems().size() == 3);
 	assert(unicodeCaseCollision.GetItems()[1].selected);
 	assert(!unicodeCaseCollision.GetItems()[2].selected);
 	assert(unicodeCaseCollision.GetFailures().size() == 1);
+#else
+	if (unicodeCaseCollision.GetItems().size() == 3) {
+		assert(unicodeCaseCollision.GetItems()[1].selected);
+		assert(!unicodeCaseCollision.GetItems()[2].selected);
+		assert(unicodeCaseCollision.GetFailures().size() == 1);
+	} else {
+		assert(unicodeCaseCollision.GetItems().size() >= 1 && unicodeCaseCollision.GetItems().size() < 3);
+		assert(unicodeCaseCollision.GetFailures().size() == 3 - unicodeCaseCollision.GetItems().size());
+	}
+#endif
 
 	RemoteDownloadPlan * owned = new RemoteDownloadPlan;
 	RemoteDownloadBatch * batch = new RemoteDownloadBatch(owned);
