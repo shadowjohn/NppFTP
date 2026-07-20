@@ -583,3 +583,8 @@
 - queue 現在只在尚未執行的 operation 被 Clear、單筆取消或 shutdown cleanup 移除前呼叫取消 hook；正常完成後的 QueueEventRemove 與正在 abort 的 operation 都不會記為取消。
 - remote directory download batch 分開記錄 failed 與 canceled remote path；完成摘要與 Output 使用 finished，列出 successful、failed、canceled 三個數量，只有 failed 與 canceled 都是零時才顯示成功訊息。
 - focused planner test 覆蓋 batch cancellation recording；Unicode/ANSI `remote_download_plan` 皆輸出 `remote_download_plan_exit=0`，`git diff --check` 通過，`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP。真實 FTP / FTPS / SFTP 的取消、摘要與 queue UI 行為仍待手動 QA。
+
+## 2026-07-20 Preserve canceled download summaries after Clear Queue
+
+- Clear Queue 現在會取消並移除所有尚未執行的普通 operation，但保留 `QueueRemoteDownloadComplete` marker；正在執行的 operation 先放回 queue，接著依原始順序接回 marker，讓 active transfer 完成後再顯示 batch 的 failed/canceled 摘要。沒有 active transfer 時也會重新喚醒 queue 執行 marker。
+- `CancelQueueOp` 對單一 marker 的既有行為不變，不會提前顯示摘要；focused batch test 保持確認同一 batch 的 completed、failed、canceled 三種狀態分離。Unicode/ANSI `remote_download_plan` 皆輸出 `remote_download_plan_exit=0`，`git diff --check` 通過，x64 Release build 成功產出 DLL 與 ZIP。

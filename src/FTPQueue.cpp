@@ -132,6 +132,7 @@ int FTPQueue::GetQueueSize() const {
 
 int FTPQueue::ClearQueue() {
 	QueueOperation * op = NULL;
+	VQueue completionMarkers;
 
 	m_monitor->Enter();
 		if (m_performing) {
@@ -139,14 +140,26 @@ int FTPQueue::ClearQueue() {
 			m_queue.pop_front();
 		}
 		while (!m_queue.empty()) {
-			m_queue.front()->OnQueueCanceled();
-			m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
-			delete m_queue.front();
+			QueueOperation * pending = m_queue.front();
 			m_queue.pop_front();
+			// Keep download completion markers so canceled file counts can be summarized after any active transfer.
+			if (pending->GetType() == QueueOperation::QueueTypeRemoteDownloadComplete) {
+				completionMarkers.push_back(pending);
+				continue;
+			}
+			pending->OnQueueCanceled();
+			pending->SendNotification(QueueOperation::QueueEventRemove);
+			delete pending;
 		}
 		if (m_performing) {
 			m_queue.push_back(op);
 		}
+		while (!completionMarkers.empty()) {
+			m_queue.push_back(completionMarkers.front());
+			completionMarkers.pop_front();
+		}
+		if (!m_performing && !m_queue.empty())
+			m_monitor->Signal(ConditionQueueOps);
 	m_monitor->Exit();
 
 	return 0;

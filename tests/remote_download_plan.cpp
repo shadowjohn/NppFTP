@@ -195,6 +195,7 @@ int main()
 	assert(batch->failures.size() == 1);
 	assert(batch->canceledPaths.size() == 1);
 	assert(batch->canceledPaths[0] == "/var/www/html/assets/app.js");
+	assert(batch->completedCount == 0);
 	batch->AddRef();
 	batch->Release();
 	batch->Release();
