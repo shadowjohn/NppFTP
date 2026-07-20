@@ -606,3 +606,8 @@
 
 - 使用者已於 Notepad++ 實機確認遠端整個目錄可成功遞迴下載到選定本機位置。
 - 碰撞選項、取消／Clear Queue 摘要，以及 FTP / FTPS / SFTP 的其餘實機情境仍維持待驗證。
+
+## 2026-07-20 Stabilize CI zlib source delivery
+
+- GitHub Actions 兩次從 `zlib.net/fossils/zlib-1.3.2.tar.gz` 收到 SHA-256 不符的內容，build 在驗證階段正確停止；本機以同一個 Python `urllib` 與官方 current URL 驗證，官方 tarball hash 仍為 `bb329a...f0119d16`。
+- 改用 zlib 官方 GitHub repository `madler/zlib` 的固定 `v1.3.2` tag archive，tag commit 為 `216c70c020aa53f0c40920d155f808b6b59c9acb`，SHA-256 固定為 `b99a0b86c0ba9360ec7e78c4f1e43b1cbdf1e6936c8fa0f6835c0cd694a495a1`；建置前仍會驗證 hash，不會放寬供應鏈檢查。
