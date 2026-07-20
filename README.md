@@ -139,6 +139,16 @@ build.bat
 
 `build_scripts.ps1` 會檢查 Visual Studio、CMake、Perl 等環境；OpenSSL / zlib / libssh 仍走既有 third-party build 流程，並保留 hash 驗證。
 
+### 第三方來源檢核
+
+在不建置 DLL 的情況下，可先重新下載並檢查目前第三方 archive：
+
+```bat
+python verify_third_party_sources.py
+```
+
+檢核腳本直接重用 `build_3rdparty.py` 的 URL 與 SHA-256，不寫入 tarball；任一來源無法下載或 hash 不符時會以非零 exit code 結束。
+
 ### 安裝與本機測試
 
 Release 使用者：下載 zip、解壓 `NppFTP.dll`，放到 `Notepad++\plugins\NppFTP\NppFTP.dll`，再重新啟動 Notepad++。
@@ -156,6 +166,7 @@ copyNppFTPdllToRealENV.bat
 - `history.md`：重要修正、踩雷、決策、build hash。
 - `todo.md`：剩餘工作與不做項目。
 - `third_party_sources.md`：第三方套件來源與 checksum。
+- `verify_third_party_sources.py`：重新下載並檢查第三方 archive 的 SHA-256。
 - `docs/superpowers/plans/`：較大任務的分步計畫。
 - `snapshot/`：README 使用的舊版 NppFTP、PSPad 參考、新版 NppFTP 畫面截圖。
 

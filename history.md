@@ -611,3 +611,8 @@
 
 - GitHub Actions 兩次從 `zlib.net/fossils/zlib-1.3.2.tar.gz` 收到 SHA-256 不符的內容，build 在驗證階段正確停止；本機以同一個 Python `urllib` 與官方 current URL 驗證，官方 tarball hash 仍為 `bb329a...f0119d16`。
 - 改用 zlib 官方 GitHub repository `madler/zlib` 的固定 `v1.3.2` tag archive，tag commit 為 `216c70c020aa53f0c40920d155f808b6b59c9acb`，SHA-256 固定為 `b99a0b86c0ba9360ec7e78c4f1e43b1cbdf1e6936c8fa0f6835c0cd694a495a1`；建置前仍會驗證 hash，不會放寬供應鏈檢查。
+
+## 2026-07-20 Add third-party source verifier
+
+- 新增 `verify_third_party_sources.py`，會重用 `build_3rdparty.py` 的 URL 與 SHA-256，直接串流下載三個 archive 驗證；不寫入 tarball，任一來源失敗會回傳非零 exit code。
+- GitHub Actions `CI_build` run 29731266380 已成功完成 maintained Windows x64 建置與 DLL 封裝，確認新的 zlib tag archive 可穩定通過既有 checksum gate。
