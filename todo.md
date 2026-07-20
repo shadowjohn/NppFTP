@@ -86,11 +86,12 @@
 
 ## 7. User-directed remote download
 
-- [ ] Route toolbar and flat-list Download commands through a Save As/folder-picker workflow; keep Edit cache-only.
-- [ ] Download a selected remote directory recursively into a same-named local root.
-- [ ] Guard local output paths, skip remote symlinks, and resolve file collisions per batch.
-- [ ] Show per-file queue progress and one directory-download failure summary.
-- [ ] Add focused plan tests and run FTP / FTPS / SFTP manual QA.
+- [x] Route toolbar and flat-list Download commands through a Save As/folder-picker workflow; keep Edit cache-only.
+- [x] Download a selected remote directory recursively into a same-named local root.
+- [x] Guard local output paths, skip remote symlinks, and resolve file collisions per batch.
+- [x] Show per-file queue progress and one directory-download failure summary.
+- [x] Add focused plan tests.
+- [ ] Run manual QA: file Save As cancel/success/no-open; folder picker root creation; nested files; overwrite/skip/all/cancel; local file/directory conflicts; scan failure; FTP/FTPS/SFTP queue progress and one summary.
 
 ## Not now
 

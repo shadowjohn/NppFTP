@@ -553,3 +553,11 @@
 - `Edit`、Enter 與 double-click 仍使用 cache download 後在 Notepad++ 開啟；使用者選擇儲存位置的單檔下載完成後只寫 Output，不再詢問或開啟檔案。
 - download batch 的碰撞對話框可對 Overwrite 或 Skip 套用至其餘檔案；目錄掃描、local preparation、逐檔失敗會在完成時以單一摘要及 Output 詳情呈現。
 - 驗證：加入 selected Skip-path assertion 後重新編譯 focused test，輸出 `remote_download_plan_exit=0`；`build.bat -Arch x64 -Config Release` 通過並產出 DLL 與 ZIP。
+
+## 2026-07-20 Document user-directed remote download workflow
+
+- README 說明 `Download...` 與 `Edit` 的明確分工：單檔 Download 使用 Windows Save As；目錄 Download 選本機父目錄，於其下建立同名 root 後遞迴下載；使用者指定的下載完成後不會開啟 Notepad++。遠端 symlink 一律不遞迴。
+- `todo.md` 將已完成的下載實作項目標記完成，並保留 release 前未勾選的完整 manual QA 清單。
+- 驗證命令與結果：`& .\_build\tests\remote_download_plan.exe` -> `remote_download_plan_exit=0`；`& .\_build\tests\remote_browser_utils.exe` -> `remote_browser_utils_exit=0`；`& .\_build\tests\remote_list_keyboard.exe` -> `remote_list_keyboard_exit=0`；`.\build.bat -Arch x64 -Config Release` -> `NppFTP.vcxproj -> D:\mytools\NppFTP\_build\Release\NppFTP.dll` 且 `NppFTP-0.30.22-win64.zip generated.`；`git diff --check` 無 whitespace error。
+- `Get-FileHash .\_build\NppFTP-0.30.22-win64.zip -Algorithm SHA256`：`FD8CF21084DA8D101641748B99903EE42579F8363AFD634AFB16397BB01A0BD9`。
+- 尚未執行真實 FTP / FTPS / SFTP server QA；仍需驗證 Save As、資料夾遞迴、碰撞選擇、scan failure、queue progress 與完成摘要。
