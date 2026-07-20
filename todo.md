@@ -91,7 +91,8 @@
 - [x] Guard local output paths, skip remote symlinks, and resolve file collisions per batch.
 - [x] Show per-file queue progress and one directory-download failure summary.
 - [x] Add focused plan tests.
-- [ ] Run manual QA: file Save As cancel/success/no-open; folder picker root creation; nested files; overwrite/skip/all/cancel; local file/directory conflicts; scan failure; FTP/FTPS/SFTP queue progress and one summary.
+- [x] Manual QA: recursively download a remote directory to a selected local parent in Notepad++.
+- [ ] Run remaining manual QA: file Save As cancel/success/no-open; overwrite/skip/all/cancel; local file/directory conflicts; scan failure; FTP/FTPS/SFTP queue progress and one summary.
 
 ## Not now
 
