@@ -1,19 +1,55 @@
 #include "src/RemoteDownloadPlan.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+
+static int CreateJunction(const TCHAR * link, const TCHAR * target)
+{
+	TCHAR fullLink[MAX_PATH]{};
+	TCHAR fullTarget[MAX_PATH]{};
+	TCHAR command[MAX_PATH * 3]{};
+	if (GetFullPathName(link, MAX_PATH, fullLink, NULL) == 0 || GetFullPathName(target, MAX_PATH, fullTarget, NULL) == 0)
+		return -1;
+	if (_sntprintf_s(command, _countof(command), _TRUNCATE, TEXT("cmd.exe /D /C mklink /J \"%s\" \"%s\" >nul"), fullLink, fullTarget) < 0)
+		return -1;
+	return _tsystem(command);
+}
 
 int main()
 {
 	const TCHAR * parent = TEXT("_build\\tests\\remote_download_fixture");
 	const TCHAR * root = TEXT("_build\\tests\\remote_download_fixture\\html");
 	const TCHAR * assets = TEXT("_build\\tests\\remote_download_fixture\\html\\assets");
+	const TCHAR * reparseParent = TEXT("_build\\tests\\remote_download_fixture_junction");
+	const TCHAR * reparseTarget = TEXT("_build\\tests\\remote_download_fixture_junction_target");
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\assets\\app.js"));
 	DeleteFile(TEXT("_build\\tests\\remote_download_fixture\\html\\index.html"));
 	RemoveDirectory(assets);
 	RemoveDirectory(root);
 	RemoveDirectory(parent);
+	RemoveDirectory(reparseParent);
+	RemoveDirectory(reparseTarget);
 	assert(CreateDirectory(TEXT("_build\\tests"), NULL) || GetLastError() == ERROR_ALREADY_EXISTS);
 	assert(CreateDirectory(parent, NULL));
+
+	const char * reservedNames[] = {
+		"CON", "PRN", "AUX", "NUL", "COM1", "COM9", "LPT1", "LPT9",
+		"CON.txt", "PRN.txt", "AUX.txt", "NUL.txt", "COM1.txt", "LPT1.txt"
+	};
+	for (size_t i = 0; i < _countof(reservedNames); ++i) {
+		RemoteDownloadPlan reserved;
+		std::string remotePath = std::string("/var/www/") + reservedNames[i];
+		assert(reserved.Build(parent, remotePath.c_str()) != 0);
+	}
+
+	assert(CreateDirectory(reparseTarget, NULL));
+	assert(CreateJunction(reparseParent, reparseTarget) == 0);
+	DWORD reparseAttributes = GetFileAttributes(reparseParent);
+	assert(reparseAttributes != INVALID_FILE_ATTRIBUTES && (reparseAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0);
+	RemoteDownloadPlan reparse;
+	assert(reparse.Build(reparseParent, "/var/www/html") != 0);
+	assert(RemoveDirectory(reparseParent));
+	assert(RemoveDirectory(reparseTarget));
 
 	RemoteDownloadPlan plan;
 	assert(plan.Build(parent, "/var/www/html") == 0);

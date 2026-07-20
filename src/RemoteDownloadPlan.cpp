@@ -4,6 +4,17 @@
 #include <shlwapi.h>
 #include <string.h>
 
+static bool IsReservedDeviceName(const TCHAR * name)
+{
+	const TCHAR * extension = _tcschr(name, TEXT('.'));
+	int length = extension ? (int)(extension - name) : lstrlen(name);
+	if (length == 3 && (_tcsnicmp(name, TEXT("CON"), 3) == 0 || _tcsnicmp(name, TEXT("PRN"), 3) == 0 ||
+		_tcsnicmp(name, TEXT("AUX"), 3) == 0 || _tcsnicmp(name, TEXT("NUL"), 3) == 0))
+		return true;
+	return length == 4 && (name[3] >= TEXT('1') && name[3] <= TEXT('9')) &&
+		(_tcsnicmp(name, TEXT("COM"), 3) == 0 || _tcsnicmp(name, TEXT("LPT"), 3) == 0);
+}
+
 static bool IsLocalNameValid(const TCHAR * name)
 {
 	if (!name || !name[0] || lstrcmp(name, TEXT(".")) == 0 || lstrcmp(name, TEXT("..")) == 0)
@@ -11,6 +22,8 @@ static bool IsLocalNameValid(const TCHAR * name)
 
 	int length = lstrlen(name);
 	if (length >= MAX_PATH || name[length - 1] == TEXT('.') || name[length - 1] == TEXT(' '))
+		return false;
+	if (IsReservedDeviceName(name))
 		return false;
 
 	for (int i = 0; i < length; ++i) {
@@ -124,7 +137,8 @@ int RemoteDownloadPlan::Build(const TCHAR * localParent, const char * remoteRoot
 		return -1;
 
 	DWORD attributes = GetFileAttributes(localParent);
-	if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+	if (attributes == INVALID_FILE_ATTRIBUTES || (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0 ||
+		(attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
 		return -1;
 
 	const char * slash = strrchr(m_remoteRoot.c_str(), '/');
@@ -134,6 +148,9 @@ int RemoteDownloadPlan::Build(const TCHAR * localParent, const char * remoteRoot
 
 	TCHAR root[MAX_PATH]{};
 	if (!PathCombine(root, localParent, rootName.c_str()) || lstrlen(root) >= MAX_PATH)
+		return -1;
+	attributes = GetFileAttributes(root);
+	if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0)
 		return -1;
 	m_localRoot = root;
 	return AddItem(true, false, m_remoteRoot.c_str());
