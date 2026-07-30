@@ -97,7 +97,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 遠端瀏覽器：
 
 - 保留舊 tree code，先讓新 flat browser 可用再逐步替換。
-- 新增目前路徑、快速搜尋、Change dir combo。
+- 新增目前路徑、快速搜尋、Change dir combo；點一下目前路徑即可複製完整 remote path，並顯示標題為 `Remote path copied to clipboard`、兩秒後自動消失的提示。
 - 新增單層目錄清單、資料夾/檔案圖示、metadata 欄位與 header drag/drop。
 - 支援 double-click 或 Enter 進目錄與下載開檔。
 - Backspace 會以 server LIST 確認上層目錄後再切換；目錄載入失敗或較舊請求晚到時保留現有畫面。

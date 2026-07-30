@@ -616,3 +616,9 @@
 
 - 新增 `verify_third_party_sources.py`，會重用 `build_3rdparty.py` 的 URL 與 SHA-256，直接串流下載三個 archive 驗證；不寫入 tarball，任一來源失敗會回傳非零 exit code。
 - GitHub Actions `CI_build` run 29731266380 已成功完成 maintained Windows x64 建置與 DLL 封裝，確認新的 zlib tag archive 可穩定通過既有 checksum gate。
+
+## 2026-07-30 Copy current remote path
+
+- flat remote browser 的目前路徑改為可點擊控制項；點擊會以 Windows clipboard API 複製完整 remote path，Unicode build 使用 `CF_UNICODETEXT`，ANSI build 使用 `CF_TEXT`。滑鼠停在路徑上顯示手勢，clipboard 失敗才寫入 Output。
+- 成功複製後會在路徑下方顯示 non-blocking native balloon tooltip；標題為 `Remote path copied to clipboard`，內容為完整 remote path。尖角對準顯示路徑文字的 80% 處；不使用系統 notification、不搶焦點，兩秒後自動消失，重複點擊會更新文字並重新計時。
+- `git diff --check` 通過，`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP；ZIP SHA-256：`1FA26C7DBA57243B35429636872750751589D695240618A1D2DF4CA8E78632D3`。尚待 Notepad++ 實機確認點擊後可貼上完整路徑與提示。

@@ -117,6 +117,8 @@ protected:
 	virtual int				RestoreRemoteListFocus(FileObject * file);
 	virtual int				UpdateRemoteSortHeader();
 	virtual int				UpdateRemotePathControls();
+	virtual int				ShowRemotePathCopyTip();
+	virtual void				HideRemotePathCopyTip();
 	virtual int				AddRemoteRecentDir(const char * path);
 	virtual int				LoadRemoteRecentDirs(const TCHAR * prefix);
 	virtual int				NavigateRemotePathFromCombo();
@@ -167,6 +169,8 @@ protected:
 
 	HWND					m_remoteHostLabel;
 	HWND					m_remotePathLabel;
+	HWND					m_remotePathCopyTip;
+	TCHAR					m_remotePathCopyText[MAX_PATH + 16];
 	HWND					m_remoteSearchLabel;
 	HWND					m_remoteSearchEdit;
 	HWND					m_remoteDirLabel;

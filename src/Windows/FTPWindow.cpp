@@ -42,7 +42,12 @@ const TCHAR * FTPWindow::FTPWINDOWCLASS = TEXT("NPPFTPMAIN");
 
 enum {
 	IDC_REMOTE_SEARCH = 13001,
-	IDC_REMOTE_DIR = 13002
+	IDC_REMOTE_DIR = 13002,
+	IDC_REMOTE_PATH = 13003
+};
+
+enum {
+	REMOTE_PATH_COPY_TIP_TIMER = 13004
 };
 
 enum {
@@ -91,6 +96,47 @@ static void ResizeRemoteListColumns(HWND list, int width)
 	ListView_SetColumnWidth(list, REMOTE_COLUMN_TYPE, typeWidth);
 	ListView_SetColumnWidth(list, REMOTE_COLUMN_PERMISSIONS, permissionsWidth);
 }
+
+static int CopyWindowTextToClipboard(HWND owner, HWND source)
+{
+	int length = GetWindowTextLength(source);
+	SIZE_T size = (SIZE_T)(length + 1) * sizeof(TCHAR);
+	HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, size);
+	if (!memory)
+		return -1;
+
+	TCHAR * text = (TCHAR*)GlobalLock(memory);
+	if (!text) {
+		GlobalFree(memory);
+		return -1;
+	}
+	GetWindowText(source, text, length + 1);
+	GlobalUnlock(memory);
+
+	if (!OpenClipboard(owner)) {
+		GlobalFree(memory);
+		return -1;
+	}
+	if (!EmptyClipboard()) {
+		CloseClipboard();
+		GlobalFree(memory);
+		return -1;
+	}
+#ifdef UNICODE
+	UINT format = CF_UNICODETEXT;
+#else
+	UINT format = CF_TEXT;
+#endif
+	if (!SetClipboardData(format, memory)) {
+		CloseClipboard();
+		GlobalFree(memory);
+		return -1;
+	}
+	CloseClipboard();
+	return 0;
+}
+
+static const TCHAR remotePathCopyTipTitle[] = TEXT("Remote path copied to clipboard");
 
 static void FormatRemoteModifiedTime(FILETIME modified, TCHAR * buffer, size_t bufferCount)
 {
@@ -153,6 +199,7 @@ FTPWindow::FTPWindow() :
 	m_localFileExists(false),
 	m_remoteHostLabel(NULL),
 	m_remotePathLabel(NULL),
+	m_remotePathCopyTip(NULL),
 	m_remoteSearchLabel(NULL),
 	m_remoteSearchEdit(NULL),
 	m_remoteDirLabel(NULL),
@@ -176,6 +223,7 @@ FTPWindow::FTPWindow() :
 {
 	m_remotePendingPath[0] = 0;
 	m_remotePendingFocusPath[0] = 0;
+	m_remotePathCopyText[0] = 0;
 	m_exStyle = 0;
 	m_style = 0;
 
@@ -460,7 +508,7 @@ int FTPWindow::CreateRemoteBrowser() {
 	HFONT font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 
 	m_remoteHostLabel = CreateWindowEx(0, TEXT("STATIC"), TEXT("FTP:"), WS_CHILD, 0, 0, 0, 0, m_hwnd, NULL, m_hInstance, NULL);
-	m_remotePathLabel = CreateWindowEx(0, TEXT("STATIC"), TEXT("/"), WS_CHILD, 0, 0, 0, 0, m_hwnd, NULL, m_hInstance, NULL);
+	m_remotePathLabel = CreateWindowEx(0, TEXT("STATIC"), TEXT("/"), WS_CHILD | SS_NOTIFY, 0, 0, 0, 0, m_hwnd, (HMENU)IDC_REMOTE_PATH, m_hInstance, NULL);
 	m_remoteSearchLabel = CreateWindowEx(0, TEXT("STATIC"), TEXT("Quick search:"), WS_CHILD, 0, 0, 0, 0, m_hwnd, NULL, m_hInstance, NULL);
 	m_remoteSearchEdit = CreateWindowEx(WS_EX_CLIENTEDGE, TEXT("EDIT"), TEXT(""), WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL, 0, 0, 0, 0, m_hwnd, (HMENU)IDC_REMOTE_SEARCH, m_hInstance, NULL);
 	m_remoteDirLabel = CreateWindowEx(0, TEXT("STATIC"), TEXT("Change dir:"), WS_CHILD, 0, 0, 0, 0, m_hwnd, NULL, m_hInstance, NULL);
@@ -492,6 +540,10 @@ int FTPWindow::CreateRemoteBrowser() {
 }
 
 int FTPWindow::DestroyRemoteBrowser() {
+	HideRemotePathCopyTip();
+	if (m_remotePathCopyTip)
+		DestroyWindow(m_remotePathCopyTip);
+	m_remotePathCopyTip = NULL;
 	if (m_remoteDirEdit)
 		RemoveWindowSubclass(m_remoteDirEdit, FTPWindow::RemoteDirEditProc, 1);
 	if (m_remoteList)
@@ -693,6 +745,65 @@ int FTPWindow::UpdateRemotePathControls() {
 	SU::FreeTChar(path);
 
 	return 0;
+}
+
+int FTPWindow::ShowRemotePathCopyTip() {
+	if (!m_remotePathLabel)
+		return -1;
+
+	TCHAR path[MAX_PATH]{};
+	GetWindowText(m_remotePathLabel, path, MAX_PATH);
+	lstrcpyn(m_remotePathCopyText, path, MAX_PATH + 16);
+
+	TOOLINFO tool{};
+	tool.cbSize = sizeof(tool);
+	tool.uFlags = TTF_TRACK | TTF_ABSOLUTE | TTF_IDISHWND;
+	tool.hwnd = m_hwnd;
+	tool.uId = (UINT_PTR)m_remotePathLabel;
+	tool.lpszText = m_remotePathCopyText;
+	if (!m_remotePathCopyTip) {
+		m_remotePathCopyTip = CreateWindowEx(WS_EX_TOPMOST | WS_EX_NOACTIVATE, TOOLTIPS_CLASS, NULL,
+			WS_POPUP | TTS_ALWAYSTIP | TTS_BALLOON | TTS_NOPREFIX, 0, 0, 0, 0, m_hwnd, NULL, m_hInstance, NULL);
+		if (!m_remotePathCopyTip)
+			return -1;
+		SendMessage(m_remotePathCopyTip, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), FALSE);
+		SendMessage(m_remotePathCopyTip, TTM_SETTITLE, 0, (LPARAM)remotePathCopyTipTitle);
+		SendMessage(m_remotePathCopyTip, TTM_ADDTOOL, 0, (LPARAM)&tool);
+		SendMessage(m_remotePathCopyTip, TTM_SETMAXTIPWIDTH, 0, 420);
+	} else {
+		SendMessage(m_remotePathCopyTip, TTM_UPDATETIPTEXT, 0, (LPARAM)&tool);
+	}
+
+	RECT rect{};
+	GetWindowRect(m_remotePathLabel, &rect);
+	int tipX = rect.left;
+	HDC dc = GetDC(m_remotePathLabel);
+	if (dc) {
+		SIZE textSize{};
+		GetTextExtentPoint32(dc, m_remotePathCopyText, lstrlen(m_remotePathCopyText), &textSize);
+		ReleaseDC(m_remotePathLabel, dc);
+		tipX += textSize.cx * 4 / 5;
+	}
+	if (tipX >= rect.right)
+		tipX = rect.right - 1;
+	SendMessage(m_remotePathCopyTip, TTM_TRACKPOSITION, 0, MAKELPARAM(tipX, rect.bottom + 3));
+	SendMessage(m_remotePathCopyTip, TTM_TRACKACTIVATE, TRUE, (LPARAM)&tool);
+	SetTimer(m_hwnd, REMOTE_PATH_COPY_TIP_TIMER, 2000, NULL);
+	return 0;
+}
+
+void FTPWindow::HideRemotePathCopyTip() {
+	KillTimer(m_hwnd, REMOTE_PATH_COPY_TIP_TIMER);
+	if (!m_remotePathCopyTip)
+		return;
+
+	TOOLINFO tool{};
+	tool.cbSize = sizeof(tool);
+	tool.uFlags = TTF_TRACK | TTF_ABSOLUTE | TTF_IDISHWND;
+	tool.hwnd = m_hwnd;
+	tool.uId = (UINT_PTR)m_remotePathLabel;
+	SendMessage(m_remotePathCopyTip, TTM_TRACKACTIVATE, FALSE, (LPARAM)&tool);
+	ShowWindow(m_remotePathCopyTip, SW_HIDE);
 }
 
 int FTPWindow::AddRemoteRecentDir(const char * path) {
@@ -1238,12 +1349,22 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 					return TRUE;
 				}
 			}
+			if (m_remoteBrowserShown && (HWND)wParam == m_remotePathLabel) {
+				SetCursor(LoadCursor(NULL, IDC_HAND));
+				return TRUE;
+			}
 			return FALSE;
 			break; }
 		case WM_CAPTURECHANGED: {
 			m_splitter.OnCaptureChanged((HWND)lParam);
 			if (m_remoteBrowserShown)
 				LayoutRemoteBrowser();
+			break; }
+		case WM_TIMER: {
+			if (wParam == REMOTE_PATH_COPY_TIP_TIMER) {
+				HideRemotePathCopyTip();
+				result = TRUE;
+			}
 			break; }
 		case WM_LBUTTONDOWN: {
 			m_splitter.OnButtonDown();
@@ -1322,6 +1443,15 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 			break; }
 		case WM_COMMAND: {
 			switch(LOWORD(wParam)) {
+				case IDC_REMOTE_PATH: {
+					if (HIWORD(wParam) == STN_CLICKED) {
+						if (CopyWindowTextToClipboard(m_hwnd, m_remotePathLabel) != 0)
+							OutErr("Unable to copy remote path to clipboard");
+						else
+							ShowRemotePathCopyTip();
+					}
+					result = TRUE;
+					break; }
 				case IDC_REMOTE_SEARCH: {
 					if (HIWORD(wParam) == EN_CHANGE)
 						FillRemoteList();
