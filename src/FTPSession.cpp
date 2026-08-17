@@ -19,6 +19,7 @@
 #include "StdInc.h"
 #include "FTPSession.h"
 
+#include "ConcurrentUploadScheduler.h"
 #include "FTPWindow.h"
 
 void CALLBACK FTPSessionTimerProc(PVOID lpHandle, BOOLEAN /*TimerOrWaitFired*/) {
@@ -35,6 +36,7 @@ FTPSession::FTPSession() :
 
 	m_mainQueue(NULL),
 	m_transferQueue(NULL),
+	m_uploadScheduler(NULL),
 
 	m_running(false),
 
@@ -106,12 +108,30 @@ int FTPSession::StartSession(FTPProfile * sessionProfile) {
 
 	m_mainWrapper->SetCertificates(m_certificates);
 	m_transferWrapper = m_mainWrapper->Clone();
+	if (!m_transferWrapper) {
+		Clear();
+		m_currentProfile->Release();
+		m_currentProfile = NULL;
+		return -1;
+	}
 
 	m_mainQueue = new FTPQueue(m_mainWrapper);
 	m_transferQueue = new FTPQueue(m_transferWrapper);
 
-	m_mainQueue->Initialize();
-	m_transferQueue->Initialize();
+	if (m_mainQueue->Initialize() != 0 || m_transferQueue->Initialize() != 0) {
+		Clear();
+		m_currentProfile->Release();
+		m_currentProfile = NULL;
+		return -1;
+	}
+
+	m_uploadScheduler = new ConcurrentUploadScheduler(m_hNotify, m_mainWrapper, m_ftpSettings->GetMaxConcurrentUploads());
+	if (m_uploadScheduler->Initialize() != 0) {
+		Clear();
+		m_currentProfile->Release();
+		m_currentProfile = NULL;
+		return -1;
+	}
 
 	m_rootObject = new FileObject("/", true, false);
 	m_rootObject->SetParent(m_rootObject);
@@ -130,7 +150,10 @@ int FTPSession::TerminateSession() {
 		return 0;
 	}
 
-	if (m_transferQueue->GetQueueSize() > 0) {
+	int transferCount = m_transferQueue ? m_transferQueue->GetQueueSize() : 0;
+	if (m_uploadScheduler)
+		transferCount += m_uploadScheduler->GetQueueSize();
+	if (transferCount > 0) {
 		int ret = ::MessageBox(_MainOutputWindow, TEXT("There are still transfers running, do you want to close the connection?"), TEXT("Closing connection"), MB_YESNO);
 		if (ret != IDYES)
 			return -1;
@@ -404,7 +427,7 @@ int FTPSession::UploadFileCache(const TCHAR * sourcefile) {
 	return UploadFile(sourcefile, target, false, 0);
 }
 
-int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code) {
+int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code, UploadPriority priority) {
 	if (!m_running) {
 		OutErr("[UploadFile] m_running is not set");
 		return -1;
@@ -427,13 +450,15 @@ int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool t
 
 	Transfer_Mode tMode = m_currentProfile->GetFileTransferMode(sourcenamelocal);
 	QueueUpload * uldop = new QueueUpload(m_hNotify, targetfile, sourcefile, tMode, code);
-	m_transferQueue->AddQueueOp(uldop);
+	int result = m_uploadScheduler ? m_uploadScheduler->AddQueueOp(uldop, priority) : -1;
+	if (!m_uploadScheduler)
+		delete uldop;
 
 	if (targetIsDir) {
 		delete [] targetfile;
 	}
 
-	return 0;
+	return result;
 }
 
 int FTPSession::ScanRemoteUploadPlan(RemoteUploadPlan * plan) {
@@ -712,16 +737,34 @@ int FTPSession::AbortOperation() {
 }
 
 int FTPSession::AbortTransfer() {
-	return m_transferWrapper->Abort();
+	int result = 0;
+	if (m_transferWrapper && m_transferWrapper->Abort() != 0)
+		result = -1;
+	if (m_uploadScheduler && m_uploadScheduler->AbortActive() != 0)
+		result = -1;
+	return result;
 }
 
 int FTPSession::CancelOperation(QueueOperation * cancelOp) {
-	return m_transferQueue->CancelQueueOp(cancelOp);
+	if (!cancelOp)
+		return -1;
+	if (cancelOp->GetType() == QueueOperation::QueueTypeUpload && m_uploadScheduler) {
+		int result = m_uploadScheduler->CancelQueueOp(cancelOp);
+		if (result <= 0)
+			return result;
+	}
+	return m_transferQueue ? m_transferQueue->CancelQueueOp(cancelOp) : -1;
 }
 
 int FTPSession::Clear() {
 
 	OutDebug("[FTPSession.Clear] Now clearing the transfer queue.");
+
+	if (m_uploadScheduler) {
+		m_uploadScheduler->Deinitialize();
+		delete m_uploadScheduler;
+		m_uploadScheduler = NULL;
+	}
 
 	if (m_mainQueue)
 		m_mainQueue->ClearQueue();

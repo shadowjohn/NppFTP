@@ -57,6 +57,10 @@ int QueueOperation::Terminate() {
 void QueueOperation::OnQueueCanceled() {
 }
 
+QueueOperation * QueueOperation::OnQueueTerminal() {
+	return NULL;
+}
+
 int QueueOperation::GetResult() const {
 	return m_result;
 }

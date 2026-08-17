@@ -201,6 +201,7 @@ protected:
 
 	bool					m_connecting;
 	bool					m_busy;
+	int						m_activeTransferCount;
 	QueueOperation*			m_cancelOperation;
 
 	DragDropWindow			m_dndWindow;

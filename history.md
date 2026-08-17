@@ -665,3 +665,12 @@
 - focused round-trip test 改用明確 return code，不再依賴 Release build 會移除的 `assert`；並涵蓋三種 malformed attribute。
 - Global settings 初始化時以 `UDM_SETBUDDY` 明確連結 1-8 spin control 與「同時上傳數量」edit，並用 `UDM_SETPOS32` 同步初始值，確保箭頭變更的是實際儲存欄位。
 - x64 Release focused test 與 package build 均通過；`NppFTP.rc` 的 UTF-8 無 BOM 與 `#pragma code_page(65001)` 保持不變。真實 Notepad++ UI/restart QA 仍待執行。
+
+## 2026-08-17 Route single-file uploads through concurrent workers
+
+- `FTPSession` 在 main wrapper 完成 profile 與 certificate 設定後，依全域 1-8 設定建立 `ConcurrentUploadScheduler`；不等待 main connection 完成，各 clone worker 延用 `QueueUpload` 的既有 auto-connect 行為。single-file 手動上傳與 cache upload 進 scheduler，現階段全部保持 normal priority。
+- download、remote browse、copy、mutation 與既有 recursive upload plan 仍留在序列 `m_transferQueue`／`m_mainQueue`；recursive batch 重整與 save urgent priority 明確保留給 Task 4、Task 5。
+- session disconnect 提示會計入 scheduler 工作；Abort 會同時中止序列 transfer 與所有 active upload worker。queue 單筆取消可分辨 scheduler 未命中、等待中已取消及 active 不可取消，尚未重整的 recursive upload 仍能 fallback 到原 transfer queue。
+- `Clear()` 與 StartSession failure 會先 deinitialize/delete scheduler，再釋放其 prototype wrapper。`QueueOperation::OnQueueTerminal()` 與 `FTPQueue` 的 ack 後 follow-up 基礎已接好，但本 task 沒有替 recursive upload 加 override。
+- FTPWindow 改以 active transfer count 維持 busy/Abort 狀態，避免其中一個並行 worker 結束時誤把其他 active transfer 標成 idle。
+- `NppFTP_ConcurrentUploadScheduler` Release focused test 與 `ftp_session_upload_routing.ps1` 均輸出 exit=0；`build.bat -Arch x64 -Config Release` 成功產出 `_build\\Release\\NppFTP.dll` 與 ZIP。既有 UTCP code-page／legacy conversion warnings 仍存在，未新增 build error。真實 FTP／FTPS／SFTP、Notepad++ task window、Abort/cancel 與 setting=1 相容性仍待實機 QA。

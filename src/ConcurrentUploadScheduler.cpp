@@ -223,13 +223,14 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 		return 0;
 	}
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		if ((*it)->queue->CancelQueueOp(op) == -1) {
+		int result = (*it)->queue->CancelQueueOp(op);
+		if (result <= 0) {
 			m_monitor->Exit();
-			return -1;
+			return result;
 		}
 	}
 	m_monitor->Exit();
-	return 0;
+	return 1;
 }
 
 int ConcurrentUploadScheduler::AbortActive() {

@@ -216,6 +216,7 @@ FTPWindow::FTPWindow() :
 	m_ftpSettings(NULL),
 	m_connecting(false),
 	m_busy(false),
+	m_activeTransferCount(0),
 	m_cancelOperation(NULL),
 	m_dndWindow(this),
 	m_currentDropObject(NULL),
@@ -2481,7 +2482,11 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 		case QueueOperation::QueueTypeDownloadHandle:
 		case QueueOperation::QueueTypeCopyFile:
 		case QueueOperation::QueueTypeUpload: {
-			m_busy = isStart;
+			if (isStart)
+				++m_activeTransferCount;
+			else if (m_activeTransferCount > 0)
+				--m_activeTransferCount;
+			m_busy = m_activeTransferCount > 0;
 			if (!isStart && (queueOp->GetType() == QueueOperation::QueueTypeDownload ||
 				queueOp->GetType() == QueueOperation::QueueTypeDownloadHandle))
 				m_remoteBusyCursor = false;

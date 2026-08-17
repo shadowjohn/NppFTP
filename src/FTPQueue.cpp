@@ -71,6 +71,8 @@ int FTPQueue::Deinitialize() {
 			m_queue.front()->SendNotification(QueueOperation::QueueEventEnd);
 			//m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
 		}
+		for (VQueue::iterator it = m_queue.begin(); it != m_queue.end(); ++it)
+			(*it)->Terminate();
 
 		m_monitor->Signal(ConditionQueueOps);
 		m_monitor->Wait(ConditionQueueStop);
@@ -166,6 +168,7 @@ int FTPQueue::ClearQueue() {
 }
 
 int FTPQueue::CancelQueueOp(QueueOperation * op) {
+	int result = 1;
 	m_monitor->Enter();
 		if (m_performing) {
 			if (op == m_queue.front()) {
@@ -182,12 +185,13 @@ int FTPQueue::CancelQueueOp(QueueOperation * op) {
 				queueop->OnQueueCanceled();
 				queueop->SendNotification(QueueOperation::QueueEventRemove);
 				delete queueop;
+				result = 0;
 				break;
 			}
 		}
 	m_monitor->Exit();
 
-	return 0;
+	return result;
 }
 
 int FTPQueue::QueueLoop() {
@@ -215,6 +219,21 @@ int FTPQueue::QueueLoop() {
 		op->Perform();
 		op->SetRunning(false);
 		op->SendNotification(QueueOperation::QueueEventEnd);
+		QueueOperation * terminalOp = op->OnQueueTerminal();
+		if (terminalOp)
+			terminalOp->SetClient(m_wrapper);
+
+		m_monitor->Enter();
+			if (terminalOp && !m_stopping)
+				m_queue.push_back(terminalOp);
+			else if (terminalOp) {
+				delete terminalOp;
+				terminalOp = NULL;
+			}
+		m_monitor->Exit();
+
+		if (terminalOp)
+			terminalOp->SendNotification(QueueOperation::QueueEventAdd);
 
 		if (m_stopping)
 			break;

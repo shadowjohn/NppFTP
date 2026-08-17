@@ -24,8 +24,10 @@
 #include "FTPCache.h"
 #include "FTPQueue.h"
 #include "SSLCertificates.h"
+#include "UploadSchedulingPolicy.h"
 
 class FTPWindow;
+class ConcurrentUploadScheduler;
 
 class FTPSession {
 public:
@@ -55,7 +57,7 @@ public:
 	int						DownloadFileHandle(const char * sourcefile, HANDLE target);
 
 	int						UploadFileCache(const TCHAR * sourcefile);	//return 0 on upload, -1 on error, 1 when no cache match was found
-	int						UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code = 1);
+	int						UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code = 1, UploadPriority priority = UploadPriorityNormal);
 	int						ScanRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						QueueRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						ScanRemoteDownloadPlan(RemoteDownloadPlan * plan);
@@ -92,6 +94,7 @@ private:
 
 	FTPQueue*				m_mainQueue;		//file/directory operations
 	FTPQueue*				m_transferQueue;	//file transfers
+	ConcurrentUploadScheduler* m_uploadScheduler;	//single-file uploads
 
 	bool					m_running;
 

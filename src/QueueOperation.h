@@ -61,6 +61,7 @@ public:
 	virtual int				Perform() = 0;
 	virtual int				Terminate();
 	virtual void				OnQueueCanceled();
+	virtual QueueOperation*	OnQueueTerminal();
 
 	virtual int				GetResult() const;
 	virtual void*			GetNotifyData() const;
