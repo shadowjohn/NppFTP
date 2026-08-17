@@ -62,6 +62,7 @@ public:
 	virtual int				Terminate();
 	virtual void				OnQueueCanceled();
 	virtual QueueOperation*	OnQueueTerminal();
+	virtual bool				WasCanceled() const;
 
 	virtual int				GetResult() const;
 	virtual void*			GetNotifyData() const;
@@ -101,6 +102,7 @@ protected:
 	unsigned int			m_notifSent;
 
 	bool					m_running;
+	volatile LONG			m_canceled;
 
 	Monitor					m_ackMonitor;
 	bool					m_terminating;
@@ -164,12 +166,14 @@ public:
 
 	virtual int				Perform();
 	virtual bool			Equals(const QueueOperation & other);
+	virtual QueueOperation *	OnQueueTerminal();
 	virtual RemoteUploadBatch * GetBatch() const;
 	virtual const std::vector<RemoteUploadPrepareFailure> & GetFailures() const;
 
 protected:
 	RemoteUploadBatch *		m_batch;
 	std::vector<RemoteUploadPrepareFailure> m_failures;
+	volatile LONG			m_terminalRecorded;
 };
 
 class QueueEnsureDirectory : public QueueOperation {
@@ -321,8 +325,7 @@ public:
 
 protected:
 	RemoteUploadBatch *		m_batch;
-	volatile LONG			m_cancelRecorded;
-	volatile LONG			m_terminalRecorded;
+	RemoteUploadFileTerminalState m_terminalState;
 };
 
 class QueueGetDir : public QueueOperation {

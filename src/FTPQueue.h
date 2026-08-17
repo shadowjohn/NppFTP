@@ -24,7 +24,7 @@
 #include "QueueOperation.h"
 
 typedef std::deque<QueueOperation*> VQueue;
-typedef void (*FTPQueueTerminalCallback)(void * context, QueueOperation * operation);
+typedef void (*FTPQueueTerminalCallback)(void * context, QueueOperation * operation, QueueOperation * followUp);
 
 /*
 Some notes about threading:
@@ -43,8 +43,9 @@ public:
 
 	virtual int				AddQueueOp(QueueOperation * op, bool sendAddNotification = true);
 	virtual int				GetQueueSize() const;
-	virtual int				ClearQueue();
+	virtual int				ClearQueue(bool suppressTerminalFollowUps = false);
 	virtual int				CancelQueueOp(QueueOperation * op, QueueOperation ** terminalOp = NULL, bool notifyTerminalCallback = true);
+	virtual int				AbortActive();
 
 	virtual int				QueueLoop();
 
@@ -59,6 +60,7 @@ private:
 	bool					m_stopping;
 	bool					m_performing;
 	QueueOperation*			m_activeOp;
+	QueueOperation*			m_activeTerminalOp;
 	HANDLE					m_threadHandle;
 	FTPQueueTerminalCallback m_terminalCallback;
 	void*					m_terminalContext;

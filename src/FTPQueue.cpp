@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "FTPQueue.h"
+#include "QueueTerminalLifecycle.h"
 #include "file_size_utils.h"
 
 #include <memory>
@@ -33,6 +34,7 @@ FTPQueue::FTPQueue(FTPClientWrapper* wrapper, FTPQueueTerminalCallback terminalC
 	m_stopping(false),
 	m_performing(false),
 	m_activeOp(NULL),
+	m_activeTerminalOp(NULL),
 	m_threadHandle(NULL),
 	m_terminalCallback(terminalCallback),
 	m_terminalContext(terminalContext)
@@ -93,18 +95,30 @@ int FTPQueue::Deinitialize() {
 	}
 
 	while (!m_queue.empty()) {
+		QueueOperation * op = m_queue.front();
+		QueueOperation * terminalOp = NULL;
 		//Remove any remaining messages (most notably Progress messages)
-		if (m_queue.front() != m_activeOp)
-			m_queue.front()->OnQueueCanceled();
-		m_queue.front()->ClearPendingNotifications();
-		m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
-		delete m_queue.front();
+		if (op != m_activeOp)
+			terminalOp = queue_cancel_and_take_terminal(op);
+		else {
+			terminalOp = m_activeTerminalOp;
+			m_activeTerminalOp = NULL;
+		}
+		op->ClearPendingNotifications();
+		op->SendNotification(QueueOperation::QueueEventRemove);
 		m_queue.pop_front();
+		if (m_terminalCallback)
+			m_terminalCallback(m_terminalContext, op, terminalOp);
+		else
+			delete terminalOp;
+		delete op;
 	}
 
 	m_running = false;
 	m_stopping = false;
 	m_performing = false;
+	m_activeOp = NULL;
+	m_activeTerminalOp = NULL;
 
 	return 0;
 }
@@ -147,7 +161,7 @@ int FTPQueue::GetQueueSize() const {
 	return res;
 }
 
-int FTPQueue::ClearQueue() {
+int FTPQueue::ClearQueue(bool suppressTerminalFollowUps) {
 	QueueOperation * op = NULL;
 	VQueue completionMarkers;
 
@@ -159,14 +173,22 @@ int FTPQueue::ClearQueue() {
 		while (!m_queue.empty()) {
 			QueueOperation * pending = m_queue.front();
 			m_queue.pop_front();
-			// Keep download completion markers so canceled file counts can be summarized after any active transfer.
-			if (pending->GetType() == QueueOperation::QueueTypeRemoteDownloadComplete) {
+			bool isCompletionMarker = pending->GetType() == QueueOperation::QueueTypeRemoteUploadComplete ||
+				pending->GetType() == QueueOperation::QueueTypeRemoteDownloadComplete;
+			// Outside session teardown, preserve completion markers after any active transfer.
+			if (isCompletionMarker && !suppressTerminalFollowUps) {
 				completionMarkers.push_back(pending);
 				continue;
 			}
-			pending->OnQueueCanceled();
+			QueueOperation * terminalOp = isCompletionMarker ? NULL : queue_cancel_and_take_terminal(pending);
+			terminalOp = queue_filter_terminal_follow_up(terminalOp, suppressTerminalFollowUps);
 			pending->SendNotification(QueueOperation::QueueEventRemove);
 			delete pending;
+			if (terminalOp) {
+				terminalOp->SetClient(m_wrapper);
+				terminalOp->SendNotification(QueueOperation::QueueEventAdd);
+				completionMarkers.push_back(terminalOp);
+			}
 		}
 		if (m_performing) {
 			m_queue.push_back(op);
@@ -211,15 +233,26 @@ int FTPQueue::CancelQueueOp(QueueOperation * op, QueueOperation ** terminalOp, b
 	canceled->SendNotification(QueueOperation::QueueEventRemove);
 	QueueOperation * followUp = canceled->OnQueueTerminal();
 	if (notifyTerminalCallback && m_terminalCallback)
-		m_terminalCallback(m_terminalContext, canceled);
+		m_terminalCallback(m_terminalContext, canceled, followUp);
 	delete canceled;
 
 	if (terminalOp) {
 		*terminalOp = followUp;
-	} else if (followUp) {
+	} else if (followUp && (!notifyTerminalCallback || !m_terminalCallback)) {
 		AddQueueOp(followUp);
 	}
 	return 0;
+}
+
+int FTPQueue::AbortActive() {
+	bool active = false;
+	m_monitor->Enter();
+		if (m_performing && m_activeOp) {
+			m_activeOp->OnQueueCanceled();
+			active = true;
+		}
+	m_monitor->Exit();
+	return active ? m_wrapper->Abort() : 0;
 }
 
 int FTPQueue::QueueLoop() {
@@ -246,21 +279,17 @@ int FTPQueue::QueueLoop() {
 		Sleep(500);
 		op->Perform();
 		op->SetRunning(false);
-		op->SendNotification(QueueOperation::QueueEventEnd);
-		QueueOperation * terminalOp = op->OnQueueTerminal();
-		if (terminalOp)
-			terminalOp->SetClient(m_wrapper);
+		QueueOperation * terminalOp = queue_end_and_take_terminal(op, QueueOperation::QueueEventEnd);
 
 		m_monitor->Enter();
-			if (terminalOp && !m_stopping)
+			if (terminalOp && !m_stopping) {
+				terminalOp->SetClient(m_wrapper);
 				m_queue.push_back(terminalOp);
-			else if (terminalOp) {
-				delete terminalOp;
-				terminalOp = NULL;
-			}
+			} else if (terminalOp)
+				m_activeTerminalOp = terminalOp;
 		m_monitor->Exit();
 
-		if (terminalOp)
+		if (terminalOp && !m_stopping)
 			terminalOp->SendNotification(QueueOperation::QueueEventAdd);
 
 		if (m_stopping)
@@ -275,7 +304,7 @@ int FTPQueue::QueueLoop() {
 		m_monitor->Exit();
 
 		if (m_terminalCallback)
-			m_terminalCallback(m_terminalContext, op);
+			m_terminalCallback(m_terminalContext, op, NULL);
 		delete op;
 	}
 

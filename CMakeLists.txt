@@ -150,6 +150,15 @@ set_target_properties(NppFTP_ConcurrentUploadScheduler PROPERTIES
 )
 target_link_libraries(NppFTP_ConcurrentUploadScheduler shlwapi)
 
+add_executable (NppFTP_RemoteUploadPlan
+    tests/remote_upload_plan.cpp
+    src/RemoteUploadPlan.cpp
+)
+set_target_properties(NppFTP_RemoteUploadPlan PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+target_link_libraries(NppFTP_RemoteUploadPlan shlwapi)
+
 add_executable (NppFTP_CertificateStoreLock
     tests/certificate_store_lock.cpp
     src/CertificateStoreLock.cpp

@@ -14,6 +14,7 @@
 #include "FTPQueue.h"
 #include "Monitor.h"
 #include "QueueOperation.h"
+#include "QueueTerminalLifecycle.h"
 
 struct ConcurrentUploadScheduler::Worker {
 	Worker(ConcurrentUploadScheduler * scheduler, FTPClientWrapper * workerWrapper) :
@@ -30,8 +31,9 @@ struct ConcurrentUploadScheduler::Worker {
 
 const int ConditionSchedulerState = 0;
 
-ConcurrentUploadScheduler::ConcurrentUploadScheduler(HWND, FTPClientWrapper * prototype, int workerCount) :
+ConcurrentUploadScheduler::ConcurrentUploadScheduler(HWND, FTPClientWrapper * prototype, int workerCount, FTPQueue * terminalQueue) :
 	m_prototype(prototype),
+	m_terminalQueue(terminalQueue),
 	m_monitor(new Monitor(1)),
 	m_dispatchThread(NULL),
 	m_workerCount(workerCount),
@@ -122,7 +124,7 @@ int ConcurrentUploadScheduler::Deinitialize() {
 	for (std::deque<PendingAdd>::iterator it = m_pendingAdds.begin(); it != m_pendingAdds.end(); ++it)
 		it->operation->Terminate();
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		(*it)->wrapper->Abort();
+		(*it)->queue->AbortActive();
 	}
 	HANDLE dispatchThread = m_dispatchThread;
 	m_monitor->Exit();
@@ -157,7 +159,9 @@ int ConcurrentUploadScheduler::AddQueueOp(QueueOperation * op, UploadPriority pr
 	m_monitor->Enter();
 	if (!m_accepting) {
 		m_monitor->Exit();
+		QueueOperation * terminalOp = queue_cancel_and_take_terminal(op);
 		delete op;
+		QueueTerminalFollowUp(terminalOp);
 		return -1;
 	}
 	QueueOperation * duplicate = FindWaitingDuplicateLocked(*op);
@@ -171,7 +175,9 @@ int ConcurrentUploadScheduler::AddQueueOp(QueueOperation * op, UploadPriority pr
 			else
 				pendingDuplicate->priority = UploadPriorityUrgent;
 		m_monitor->Exit();
+		QueueOperation * terminalOp = queue_cancel_and_take_terminal(op);
 		delete op;
+		QueueTerminalFollowUp(terminalOp);
 		return 0;
 	}
 	m_pendingAdds.push_back(PendingAdd(op, priority));
@@ -200,12 +206,10 @@ int ConcurrentUploadScheduler::AddQueueOp(QueueOperation * op, UploadPriority pr
 	if (!canceled)
 		return 0;
 
-	op->OnQueueCanceled();
 	op->SendNotification(QueueOperation::QueueEventRemove);
-	QueueOperation * terminalOp = op->OnQueueTerminal();
+	QueueOperation * terminalOp = queue_cancel_and_take_terminal(op);
 	delete op;
-	if (terminalOp)
-		AddQueueOp(terminalOp, UploadPriorityNormal);
+	QueueTerminalFollowUp(terminalOp);
 	return -1;
 }
 
@@ -223,12 +227,10 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 	}
 	if (m_policy.Remove(op)) {
 		m_monitor->Exit();
-		op->OnQueueCanceled();
 		op->SendNotification(QueueOperation::QueueEventRemove);
-		QueueOperation * terminalOp = op->OnQueueTerminal();
+		QueueOperation * terminalOp = queue_cancel_and_take_terminal(op);
 		delete op;
-		if (terminalOp)
-			AddQueueOp(terminalOp, UploadPriorityNormal);
+		QueueTerminalFollowUp(terminalOp);
 		return 0;
 	}
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
@@ -247,8 +249,7 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 		if (result == 0) {
 			worker->operations.erase(assigned);
 			m_monitor->Exit();
-			if (terminalOp)
-				AddQueueOp(terminalOp, UploadPriorityNormal);
+			QueueTerminalFollowUp(terminalOp);
 			return 0;
 		}
 		if (result <= 0) {
@@ -261,13 +262,14 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 }
 
 int ConcurrentUploadScheduler::AbortActive() {
+	int result = 0;
 	m_monitor->Enter();
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		if ((*it)->queue->GetQueueSize() > 0)
-			(*it)->wrapper->Abort();
+		if ((*it)->queue->AbortActive() != 0)
+			result = -1;
 	}
 	m_monitor->Exit();
-	return 0;
+	return result;
 }
 
 int ConcurrentUploadScheduler::GetQueueSize() const {
@@ -369,10 +371,11 @@ void ConcurrentUploadScheduler::DeletePendingOperations() {
 		m_monitor->Exit();
 		if (!op)
 			break;
-		op->OnQueueCanceled();
+		QueueOperation * terminalOp = queue_cancel_and_take_terminal(op);
 		op->ClearPendingNotifications();
 		op->SendNotification(QueueOperation::QueueEventRemove);
 		delete op;
+		QueueTerminalFollowUp(terminalOp);
 	}
 }
 
@@ -386,7 +389,7 @@ void ConcurrentUploadScheduler::DeleteWorkers() {
 
 void ConcurrentUploadScheduler::DeleteWorkerList(std::vector<Worker*> & workers) {
 	for (std::vector<Worker*>::iterator it = workers.begin(); it != workers.end(); ++it) {
-		(*it)->wrapper->Abort();
+		(*it)->queue->AbortActive();
 		(*it)->queue->Deinitialize();
 		(*it)->wrapper->Disconnect();
 		delete (*it)->queue;
@@ -396,7 +399,23 @@ void ConcurrentUploadScheduler::DeleteWorkerList(std::vector<Worker*> & workers)
 	workers.clear();
 }
 
-void ConcurrentUploadScheduler::WorkerOperationTerminal(void * context, QueueOperation * op) {
+void ConcurrentUploadScheduler::QueueTerminalFollowUp(QueueOperation * followUp) {
+	if (!followUp)
+		return;
+	m_monitor->Enter();
+	bool suppress = m_stopping;
+	m_monitor->Exit();
+	followUp = queue_filter_terminal_follow_up(followUp, suppress);
+	if (!followUp)
+		return;
+	if (m_terminalQueue) {
+		m_terminalQueue->AddQueueOp(followUp);
+		return;
+	}
+	delete followUp;
+}
+
+void ConcurrentUploadScheduler::WorkerOperationTerminal(void * context, QueueOperation * op, QueueOperation * followUp) {
 	Worker * worker = static_cast<Worker*>(context);
 	if (!worker || !worker->owner)
 		return;
@@ -410,6 +429,7 @@ void ConcurrentUploadScheduler::WorkerOperationTerminal(void * context, QueueOpe
 	}
 	scheduler->m_monitor->Signal(ConditionSchedulerState);
 	scheduler->m_monitor->Exit();
+	scheduler->QueueTerminalFollowUp(followUp);
 }
 
 DWORD WINAPI ConcurrentUploadScheduler::SchedulerThread(LPVOID param) {

@@ -36,6 +36,7 @@ QueueOperation::QueueOperation(QueueType type, HWND hNotify, int notifyCode, voi
 	m_progress(0.0f),
 	m_notifSent(0),
 	m_running(false),
+	m_canceled(0),
 	m_ackMonitor(QueueConditionCount),
 	m_terminating(false)
 {
@@ -56,10 +57,15 @@ int QueueOperation::Terminate() {
 }
 
 void QueueOperation::OnQueueCanceled() {
+	InterlockedExchange(&m_canceled, 1);
 }
 
 QueueOperation * QueueOperation::OnQueueTerminal() {
 	return NULL;
+}
+
+bool QueueOperation::WasCanceled() const {
+	return InterlockedCompareExchange(const_cast<volatile LONG*>(&m_canceled), 0, 0) != 0;
 }
 
 int QueueOperation::GetResult() const {
@@ -473,8 +479,7 @@ const char* QueueUpload::GetExternalPath() {
 QueueRemoteUploadFile::QueueRemoteUploadFile(HWND hNotify, const char * externalFile, const TCHAR * localFile, Transfer_Mode tMode, RemoteUploadBatch * batch, int notifyCode) :
 	QueueUpload(hNotify, externalFile, localFile, tMode, notifyCode, batch),
 	m_batch(batch),
-	m_cancelRecorded(0),
-	m_terminalRecorded(0)
+	m_terminalState(batch, externalFile)
 {
 	if (m_batch)
 		m_batch->AddRef();
@@ -486,14 +491,12 @@ QueueRemoteUploadFile::~QueueRemoteUploadFile() {
 }
 
 void QueueRemoteUploadFile::OnQueueCanceled() {
-	if (m_batch && InterlockedCompareExchange(&m_cancelRecorded, 1, 0) == 0)
-		m_batch->RecordCanceled(GetExternalPath());
+	QueueOperation::OnQueueCanceled();
+	m_terminalState.Cancel();
 }
 
 QueueOperation * QueueRemoteUploadFile::OnQueueTerminal() {
-	if (!m_batch || InterlockedCompareExchange(&m_terminalRecorded, 1, 0) != 0)
-		return NULL;
-	if (!m_batch->CompleteFileTerminal())
+	if (!m_terminalState.Complete())
 		return NULL;
 	return new QueueRemoteUploadComplete(m_hNotify, m_batch);
 }
@@ -747,7 +750,8 @@ RemoteUploadPlan * QueueRemoteUploadScan::GetPlan() const {
 
 QueueRemoteUploadPrepare::QueueRemoteUploadPrepare(HWND hNotify, RemoteUploadBatch * batch, int notifyCode) :
 	QueueOperation(QueueTypeRemoteUploadPrepare, hNotify, notifyCode, batch),
-	m_batch(batch)
+	m_batch(batch),
+	m_terminalRecorded(0)
 {
 	if (m_batch)
 		m_batch->AddRef();
@@ -797,6 +801,15 @@ int QueueRemoteUploadPrepare::Perform() {
 
 bool QueueRemoteUploadPrepare::Equals(const QueueOperation & other) {
 	return QueueOperation::Equals(other);
+}
+
+QueueOperation * QueueRemoteUploadPrepare::OnQueueTerminal() {
+	if (!m_batch || (m_result != -1 && !WasCanceled()) ||
+		InterlockedCompareExchange(&m_terminalRecorded, 1, 0) != 0)
+		return NULL;
+	if (!m_batch->CancelUnstartedSelectedFiles())
+		return NULL;
+	return new QueueRemoteUploadComplete(m_hNotify, m_batch);
 }
 
 RemoteUploadBatch * QueueRemoteUploadPrepare::GetBatch() const {
@@ -966,6 +979,7 @@ QueueRemoteDownloadFile::~QueueRemoteDownloadFile()
 
 void QueueRemoteDownloadFile::OnQueueCanceled()
 {
+	QueueOperation::OnQueueCanceled();
 	if (m_batch)
 		m_batch->RecordCanceled(GetExternalPath());
 }

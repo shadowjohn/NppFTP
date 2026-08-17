@@ -24,7 +24,7 @@ class QueueOperation;
 
 class ConcurrentUploadScheduler {
 public:
-	ConcurrentUploadScheduler(HWND hNotify, FTPClientWrapper * prototype, int workerCount);
+	ConcurrentUploadScheduler(HWND hNotify, FTPClientWrapper * prototype, int workerCount, FTPQueue * terminalQueue);
 	~ConcurrentUploadScheduler();
 
 	int Initialize();
@@ -57,12 +57,14 @@ private:
 	PendingAdd * FindPendingAddLocked(QueueOperation * op);
 	void DeletePendingOperations();
 	void DeleteWorkers();
+	void QueueTerminalFollowUp(QueueOperation * followUp);
 	static void DeleteWorkerList(std::vector<Worker*> & workers);
-	static void WorkerOperationTerminal(void * context, QueueOperation * op);
+	static void WorkerOperationTerminal(void * context, QueueOperation * op, QueueOperation * followUp);
 
 	static DWORD WINAPI SchedulerThread(LPVOID param);
 
 	FTPClientWrapper * m_prototype;
+	FTPQueue * m_terminalQueue;
 	Monitor * m_monitor;
 	UploadSchedulingPolicy m_policy;
 	std::deque<PendingAdd> m_pendingAdds;

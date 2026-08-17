@@ -1,5 +1,6 @@
 #include "RemoteUploadPlan.h"
 
+#include <algorithm>
 #include <shlwapi.h>
 #include <string.h>
 
@@ -52,6 +53,28 @@ static const char * RemoteFilename(const char * path)
 		return NULL;
 	const char * slash = strrchr(path, '/');
 	return slash ? slash + 1 : path;
+}
+
+static size_t RemotePathDepth(const std::string & path)
+{
+	size_t depth = 0;
+	bool inPart = false;
+	for (size_t i = 0; i < path.size(); ++i) {
+		if (path[i] == '/') {
+			inPart = false;
+		} else if (!inPart) {
+			++depth;
+			inPart = true;
+		}
+	}
+	return depth;
+}
+
+RemoteUploadFileOutcome resolve_remote_upload_file_outcome(int result, bool canceled)
+{
+	if (canceled)
+		return RemoteUploadFileCanceled;
+	return result == -1 ? RemoteUploadFileFailed : RemoteUploadFileSucceeded;
 }
 
 int RemoteUploadPlan::Build(const TCHAR * localDirectory, const char * remoteParent)
@@ -233,6 +256,9 @@ std::vector<const RemoteUploadItem*> RemoteUploadPlan::GetDirectoryItems() const
 		if (m_items[i].isDirectory)
 			directories.push_back(&m_items[i]);
 	}
+	std::stable_sort(directories.begin(), directories.end(), [](const RemoteUploadItem * left, const RemoteUploadItem * right) {
+		return RemotePathDepth(left->remotePath) < RemotePathDepth(right->remotePath);
+	});
 	return directories;
 }
 
@@ -266,7 +292,8 @@ RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char *
 	m_failedFiles(0),
 	m_canceledFiles(0),
 	m_remainingFiles(0),
-	m_completionRequested(0)
+	m_completionRequested(0),
+	m_unstartedCancellationRecorded(0)
 {
 	InitializeCriticalSection(&m_canceledPathsLock);
 }
@@ -294,6 +321,7 @@ void RemoteUploadBatch::InitializeFileCounts(int selectedFiles, int skippedFiles
 	InterlockedExchange(&m_skippedFiles, skippedFiles < 0 ? 0 : skippedFiles);
 	InterlockedExchange(&m_remainingFiles, selectedFiles < 0 ? 0 : selectedFiles);
 	InterlockedExchange(&m_completionRequested, 0);
+	InterlockedExchange(&m_unstartedCancellationRecorded, 0);
 }
 
 void RemoteUploadBatch::RecordFileSucceeded()
@@ -312,6 +340,23 @@ void RemoteUploadBatch::RecordCanceled(const char * remotePath)
 	EnterCriticalSection(&m_canceledPathsLock);
 	m_canceledPaths.push_back(remotePath ? remotePath : "(unknown path)");
 	LeaveCriticalSection(&m_canceledPathsLock);
+}
+
+bool RemoteUploadBatch::CancelUnstartedSelectedFiles()
+{
+	if (InterlockedCompareExchange(&m_unstartedCancellationRecorded, 1, 0) != 0)
+		return false;
+
+	bool requestCompletion = false;
+	std::vector<const RemoteUploadItem*> selectedFiles = plan ? plan->GetSelectedFileItems() : std::vector<const RemoteUploadItem*>();
+	for (size_t i = 0; i < selectedFiles.size(); ++i) {
+		RecordCanceled(selectedFiles[i]->remotePath.c_str());
+		if (CompleteFileTerminal())
+			requestCompletion = true;
+	}
+	if (selectedFiles.empty())
+		requestCompletion = RequestCompletionIfReady();
+	return requestCompletion;
 }
 
 bool RemoteUploadBatch::CompleteFileTerminal()
@@ -361,4 +406,30 @@ void RemoteUploadBatch::GetCanceledPaths(std::vector<std::string> & paths) const
 	EnterCriticalSection(&m_canceledPathsLock);
 	paths = m_canceledPaths;
 	LeaveCriticalSection(&m_canceledPathsLock);
+}
+
+RemoteUploadFileTerminalState::RemoteUploadFileTerminalState(RemoteUploadBatch * batch, const char * remotePath) :
+	m_batch(batch),
+	m_remotePath(remotePath ? remotePath : "(unknown path)"),
+	m_canceled(0),
+	m_terminal(0)
+{
+}
+
+void RemoteUploadFileTerminalState::Cancel()
+{
+	if (InterlockedCompareExchange(&m_canceled, 1, 0) == 0 && m_batch)
+		m_batch->RecordCanceled(m_remotePath.c_str());
+}
+
+bool RemoteUploadFileTerminalState::Complete()
+{
+	if (InterlockedCompareExchange(&m_terminal, 1, 0) != 0 || !m_batch)
+		return false;
+	return m_batch->CompleteFileTerminal();
+}
+
+bool RemoteUploadFileTerminalState::WasCanceled() const
+{
+	return InterlockedCompareExchange(const_cast<volatile LONG*>(&m_canceled), 0, 0) != 0;
 }

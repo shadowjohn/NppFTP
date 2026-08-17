@@ -125,7 +125,7 @@ int FTPSession::StartSession(FTPProfile * sessionProfile) {
 		return -1;
 	}
 
-	m_uploadScheduler = new ConcurrentUploadScheduler(m_hNotify, m_mainWrapper, m_ftpSettings->GetMaxConcurrentUploads());
+	m_uploadScheduler = new ConcurrentUploadScheduler(m_hNotify, m_mainWrapper, m_ftpSettings->GetMaxConcurrentUploads(), m_transferQueue);
 	if (m_uploadScheduler->Initialize() != 0) {
 		Clear();
 		m_currentProfile->Release();
@@ -777,8 +777,10 @@ int FTPSession::Clear() {
 
 	if (m_mainQueue)
 		m_mainQueue->ClearQueue();
-	if (m_transferQueue)
-		m_transferQueue->ClearQueue();
+	if (m_transferQueue) {
+		m_transferQueue->AbortActive();
+		m_transferQueue->ClearQueue(true);
+	}
 
 	if (m_transferWrapper) {
 		m_transferWrapper->Abort();

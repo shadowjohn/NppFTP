@@ -17,6 +17,14 @@ struct RemoteUploadItem {
 	bool selected;
 };
 
+enum RemoteUploadFileOutcome {
+	RemoteUploadFileSucceeded,
+	RemoteUploadFileFailed,
+	RemoteUploadFileCanceled
+};
+
+RemoteUploadFileOutcome resolve_remote_upload_file_outcome(int result, bool canceled);
+
 class RemoteUploadPlan {
 public:
 	int Build(const TCHAR * localDirectory, const char * remoteParent);
@@ -46,6 +54,7 @@ struct RemoteUploadBatch {
 	void RecordFileSucceeded();
 	void RecordFileFailed();
 	void RecordCanceled(const char * remotePath);
+	bool CancelUnstartedSelectedFiles();
 	bool CompleteFileTerminal();
 	bool RequestCompletionIfReady();
 	int GetSelectedFileCount() const;
@@ -68,10 +77,25 @@ private:
 	volatile LONG m_canceledFiles;
 	volatile LONG m_remainingFiles;
 	volatile LONG m_completionRequested;
+	volatile LONG m_unstartedCancellationRecorded;
 	mutable CRITICAL_SECTION m_canceledPathsLock;
 	std::vector<std::string> m_canceledPaths;
 	RemoteUploadBatch(const RemoteUploadBatch &);
 	RemoteUploadBatch & operator=(const RemoteUploadBatch &);
+};
+
+class RemoteUploadFileTerminalState {
+public:
+	RemoteUploadFileTerminalState(RemoteUploadBatch * batch, const char * remotePath);
+	void Cancel();
+	bool Complete();
+	bool WasCanceled() const;
+
+private:
+	RemoteUploadBatch * m_batch;
+	std::string m_remotePath;
+	volatile LONG m_canceled;
+	volatile LONG m_terminal;
 };
 
 #endif //REMOTEUPLOADPLAN_H

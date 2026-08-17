@@ -4,6 +4,7 @@
 #include "UploadSchedulingPolicy.h"
 #include "UploadTransferIdentity.h"
 #include "RemoteUploadPlan.h"
+#include "QueueTerminalLifecycle.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -20,6 +21,58 @@ static bool Check(bool condition, const char * message)
 	fprintf(stderr, "concurrent_upload_scheduler_failed=%s\n", message);
 	return false;
 }
+
+class BatchFileOperationHarness {
+public:
+	BatchFileOperationHarness(RemoteUploadBatch * batch, const char * path) :
+		m_terminal(batch, path),
+		m_endAcknowledged(false),
+		m_terminalBeforeEnd(false) {
+	}
+
+	void OnQueueCanceled() {
+		m_terminal.Cancel();
+	}
+
+	bool OnQueueTerminal() {
+		if (!m_endAcknowledged)
+			m_terminalBeforeEnd = true;
+		return m_terminal.Complete();
+	}
+
+	int SendNotification(int event) {
+		if (event == 2)
+			m_endAcknowledged = true;
+		return 0;
+	}
+
+	bool WasCanceled() const {
+		return m_terminal.WasCanceled();
+	}
+
+	bool TerminalRanBeforeEnd() const {
+		return m_terminalBeforeEnd;
+	}
+
+private:
+	RemoteUploadFileTerminalState m_terminal;
+	bool m_endAcknowledged;
+	bool m_terminalBeforeEnd;
+};
+
+class TerminalFollowUpHarness {
+public:
+	TerminalFollowUpHarness(bool * destroyed) :
+		m_destroyed(destroyed) {
+	}
+
+	~TerminalFollowUpHarness() {
+		*m_destroyed = true;
+	}
+
+private:
+	bool * m_destroyed;
+};
 
 int main()
 {
@@ -114,6 +167,57 @@ int main()
 		++completionMarkers;
 	if (!Check(completionMarkers == 1, "later queue activity cannot duplicate completion marker")) return 1;
 	oppositeOrderBatch->Release();
+
+	RemoteUploadBatch * cleanupBatch = new RemoteUploadBatch(new RemoteUploadPlan, "/site");
+	cleanupBatch->InitializeFileCounts(3, 0);
+	BatchFileOperationHarness rejected(cleanupBatch, "/site/rejected.txt");
+	BatchFileOperationHarness merged(cleanupBatch, "/site/merged.txt");
+	BatchFileOperationHarness shutdown(cleanupBatch, "/site/shutdown.txt");
+	int cleanupMarkers = 0;
+	if (queue_cancel_and_take_terminal(&rejected)) ++cleanupMarkers;
+	if (queue_cancel_and_take_terminal(&merged)) ++cleanupMarkers;
+	if (queue_cancel_and_take_terminal(&shutdown)) ++cleanupMarkers;
+	if (!Check(cleanupMarkers == 1, "rejection merge and shutdown emit one completion")) return 1;
+	if (!Check(cleanupBatch->GetRemainingFileCount() == 0, "cleanup paths reach batch terminal")) return 1;
+	if (!Check(cleanupBatch->GetCanceledFileCount() == 3, "cleanup paths are canceled")) return 1;
+	cleanupBatch->Release();
+
+	RemoteUploadBatch * acknowledgedBatch = new RemoteUploadBatch(new RemoteUploadPlan, "/site");
+	acknowledgedBatch->InitializeFileCounts(1, 0);
+	BatchFileOperationHarness acknowledged(acknowledgedBatch, "/site/ack.txt");
+	if (!Check(queue_end_and_take_terminal(&acknowledged, 2), "End acknowledgement releases completion")) return 1;
+	if (!Check(!acknowledged.TerminalRanBeforeEnd(), "terminal hook runs after End acknowledgement")) return 1;
+	acknowledgedBatch->Release();
+
+	RemoteUploadBatch * abortBatch = new RemoteUploadBatch(new RemoteUploadPlan, "/site");
+	abortBatch->InitializeFileCounts(1, 0);
+	BatchFileOperationHarness aborted(abortBatch, "/site/aborted.txt");
+	aborted.OnQueueCanceled();
+	if (!Check(resolve_remote_upload_file_outcome(-1, aborted.WasCanceled()) == RemoteUploadFileCanceled,
+		"active Abort is canceled")) return 1;
+	if (!Check(resolve_remote_upload_file_outcome(-1, false) == RemoteUploadFileFailed,
+		"server failure remains failed")) return 1;
+	if (!Check(aborted.OnQueueTerminal(), "active Abort reaches terminal completion")) return 1;
+	abortBatch->Release();
+
+	RemoteUploadBatch * zeroSelected = new RemoteUploadBatch(new RemoteUploadPlan, "/site");
+	zeroSelected->InitializeFileCounts(0, 2);
+	if (!Check(zeroSelected->RequestCompletionIfReady(), "zero-selected batch requests completion")) return 1;
+	if (!Check(!zeroSelected->RequestCompletionIfReady(), "zero-selected completion is one-shot")) return 1;
+	zeroSelected->Release();
+
+	bool shutdownMarkerDestroyed = false;
+	TerminalFollowUpHarness * shutdownMarker = new TerminalFollowUpHarness(&shutdownMarkerDestroyed);
+	if (!Check(queue_filter_terminal_follow_up(shutdownMarker, true) == NULL,
+		"session teardown suppresses completion marker")) return 1;
+	if (!Check(shutdownMarkerDestroyed, "suppressed completion marker is released")) return 1;
+
+	bool normalMarkerDestroyed = false;
+	TerminalFollowUpHarness * normalMarker = new TerminalFollowUpHarness(&normalMarkerDestroyed);
+	if (!Check(queue_filter_terminal_follow_up(normalMarker, false) == normalMarker,
+		"normal operation preserves completion marker")) return 1;
+	if (!Check(!normalMarkerDestroyed, "normal completion marker remains owned by caller")) return 1;
+	delete normalMarker;
 
 	printf("concurrent_upload_scheduler_exit=0\n");
 	return 0;

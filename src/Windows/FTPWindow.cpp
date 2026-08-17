@@ -2585,6 +2585,15 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			}
 
 			RemoteUploadBatch * batch = prepare->GetBatch();
+			if (queueResult == -1) {
+				if (batch) {
+					std::basic_string<TCHAR> failure(TEXT("Prepare remote directories failed: "));
+					failure.append(GetRemoteFailureMessage(prepare->GetFailureKind()));
+					batch->failures.push_back(failure);
+					OutErr("[FTPWindow] %T", failure.c_str());
+				}
+				break;
+			}
 			const std::vector<RemoteUploadPrepareFailure> & prepareFailures = prepare->GetFailures();
 			for (size_t i = 0; i < prepareFailures.size(); ++i) {
 				TCHAR * remotePath = SU::Utf8ToTChar(prepareFailures[i].remotePath.c_str());
@@ -2716,7 +2725,12 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			RemoteUploadBatch * batch = (RemoteUploadBatch*)data;
 			if (isStart)
 				break;
-			if (queueResult == -1) {
+			RemoteUploadFileOutcome outcome = resolve_remote_upload_file_outcome(queueResult, batch && queueOp->WasCanceled());
+			if (batch && outcome == RemoteUploadFileCanceled) {
+				OutMsg("[FTPWindow] Upload canceled for %T", SU::Utf8ToTChar(opuld->GetExternalPath()));
+				break;
+			}
+			if (outcome == RemoteUploadFileFailed) {
 				if (batch) {
 					RecordRemoteUploadFailure(batch, TEXT("Upload file"), queueOp);
 					break;

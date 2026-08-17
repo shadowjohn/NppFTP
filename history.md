@@ -1,5 +1,16 @@
 # NppFTP 接續紀錄
 
+## 2026-08-17 Task 4 recursive upload terminal lifecycle review fix
+
+- 遞迴上傳的 scheduler 拒絕、重複合併、等待取消、worker shutdown 與 active Abort，現在都會先經過共用 terminal hook；每個 selected file 恰好計入一次 success、failed 或 canceled，remaining counter 不會卡住。
+- `QueueRemoteUploadPrepare` 發生 fatal `-1` 時不再派送檔案，會把尚未開始的 selected files 記為 canceled，最後只產生一次真實摘要；active Abort 與真正的 server failure 也分別記為 canceled / failed。
+- `GetDirectoryItems()` 會依遠端路徑深度穩定排序，不再依賴掃描輸入順序，確保 parent directory 一定早於 child directory 準備。
+- 已確認 session teardown 的特殊邊界：所有 batch terminal accounting 與 reference release 仍完整執行，但 suppress `QueueRemoteUploadComplete` UI marker，避免 UI thread 等 shutdown、worker 又等待 UI ack 的 deadlock，也避免摘要存取已清除的 session。
+- 一般 scheduler rejection、手動等待取消、session 保持開啟時的 active Abort、prepare fatal failure，仍會送出恰好一次摘要；沒有加入 Task 5 urgent save、設定 UI 或多國語系改動。
+- focused Release checks 通過：`remote_upload_plan_exit=0`、`concurrent_upload_scheduler_exit=0`、`ftp_session_upload_routing_exit=0`。`remote_upload_plan.cpp` 已移除 Release 下失效的 `assert`，並加入可直接重跑的 CMake target。
+- `build.bat -Arch x64 -Config Release` 通過，產出 `_build\Release\NppFTP.dll`（4,770,816 bytes）與 `_build\NppFTP-0.30.22-win64.zip`（2,203,178 bytes）；ZIP SHA256：`436663F5A2A388833F356AD071F4F87D3D5DA49B5DFFBF24443872C5AA301471`。
+- 尚未執行 Notepad++ 加真實 FTP/FTPS/SFTP server 的手動 QA；build 只剩既有 UTCP code-page 與 legacy conversion warnings。
+
 ## 2026-07-18 Flat remote list navigation, context targets, and sorting
 
 - Flat list 的 Backspace 現在先對上層做 LIST，只有最新且成功的請求才切換目前目錄；root 是 no-op。失敗或 stale completion 保留目前路徑、清單、選取與 wait cursor。
