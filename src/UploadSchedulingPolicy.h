@@ -20,6 +20,10 @@ enum UploadPriority {
 	UploadPriorityUrgent
 };
 
+inline int upload_scheduling_queue_size(size_t waiting, size_t pendingAdds, int dispatched) {
+	return static_cast<int>(waiting + pendingAdds) + dispatched;
+}
+
 class UploadSchedulingPolicy {
 public:
 	void Push(QueueOperation * op, UploadPriority priority) {

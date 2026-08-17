@@ -646,3 +646,8 @@
 - enqueue 新增受 lock 保護的 `PendingAdd` registry。duplicate 檢查、登記與 urgent promotion 皆在同一同步區段；只有 `QueueEventAdd` acknowledgement 結束後才原子放入可分派 policy，避免通知間隙的重複 enqueue 或 Start 早於 Add。
 - shutdown 現在具 single-owner 行為：後續 `Deinitialize()` 會等第一個呼叫完成，只有第一個呼叫 wait/close dispatcher handle、回收 workers 與 pending operations。
 - focused `concurrent_upload_scheduler_exit=0` 與 x64 Release build 均重新通過；實際 FTP／FTPS／SFTP 與 session integration 仍屬後續 Task 3 邊界。
+
+## 2026-08-17 Concurrent scheduler pending-add queue count
+
+- `ConcurrentUploadScheduler::GetQueueSize()` 現在包含尚在 `QueueEventAdd` acknowledgement 的 `m_pendingAdds`，避免 caller 在工作已被 scheduler 接手但尚未進入 dispatch lane 時誤判 queue 為 idle。
+- 將三段 count 合併成純 header-only helper，focused test 明確驗證 waiting=0、pendingAdd=1、dispatched=0 時總數為 1；`concurrent_upload_scheduler_exit=0` 與 x64 Release build 均通過。

@@ -34,6 +34,7 @@ int main()
 	assert(policy.TakeNext() == normalB);
 	assert(policy.PromoteWaiting(activeUpload) == false);
 	assert(policy.ContainsWaiting(activeUpload) == false);
+	assert(upload_scheduling_queue_size(policy.GetQueueSize(), 1, 0) == 1);
 
 	policy.Push(normalA, UploadPriorityNormal);
 	assert(policy.Remove(normalA) == true);

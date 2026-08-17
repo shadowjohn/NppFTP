@@ -245,7 +245,7 @@ int ConcurrentUploadScheduler::AbortActive() {
 int ConcurrentUploadScheduler::GetQueueSize() const {
 	int size = 0;
 	m_monitor->Enter();
-	size = static_cast<int>(m_policy.GetQueueSize());
+	size = upload_scheduling_queue_size(m_policy.GetQueueSize(), m_pendingAdds.size(), 0);
 	for (std::vector<Worker*>::const_iterator it = m_workers.begin(); it != m_workers.end(); ++it)
 		size += (*it)->queue->GetQueueSize();
 	m_monitor->Exit();
