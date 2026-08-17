@@ -674,3 +674,12 @@
 - `Clear()` 與 StartSession failure 會先 deinitialize/delete scheduler，再釋放其 prototype wrapper。`QueueOperation::OnQueueTerminal()` 與 `FTPQueue` 的 ack 後 follow-up 基礎已接好，但本 task 沒有替 recursive upload 加 override。
 - FTPWindow 改以 active transfer count 維持 busy/Abort 狀態，避免其中一個並行 worker 結束時誤把其他 active transfer 標成 idle。
 - `NppFTP_ConcurrentUploadScheduler` Release focused test 與 `ftp_session_upload_routing.ps1` 均輸出 exit=0；`build.bat -Arch x64 -Config Release` 成功產出 `_build\\Release\\NppFTP.dll` 與 ZIP。既有 UTCP code-page／legacy conversion warnings 仍存在，未新增 build error。真實 FTP／FTPS／SFTP、Notepad++ task window、Abort/cancel 與 setting=1 相容性仍待實機 QA。
+
+## 2026-08-17 Task 3 review fix round 1
+
+- scheduler worker 現在從 dispatch adoption 到 `QueueEventRemove` 完成並退出 worker queue 之間持續登記其 operation；ownership 登記與 `FTPQueue` 接手在同一把 scheduler lock 內完成，取消、queue size 與 duplicate/conflict 檢查不再有 TakeNext 後的不可見空窗。worker 先清出完成項目再通知 scheduler，避免太早喚醒後沒有後續 signal 而停住。
+- `QueueUpload::ConflictsWith` 以共同測試過的 local+remote path identity 判斷同一傳輸。若同檔已有 worker 持有，後續 normal upload 留在等待 lane；其他檔案仍可使用空閒 worker，同檔不會並行覆寫。save urgent/follow-up 規則仍未啟用。
+- scheduler 接受 operation 時只送一次 `QueueEventAdd`；worker queue 以 `sendAddNotification=false` 接手，事件順序維持單一 Add、Start、End、Remove。
+- FTPS clone 共用的 certificate vector 由 DLL 內同一把 recursive critical section 保護；certificate load、contains、accept 後二次檢查/append、settings save 與 free 均受鎖保護，避免多 worker auto-connect 同時修改 vector。lock state 由 thread-safe function static 建立並刻意維持到 DLL 卸載，不會早於全域 `NppFTP` destructor 失效，也不提高既有 Windows API target。
+- `FTPQueue` 現在保存並檢查 `CreateThread` handle；建立失敗回傳 `-1`，成功 shutdown 會等待並關閉 handle，避免假成功、永久等待與每 session 最多八個 worker handle leak。
+- focused Release tests 新增 blocked-conflict scheduling/path identity 與八執行緒 certificate lock；source contract 覆蓋 ownership 順序、單一 Add、thread handle lifecycle 與 certificate lock 接線。真實 FTP／FTPS／SFTP 同檔快速重複上傳、FTPS 首次憑證提示、取消 dispatch 中 operation 與關閉 session 仍待實機 QA。

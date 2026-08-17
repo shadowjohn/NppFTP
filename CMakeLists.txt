@@ -148,6 +148,14 @@ set_target_properties(NppFTP_ConcurrentUploadScheduler PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
 )
 
+add_executable (NppFTP_CertificateStoreLock
+    tests/certificate_store_lock.cpp
+    src/CertificateStoreLock.cpp
+)
+set_target_properties(NppFTP_CertificateStoreLock PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+
 add_library (NppFTP MODULE ${project_rc_files} ${project_sources})
 
 add_dependencies(NppFTP NppFTP3rdPartyPrerequists)

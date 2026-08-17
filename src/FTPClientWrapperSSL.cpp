@@ -19,6 +19,7 @@
 #include "StdInc.h"
 #include "FTPClientWrapper.h"
 
+#include "CertificateStoreLock.h"
 #include "FTPSHostnameVerifier.h"
 #include "SSLCertificates.h"
 #include "MessageDialog.h"
@@ -685,6 +686,7 @@ int FtpSSLWrapper::OnLoadCertificates(SSL_CTX * ctx) {
 	unsigned long err = 0;
 	while ((err = ERR_get_error()) != 0) {}
 
+	CertificateStoreLock lock;
 	int size = (int)m_certificates->size();
 	for(int i = 0; i < size; i++) {
 		if (!SSLCertificates::MatchesScopedX509(m_certificates->at(i), m_certificates->at(i).certificate, scope))
@@ -750,9 +752,12 @@ int FtpSSLWrapper::OnSSLCertificate(const SSL * ssl, const X509* certificate, in
 		if (ret == IDYES) {
 			OutDebug("[FTPS] Certificate accepted");
 
-			if (m_certificates && scopeComplete && !SSLCertificates::ContainsScopedX509(*m_certificates, certificate, scope)) {
-				SSL_get_peer_certificate(ssl);	//increase reference counter
-				m_certificates->push_back(SSLCertificates::MakeScopedX509(certificate, scope));
+			if (m_certificates && scopeComplete) {
+				CertificateStoreLock lock;
+				if (!SSLCertificates::ContainsScopedX509(*m_certificates, certificate, scope)) {
+					SSL_get_peer_certificate(ssl);	//increase reference counter
+					m_certificates->push_back(SSLCertificates::MakeScopedX509(certificate, scope));
+				}
 			}
 		} else {
 			OutDebug("[FTPS] Certificate rejected");

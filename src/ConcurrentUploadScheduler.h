@@ -51,12 +51,14 @@ private:
 
 	int SchedulerLoop();
 	Worker * FindIdleWorkerLocked();
+	bool FindWorkerConflictLocked(const QueueOperation & op) const;
 	QueueOperation * FindWaitingDuplicateLocked(QueueOperation & op) const;
 	PendingAdd * FindPendingDuplicateLocked(QueueOperation & op);
 	PendingAdd * FindPendingAddLocked(QueueOperation * op);
 	void DeletePendingOperations();
 	void DeleteWorkers();
 	static void DeleteWorkerList(std::vector<Worker*> & workers);
+	static void WorkerOperationTerminal(void * context, QueueOperation * op);
 
 	static DWORD WINAPI SchedulerThread(LPVOID param);
 

@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "SSLCertificates.h"
+#include "CertificateStoreLock.h"
 
 const char * SSLCertificates::DERsElem = "Certificates";
 
@@ -73,6 +74,7 @@ vDER SSLCertificates::LoadDER(const TiXmlElement * dersElem) {
 }
 
 TiXmlElement* SSLCertificates::SaveScopedX509(const vScopedX509 & x509Vect) {
+	CertificateStoreLock lock;
 	TiXmlElement * dersElem = new TiXmlElement(DERsElem);
 	for(size_t i = 0; i < x509Vect.size(); i++) {
 		const ScopedX509 & scoped = x509Vect[i];
@@ -215,6 +217,7 @@ bool SSLCertificates::MatchesScopedX509(const ScopedX509 & scoped, const X509 * 
 }
 
 bool SSLCertificates::ContainsScopedX509(const vScopedX509 & x509Vect, const X509 * x509, const FTPSCertificateScope & scope) {
+	CertificateStoreLock lock;
 	for(size_t i = 0; i < x509Vect.size(); i++) {
 		if (MatchesScopedX509(x509Vect[i], x509, scope))
 			return true;
@@ -241,6 +244,7 @@ int SSLCertificates::FreeX509Vector(vX509 & x509Vect) {
 }
 
 int SSLCertificates::FreeScopedX509Vector(vScopedX509 & x509Vect) {
+	CertificateStoreLock lock;
 	for(size_t i = 0; i < x509Vect.size(); i++) {
 		FreeScopedX509(x509Vect[i]);
 	}

@@ -2,6 +2,7 @@
 // cl /nologo /EHsc /I src tests\concurrent_upload_scheduler.cpp /Fe:_build\tests\concurrent_upload_scheduler.exe
 
 #include "UploadSchedulingPolicy.h"
+#include "UploadTransferIdentity.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -21,6 +22,13 @@ static bool Check(bool condition, const char * message)
 
 int main()
 {
+	if (!Check(upload_transfer_paths_conflict(_T("C:\\cache\\index.html"), "/site/index.html",
+		_T("C:\\cache\\index.html"), "/site/index.html"), "same local and remote paths conflict")) return 1;
+	if (!Check(!upload_transfer_paths_conflict(_T("C:\\cache\\index.html"), "/site/index.html",
+		_T("C:\\cache\\other.html"), "/site/index.html"), "different local paths do not conflict")) return 1;
+	if (!Check(!upload_transfer_paths_conflict(_T("C:\\cache\\index.html"), "/site/index.html",
+		_T("C:\\cache\\index.html"), "/site/other.html"), "different remote paths do not conflict")) return 1;
+
 	UploadSchedulingPolicy policy;
 	QueueOperation * normalA = FakeOperation(1);
 	QueueOperation * normalB = FakeOperation(2);
@@ -74,6 +82,23 @@ int main()
 	QueueOperation * dispatchedAfterSlot = activeWorkers < workerLimit ? workerPolicy.TakeNext() : NULL;
 	if (!Check(dispatchedAfterSlot == urgentAfterSlot, "urgent item takes released slot")) return 1;
 	if (!Check(workerPolicy.TakeNext() == workerC, "queued normal remains after urgent")) return 1;
+
+	UploadSchedulingPolicy conflictPolicy;
+	QueueOperation * blockedUrgent = FakeOperation(20);
+	QueueOperation * blockedNormal = FakeOperation(21);
+	QueueOperation * independentNormal = FakeOperation(22);
+	conflictPolicy.Push(blockedNormal, UploadPriorityNormal);
+	conflictPolicy.Push(independentNormal, UploadPriorityNormal);
+	conflictPolicy.Push(blockedUrgent, UploadPriorityUrgent);
+	QueueOperation * independent = conflictPolicy.TakeNextMatching([blockedUrgent, blockedNormal](QueueOperation * op) {
+		return op != blockedUrgent && op != blockedNormal;
+	});
+	if (!Check(independent == independentNormal, "dispatch skips uploads conflicting with active workers")) return 1;
+	if (!Check(conflictPolicy.ContainsWaiting(blockedUrgent), "blocked urgent remains queued")) return 1;
+	if (!Check(conflictPolicy.ContainsWaiting(blockedNormal), "blocked normal remains queued")) return 1;
+	if (!Check(conflictPolicy.TakeNextMatching([](QueueOperation *) { return true; }) == blockedUrgent,
+		"unblocked urgent keeps priority")) return 1;
+	if (!Check(conflictPolicy.TakeNext() == blockedNormal, "unblocked normal remains FIFO")) return 1;
 
 	printf("concurrent_upload_scheduler_exit=0\n");
 	return 0;

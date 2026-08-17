@@ -27,12 +27,15 @@ const int ConditionQueueStop = 1;
 const int ConditionQueueAcked = 2;
 const int ConditionCount = 3;
 
-FTPQueue::FTPQueue(FTPClientWrapper* wrapper) :
+FTPQueue::FTPQueue(FTPClientWrapper* wrapper, FTPQueueTerminalCallback terminalCallback, void * terminalContext) :
 	m_wrapper(wrapper),
 	m_running(false),
 	m_stopping(false),
 	m_performing(false),
-	m_activeOp(NULL)
+	m_activeOp(NULL),
+	m_threadHandle(NULL),
+	m_terminalCallback(terminalCallback),
+	m_terminalContext(terminalContext)
 {
 	m_monitor = new Monitor(ConditionCount);
 	m_wrapper->SetProgressMonitor(this);
@@ -51,7 +54,11 @@ int FTPQueue::Initialize() {
 	m_stopping = false;
 	m_running = true;
 
-	::CreateThread(NULL, 0, &ThreadProc, this, 0, NULL);
+	m_threadHandle = ::CreateThread(NULL, 0, &ThreadProc, this, 0, NULL);
+	if (!m_threadHandle) {
+		m_running = false;
+		return -1;
+	}
 
 	return 0;
 }
@@ -78,6 +85,13 @@ int FTPQueue::Deinitialize() {
 		m_monitor->Wait(ConditionQueueStop);
 	m_monitor->Exit();
 
+	HANDLE threadHandle = m_threadHandle;
+	m_threadHandle = NULL;
+	if (threadHandle) {
+		::WaitForSingleObject(threadHandle, INFINITE);
+		::CloseHandle(threadHandle);
+	}
+
 	while (!m_queue.empty()) {
 		//Remove any remaining messages (most notably Progress messages)
 		if (m_queue.front() != m_activeOp)
@@ -95,7 +109,7 @@ int FTPQueue::Deinitialize() {
 	return 0;
 }
 
-int FTPQueue::AddQueueOp(QueueOperation * op) {
+int FTPQueue::AddQueueOp(QueueOperation * op, bool sendAddNotification) {
 	std::unique_ptr<QueueOperation> owned(op);
 	op->SetClient(m_wrapper);
 
@@ -111,7 +125,8 @@ int FTPQueue::AddQueueOp(QueueOperation * op) {
 	m_monitor->Exit();
 
 	//Can safely inform queueWindow, Add is called by window thread
-	op->SendNotification(QueueOperation::QueueEventAdd);
+	if (sendAddNotification)
+		op->SendNotification(QueueOperation::QueueEventAdd);
 
 	m_monitor->Enter();
 		m_queue.push_back(owned.release());
@@ -244,8 +259,11 @@ int FTPQueue::QueueLoop() {
 			m_activeOp = NULL;
 			m_performing = false;
 			m_queue.pop_front();
-			delete op;
 		m_monitor->Exit();
+
+		if (m_terminalCallback)
+			m_terminalCallback(m_terminalContext, op);
+		delete op;
 	}
 
 	m_monitor->Enter();

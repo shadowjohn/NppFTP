@@ -24,6 +24,7 @@
 #include "QueueOperation.h"
 
 typedef std::deque<QueueOperation*> VQueue;
+typedef void (*FTPQueueTerminalCallback)(void * context, QueueOperation * operation);
 
 /*
 Some notes about threading:
@@ -33,14 +34,14 @@ Some notes about threading:
 
 class FTPQueue : public ProgressMonitor {
 public:
-							FTPQueue(FTPClientWrapper* wrapper);
+							FTPQueue(FTPClientWrapper* wrapper, FTPQueueTerminalCallback terminalCallback = NULL, void * terminalContext = NULL);
 	virtual					~FTPQueue();
 
 	//Only to be called by creating thread
 	virtual int				Initialize();
 	virtual int				Deinitialize();
 
-	virtual int				AddQueueOp(QueueOperation * op);
+	virtual int				AddQueueOp(QueueOperation * op, bool sendAddNotification = true);
 	virtual int				GetQueueSize() const;
 	virtual int				ClearQueue();
 	virtual int				CancelQueueOp(QueueOperation * op);
@@ -58,6 +59,9 @@ private:
 	bool					m_stopping;
 	bool					m_performing;
 	QueueOperation*			m_activeOp;
+	HANDLE					m_threadHandle;
+	FTPQueueTerminalCallback m_terminalCallback;
+	void*					m_terminalContext;
 
 	VQueue					m_queue;
 };

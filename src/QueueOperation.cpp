@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "QueueOperation.h"
+#include "UploadTransferIdentity.h"
 
 const int QueueConditionAcked = 0;
 const int QueueConditionCount = 1;
@@ -173,6 +174,10 @@ bool QueueOperation::Equals(const QueueOperation & other) {
 		return false;
 
 	return true;	//ignore everything else
+}
+
+bool QueueOperation::ConflictsWith(const QueueOperation &) const {
+	return false;
 }
 
 int QueueOperation::SetClient(FTPClientWrapper* wrapper) {
@@ -445,6 +450,14 @@ bool QueueUpload::Equals(const QueueOperation & other) {
 	const QueueUpload & otherUld = (QueueUpload&) other;
 
 	return (!lstrcmp(otherUld.m_localFile, m_localFile) && !strcmp(otherUld.m_externalFile, m_externalFile) && !m_running && !otherUld.m_running);
+}
+
+bool QueueUpload::ConflictsWith(const QueueOperation & other) const {
+	if (other.GetType() != QueueTypeUpload)
+		return false;
+	const QueueUpload & otherUpload = static_cast<const QueueUpload&>(other);
+	return upload_transfer_paths_conflict(m_localFile, m_externalFile,
+		otherUpload.m_localFile, otherUpload.m_externalFile);
 }
 
 const TCHAR* QueueUpload::GetLocalPath() {

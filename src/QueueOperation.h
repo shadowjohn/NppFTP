@@ -80,6 +80,7 @@ public:
 	virtual float			GetProgress() const;
 
 	virtual bool			Equals(const QueueOperation & other);
+	virtual bool			ConflictsWith(const QueueOperation & other) const;
 protected:
 	virtual int				SetClient(FTPClientWrapper* wrapper);
 
@@ -281,6 +282,7 @@ public:
 	virtual int				Perform();
 
 	virtual bool			Equals(const QueueOperation & other);
+	virtual bool			ConflictsWith(const QueueOperation & other) const;
 
 	virtual const TCHAR*	GetLocalPath();
 	virtual const char*		GetExternalPath();

@@ -24,8 +24,14 @@ function Require-Order([string]$Text, [string]$First, [string]$Second, [string]$
 
 $sessionHeader = Read-Source 'src/FTPSession.h'
 $sessionSource = Read-Source 'src/FTPSession.cpp'
+$schedulerHeader = Read-Source 'src/ConcurrentUploadScheduler.h'
+$schedulerSource = Read-Source 'src/ConcurrentUploadScheduler.cpp'
+$ftpQueueHeader = Read-Source 'src/FTPQueue.h'
 $queueHeader = Read-Source 'src/QueueOperation.h'
 $queueSource = Read-Source 'src/FTPQueue.cpp'
+$certificateLockSource = Read-Source 'src/CertificateStoreLock.cpp'
+$sslSource = Read-Source 'src/FTPClientWrapperSSL.cpp'
+$certificateSource = Read-Source 'src/SSLCertificates.cpp'
 $windowSource = Read-Source 'src/Windows/FTPWindow.cpp'
 
 Require-Match $sessionHeader 'ConcurrentUploadScheduler\s*\*\s*m_uploadScheduler' 'FTPSession must own the upload scheduler.'
@@ -45,5 +51,29 @@ Require-Order $sessionSource 'delete m_uploadScheduler;' 'delete m_transferWrapp
 Require-Match $queueHeader 'virtual\s+QueueOperation\s*\*\s*OnQueueTerminal\(\)' 'QueueOperation must expose the terminal follow-up hook.'
 Require-Order $queueSource 'SendNotification(QueueOperation::QueueEventEnd)' 'OnQueueTerminal()' 'The terminal hook must run only after the End notification is acknowledged.'
 Require-Match $windowSource 'm_activeTransferCount' 'FTPWindow must count concurrent active transfers instead of clearing busy state on the first End event.'
+Require-Match ($schedulerHeader + $schedulerSource) 'std::deque<QueueOperation\s*\*>' 'Scheduler workers must retain ownership visibility until terminal removal.'
+Require-Match $schedulerSource 'FindWorkerConflictLocked' 'Dispatch must reject same-file work that conflicts with an assigned worker operation.'
+Require-Match (Read-Source 'src/QueueOperation.cpp') 'upload_transfer_paths_conflict' 'QueueUpload conflict checks must use the executable-tested path identity helper.'
+Require-Order $schedulerSource 'worker->operations.push_back(op);' 'worker->queue->AddQueueOp(op, false)' 'Scheduler ownership must be registered before worker queue adoption.'
+if ([regex]::Matches($schedulerSource, 'SendNotification\(QueueOperation::QueueEventAdd\)').Count -ne 1) {
+    throw 'Scheduler must emit exactly one QueueEventAdd per accepted operation.'
+}
+Require-Match $ftpQueueHeader 'AddQueueOp\(QueueOperation \* op, bool sendAddNotification' 'Worker adoption must explicitly suppress the second Add notification.'
+Require-Match $queueSource 'm_threadHandle\s*=\s*::CreateThread' 'FTPQueue must retain the worker thread handle.'
+Require-Match $queueSource 'if \(!m_threadHandle\)' 'FTPQueue must report CreateThread failure.'
+Require-Match $queueSource '::WaitForSingleObject\(threadHandle, INFINITE\)' 'FTPQueue must join its worker thread before closing the handle.'
+Require-Match $queueSource '::CloseHandle\(threadHandle\)' 'FTPQueue must close its worker thread handle.'
+Require-Match $queueSource 'if \(sendAddNotification\)\s*op->SendNotification\(QueueOperation::QueueEventAdd\)' 'FTPQueue must honor scheduler adoption without a second Add notification.'
+Require-Order $queueSource 'm_queue.pop_front();' 'm_terminalCallback(m_terminalContext, op);' 'FTPQueue must release its completed queue slot before the scheduler wakes for another dispatch.'
+Require-Order $queueSource 'm_terminalCallback(m_terminalContext, op);' 'delete op;' 'Scheduler ownership must be cleared before FTPQueue deletes the completed operation.'
+Require-Match $queueSource 'op->SendNotification\(QueueOperation::QueueEventRemove\);[\s\S]*?m_queue\.pop_front\(\);[\s\S]*?m_monitor->Exit\(\);[\s\S]*?m_terminalCallback\(m_terminalContext, op\);[\s\S]*?delete op;' 'Completed worker operations must follow Remove, queue release, scheduler terminal callback, then deletion.'
+Require-Match $certificateLockSource 'static CertificateStoreLockState \* state = new CertificateStoreLockState\(\)' 'The certificate lock must initialize once and remain valid through global teardown.'
+if ($certificateLockSource -match 'DeleteCriticalSection') {
+    throw 'The certificate lock must remain valid through global NppFTP teardown.'
+}
+if ([regex]::Matches($sslSource, 'CertificateStoreLock\s+lock').Count -lt 2 -or
+    [regex]::Matches($certificateSource, 'CertificateStoreLock\s+lock').Count -lt 3) {
+    throw 'Every shared FTPS certificate read/write path must hold the certificate store lock.'
+}
 
 Write-Output 'ftp_session_upload_routing_exit=0'

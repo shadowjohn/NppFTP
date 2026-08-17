@@ -16,13 +16,16 @@
 #include "QueueOperation.h"
 
 struct ConcurrentUploadScheduler::Worker {
-	Worker(FTPClientWrapper * workerWrapper) :
+	Worker(ConcurrentUploadScheduler * scheduler, FTPClientWrapper * workerWrapper) :
+		owner(scheduler),
 		wrapper(workerWrapper),
-		queue(new FTPQueue(workerWrapper)) {
+		queue(new FTPQueue(workerWrapper, &ConcurrentUploadScheduler::WorkerOperationTerminal, this)) {
 	}
 
+	ConcurrentUploadScheduler * owner;
 	FTPClientWrapper * wrapper;
 	FTPQueue * queue;
+	std::deque<QueueOperation*> operations;
 };
 
 const int ConditionSchedulerState = 0;
@@ -65,7 +68,7 @@ int ConcurrentUploadScheduler::Initialize() {
 			m_monitor->Exit();
 			return -1;
 		}
-		Worker * worker = new Worker(clone);
+		Worker * worker = new Worker(this, clone);
 		if (worker->queue->Initialize() != 0) {
 			delete worker->queue;
 			delete worker->wrapper;
@@ -223,7 +226,19 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 		return 0;
 	}
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		int result = (*it)->queue->CancelQueueOp(op);
+		Worker * worker = *it;
+		std::deque<QueueOperation*>::iterator assigned = worker->operations.end();
+		for (std::deque<QueueOperation*>::iterator operation = worker->operations.begin(); operation != worker->operations.end(); ++operation) {
+			if (*operation == op) {
+				assigned = operation;
+				break;
+			}
+		}
+		if (assigned == worker->operations.end())
+			continue;
+		int result = worker->queue->CancelQueueOp(op);
+		if (result == 0)
+			worker->operations.erase(assigned);
 		if (result <= 0) {
 			m_monitor->Exit();
 			return result;
@@ -248,7 +263,7 @@ int ConcurrentUploadScheduler::GetQueueSize() const {
 	m_monitor->Enter();
 	size = upload_scheduling_queue_size(m_policy.GetQueueSize(), m_pendingAdds.size(), 0);
 	for (std::vector<Worker*>::const_iterator it = m_workers.begin(); it != m_workers.end(); ++it)
-		size += (*it)->queue->GetQueueSize();
+		size += static_cast<int>((*it)->operations.size());
 	m_monitor->Exit();
 	return size;
 }
@@ -257,7 +272,7 @@ int ConcurrentUploadScheduler::GetActiveCount() const {
 	int count = 0;
 	m_monitor->Enter();
 	for (std::vector<Worker*>::const_iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		if ((*it)->queue->GetQueueSize() > 0)
+		if (!(*it)->operations.empty())
 			++count;
 	}
 	m_monitor->Exit();
@@ -275,8 +290,15 @@ int ConcurrentUploadScheduler::SchedulerLoop() {
 			break;
 		}
 		worker = FindIdleWorkerLocked();
-		if (worker)
-			op = m_policy.TakeNext();
+		if (worker) {
+			op = m_policy.TakeNextMatching([this](QueueOperation * candidate) {
+				return !FindWorkerConflictLocked(*candidate);
+			});
+			if (op) {
+				worker->operations.push_back(op);
+				worker->queue->AddQueueOp(op, false);
+			}
+		}
 		m_monitor->Exit();
 
 		if (!op) {
@@ -284,18 +306,26 @@ int ConcurrentUploadScheduler::SchedulerLoop() {
 			continue;
 		}
 
-		// FTPQueue binds the operation to this clone immediately before it can run.
-		worker->queue->AddQueueOp(op);
 	}
 	return 0;
 }
 
 ConcurrentUploadScheduler::Worker * ConcurrentUploadScheduler::FindIdleWorkerLocked() {
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		if ((*it)->queue->GetQueueSize() == 0)
+		if ((*it)->operations.empty() && (*it)->queue->GetQueueSize() == 0)
 			return *it;
 	}
 	return NULL;
+}
+
+bool ConcurrentUploadScheduler::FindWorkerConflictLocked(const QueueOperation & op) const {
+	for (std::vector<Worker*>::const_iterator worker = m_workers.begin(); worker != m_workers.end(); ++worker) {
+		for (std::deque<QueueOperation*>::const_iterator assigned = (*worker)->operations.begin(); assigned != (*worker)->operations.end(); ++assigned) {
+			if (op.ConflictsWith(**assigned))
+				return true;
+		}
+	}
+	return false;
 }
 
 QueueOperation * ConcurrentUploadScheduler::FindWaitingDuplicateLocked(QueueOperation & op) const {
@@ -352,6 +382,22 @@ void ConcurrentUploadScheduler::DeleteWorkerList(std::vector<Worker*> & workers)
 		delete *it;
 	}
 	workers.clear();
+}
+
+void ConcurrentUploadScheduler::WorkerOperationTerminal(void * context, QueueOperation * op) {
+	Worker * worker = static_cast<Worker*>(context);
+	if (!worker || !worker->owner)
+		return;
+	ConcurrentUploadScheduler * scheduler = worker->owner;
+	scheduler->m_monitor->Enter();
+	for (std::deque<QueueOperation*>::iterator it = worker->operations.begin(); it != worker->operations.end(); ++it) {
+		if (*it != op)
+			continue;
+		worker->operations.erase(it);
+		break;
+	}
+	scheduler->m_monitor->Signal(ConditionSchedulerState);
+	scheduler->m_monitor->Exit();
 }
 
 DWORD WINAPI ConcurrentUploadScheduler::SchedulerThread(LPVOID param) {

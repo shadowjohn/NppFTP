@@ -47,6 +47,14 @@ public:
 		return NULL;
 	}
 
+	template <typename Predicate>
+	QueueOperation * TakeNextMatching(Predicate predicate) {
+		QueueOperation * op = TakeFirstMatching(m_urgent, predicate);
+		if (op)
+			return op;
+		return TakeFirstMatching(m_normal, predicate);
+	}
+
 	bool PromoteWaiting(QueueOperation * op) {
 		if (Contains(m_urgent, op))
 			return true;
@@ -87,6 +95,18 @@ public:
 	}
 
 private:
+	template <typename Predicate>
+	static QueueOperation * TakeFirstMatching(std::deque<QueueOperation*> & queue, Predicate predicate) {
+		for (std::deque<QueueOperation*>::iterator it = queue.begin(); it != queue.end(); ++it) {
+			if (!predicate(*it))
+				continue;
+			QueueOperation * op = *it;
+			queue.erase(it);
+			return op;
+		}
+		return NULL;
+	}
+
 	static bool Contains(const std::deque<QueueOperation*> & queue, QueueOperation * op) {
 		for (std::deque<QueueOperation*>::const_iterator it = queue.begin(); it != queue.end(); ++it) {
 			if (*it == op)
