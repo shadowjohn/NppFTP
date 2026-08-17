@@ -658,3 +658,10 @@
 - `FTPSettings` 預設為 1，並透過同一 helper 載入、儲存與設定值正規化。Global settings 對話框新增「同時上傳數量」數字欄位與 1-8 spin control，仍在既有「確定」關閉流程儲存。
 - 只將 `src/Windows/NppFTP.rc` 轉為 UTF-8 無 BOM，檔首加上 `#pragma code_page(65001)`，並僅把 Global settings caption、固定文字與確定按鈕改為正體中文；其他資源及 runtime 字串不在本 task 範圍。
 - `NppFTP_FTPSettingsRoundTrip` 只連結 TinyXML 與 helper，確認 persistence boundary；focused test 與 x64 Release package build 均通過。真實 Notepad++ 對話框的顯示與 restart persistence 仍需實機 QA。
+
+## 2026-08-17 Harden concurrent upload settings validation
+
+- 修正原先 `QueryIntAttribute` 對帶尾碼數字的寬鬆解析；`maxConcurrentUploads` 現在逐字元確認完整整數，`abc`、`2.5`、`2abc`、空值與 overflow 都會回復為 1。這也修正前一筆 history 對「非整數已處理」的過度宣稱。
+- focused round-trip test 改用明確 return code，不再依賴 Release build 會移除的 `assert`；並涵蓋三種 malformed attribute。
+- Global settings 初始化時以 `UDM_SETBUDDY` 明確連結 1-8 spin control 與「同時上傳數量」edit，並用 `UDM_SETPOS32` 同步初始值，確保箭頭變更的是實際儲存欄位。
+- x64 Release focused test 與 package build 均通過；`NppFTP.rc` 的 UTF-8 無 BOM 與 `#pragma code_page(65001)` 保持不變。真實 Notepad++ UI/restart QA 仍待執行。

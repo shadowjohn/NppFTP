@@ -12,10 +12,38 @@
 
 #include "tinyxml.h"
 
+#include <limits.h>
+
 namespace {
 	const char * const kMaxConcurrentUploadsAttribute = "maxConcurrentUploads";
 	const int kMinConcurrentUploads = 1;
 	const int kMaxConcurrentUploads = 8;
+
+	bool ParseInteger(const char * text, int * value) {
+		if (!text || !*text)
+			return false;
+
+		bool negative = false;
+		if (*text == '-' || *text == '+') {
+			negative = (*text == '-');
+			++text;
+		}
+		if (!*text)
+			return false;
+
+		int parsed = 0;
+		for (; *text; ++text) {
+			if (*text < '0' || *text > '9')
+				return false;
+			int digit = *text - '0';
+			if (parsed > (INT_MAX - digit) / 10)
+				return false;
+			parsed = parsed * 10 + digit;
+		}
+
+		*value = negative ? -parsed : parsed;
+		return true;
+	}
 }
 
 int ConcurrentUploadSettings::Normalize(int value) {
@@ -25,8 +53,8 @@ int ConcurrentUploadSettings::Normalize(int value) {
 }
 
 int ConcurrentUploadSettings::Load(const TiXmlElement * settingsElem) {
-	int value = kMinConcurrentUploads;
-	if (!settingsElem || settingsElem->QueryIntAttribute(kMaxConcurrentUploadsAttribute, &value) != TIXML_SUCCESS)
+	int value = 0;
+	if (!settingsElem || !ParseInteger(settingsElem->Attribute(kMaxConcurrentUploadsAttribute), &value))
 		return kMinConcurrentUploads;
 	return Normalize(value);
 }

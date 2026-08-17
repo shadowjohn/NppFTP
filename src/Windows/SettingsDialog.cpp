@@ -44,9 +44,12 @@ INT_PTR SettingsDialog::OnInitDialog() {
 	Edit_LimitText(::GetDlgItem(m_hwnd, IDC_EDIT_MASTERPASS), Encryption::KeySize);
 
 	::SetDlgItemText(m_hwnd, IDC_EDIT_CACHE, cachePath);
-	Edit_LimitText(::GetDlgItem(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS), 1);
-	::SendDlgItemMessage(m_hwnd, IDC_SPIN_CONCURRENT_UPLOADS, UDM_SETRANGE32, 1, 8);
-	::SetDlgItemInt(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS, m_ftpSettings->GetMaxConcurrentUploads(), FALSE);
+	HWND uploadEdit = ::GetDlgItem(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS);
+	HWND uploadSpin = ::GetDlgItem(m_hwnd, IDC_SPIN_CONCURRENT_UPLOADS);
+	Edit_LimitText(uploadEdit, 1);
+	::SendMessage(uploadSpin, UDM_SETBUDDY, reinterpret_cast<WPARAM>(uploadEdit), 0);
+	::SendMessage(uploadSpin, UDM_SETRANGE32, 1, 8);
+	::SendMessage(uploadSpin, UDM_SETPOS32, 0, static_cast<LPARAM>(m_ftpSettings->GetMaxConcurrentUploads()));
 
 	if (!Encryption::IsDefaultKey()) {
 		char password[Encryption::KeySize+1];
