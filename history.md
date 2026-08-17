@@ -628,3 +628,4 @@
 - 確定全域 `Concurrent uploads` 範圍為 1-8、預設 1，套用 FTP／FTPS／SFTP，於下次連線生效；不做 profile 個別覆寫。
 - 確定只有 `NPPN_FILESAVED` 的 cache upload 提升為 urgent，僅插隊等待項目、不打斷已在傳輸的檔案；工具列 Abort 全部 active upload、queue 右鍵 Abort 僅作用於選取項目。
 - 多國語系由使用者決定暫緩至後續工作，不與本輪併行 upload／save priority 混合開發。
+- 使用者指定本輪 Global settings 對話框的固定字串改為正體中文；這是設定畫面的局部翻譯，不加入語言選擇或擴大為全 plugin i18n。

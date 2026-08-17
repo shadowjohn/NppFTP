@@ -15,7 +15,10 @@ not change it.
   copy, and mutation operations retain their current single-operation flow.
 - The setting takes effect for the next NppFTP connection. An active session
   keeps its established worker count until it disconnects.
-- Localization is intentionally deferred to a later slice.
+- The Global settings dialog's fixed strings, including the new upload-limit
+  field, use Traditional Chinese. This is a scoped settings-dialog update, not
+  a language-selection system or a translation of the remaining plugin UI.
+- Localization is otherwise intentionally deferred to a later slice.
 
 ## Upload Worker Design
 
@@ -23,9 +26,10 @@ not change it.
   workers. Each worker owns an independently connected `FTPClientWrapper`
   created through the existing `Clone()` API; no protocol connection is shared
   by multiple threads.
-- Add `Concurrent uploads` to the Global settings dialog. Persist it in the
-  existing NppFTP settings XML as an integer, clamp malformed values to 1, and
-  constrain UI input to 1 through 8.
+- Add `同時上傳數量` to the Global settings dialog. Persist it in the existing
+  NppFTP settings XML as an integer, clamp malformed values to 1, and constrain
+  UI input to 1 through 8. Translate the dialog's existing fixed labels and OK
+  button to Traditional Chinese in the same change.
 - The existing serial transfer queue remains responsible for downloads and
   other non-upload transfer operations. The scheduler receives only upload
   file operations, so enabling parallel uploads does not silently enable
