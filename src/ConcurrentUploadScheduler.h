@@ -12,6 +12,7 @@
 #define CONCURRENTUPLOADSCHEDULER_H
 
 #include <windows.h>
+#include <deque>
 #include <vector>
 
 #include "UploadSchedulingPolicy.h"
@@ -36,24 +37,38 @@ public:
 
 private:
 	struct Worker;
+	struct PendingAdd {
+		PendingAdd(QueueOperation * queueOperation, UploadPriority queuePriority) :
+			operation(queueOperation),
+			priority(queuePriority),
+			canceled(false) {
+		}
+
+		QueueOperation * operation;
+		UploadPriority priority;
+		bool canceled;
+	};
 
 	int SchedulerLoop();
-	int ReclaimFinishedWorkersLocked();
 	Worker * FindIdleWorkerLocked();
 	QueueOperation * FindWaitingDuplicateLocked(QueueOperation & op) const;
+	PendingAdd * FindPendingDuplicateLocked(QueueOperation & op);
+	PendingAdd * FindPendingAddLocked(QueueOperation * op);
 	void DeletePendingOperations();
 	void DeleteWorkers();
+	static void DeleteWorkerList(std::vector<Worker*> & workers);
 
 	static DWORD WINAPI SchedulerThread(LPVOID param);
 
-	HWND m_hNotify;
 	FTPClientWrapper * m_prototype;
 	Monitor * m_monitor;
 	UploadSchedulingPolicy m_policy;
+	std::deque<PendingAdd> m_pendingAdds;
 	std::vector<Worker*> m_workers;
 	HANDLE m_dispatchThread;
 	int m_workerCount;
 	bool m_running;
+	bool m_initializing;
 	bool m_stopping;
 	bool m_accepting;
 };

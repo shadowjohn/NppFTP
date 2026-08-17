@@ -630,3 +630,19 @@
 - 多國語系由使用者決定暫緩至後續工作，不與本輪併行 upload／save priority 混合開發。
 - 使用者指定本輪 Global settings 對話框的固定字串改為正體中文；這是設定畫面的局部翻譯，不加入語言選擇或擴大為全 plugin i18n。
 - SDD pre-flight 將 XML persistence 驗證拆成獨立 `ConcurrentUploadSettings` + TinyXML round-trip test，避免 unit test 連結 FTP cache、加密與 UI；排程 policy test 也改為先 promotion、再 dequeue，確保只檢查仍在等待中的項目。
+
+## 2026-08-17 Concurrent upload scheduler foundation
+
+- 新增 `UploadSchedulingPolicy`：normal lane 維持 FIFO、urgent lane 先取；等待中的 operation 可提升為 urgent，且可移除等待項目，不涉及 socket、thread 或 UI。
+- 新增尚未接入 `FTPSession` 的 `ConcurrentUploadScheduler` 基礎：每個 worker 都從 prototype 建立獨立 `FTPClientWrapper::Clone()`，並重用既有單 worker `FTPQueue` 的 UI acknowledgement 與 per-worker progress monitor。operation 直到分派到空閒 worker 才綁定 wrapper。
+- 關閉時會停止接收與分派、terminate notification wait、abort active clone、等待 dispatcher、deinitialize worker queue、disconnect/delete clone，最後取消並釋放尚未分派的 operation。
+- focused policy test：`concurrent_upload_scheduler_exit=0`；`build.bat -Arch x64 -Config Release` 通過並產出 `_build\\Release\\NppFTP.dll` 與 `NppFTP-0.30.22-win64.zip`。此次 build 的既有 UTCP code page／legacy conversion warnings 未新增 error。
+- 此 task 刻意不接入 session、設定、recursive batch 或 save priority；後續 task 才會進行真實 FTP／FTPS／SFTP worker 與 UI 實機驗證。
+
+## 2026-08-17 Concurrent scheduler lifecycle correction
+
+- scheduler 不再保存已交給 `FTPQueue` lifecycle 管理的 operation raw pointer；worker 是否忙碌改由既有 queue size 判定，shutdown 只 abort wrapper 並讓 `FTPQueue::Deinitialize()` 在自身 lock 內 terminate/delete operation，避免 polling 清除前的 use-after-free。
+- 初始化從「先放開 state lock 再建立 worker」改為同一把 `Monitor` 全程保護，並加上 `m_initializing`；失敗時只清理尚未 publish 的 local worker list，不會遺失 queue thread 或 dispatcher handle。
+- enqueue 新增受 lock 保護的 `PendingAdd` registry。duplicate 檢查、登記與 urgent promotion 皆在同一同步區段；只有 `QueueEventAdd` acknowledgement 結束後才原子放入可分派 policy，避免通知間隙的重複 enqueue 或 Start 早於 Add。
+- shutdown 現在具 single-owner 行為：後續 `Deinitialize()` 會等第一個呼叫完成，只有第一個呼叫 wait/close dispatcher handle、回收 workers 與 pending operations。
+- focused `concurrent_upload_scheduler_exit=0` 與 x64 Release build 均重新通過；實際 FTP／FTPS／SFTP 與 session integration 仍屬後續 Task 3 邊界。
