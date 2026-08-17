@@ -61,6 +61,7 @@ public:
 	int						ScanRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						QueueRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						DispatchRemoteUploadBatch(RemoteUploadBatch * batch);
+	int						HandleRemoteUploadBatchCompletion(RemoteUploadBatch * batch, LONG generation);
 	int						ScanRemoteDownloadPlan(RemoteDownloadPlan * plan);
 	int						QueueRemoteDownloadPlan(RemoteDownloadPlan * plan);
 
@@ -83,6 +84,7 @@ public:
 	int						CancelOperation(QueueOperation * cancelOp);
 private:
 	int						Clear();
+	void					DiscardRemoteUploadBatchNotifications();
 
 	HANDLE					m_timerHandle = NULL;
 	bool					m_timerIsInit = false;
@@ -98,6 +100,7 @@ private:
 	ConcurrentUploadScheduler* m_uploadScheduler;	//single-file uploads
 
 	bool					m_running;
+	volatile LONG			m_generation;
 
 	HWND					m_hNotify;
 	FTPWindow*				m_ftpWindow;

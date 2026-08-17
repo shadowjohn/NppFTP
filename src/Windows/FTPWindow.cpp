@@ -2142,6 +2142,14 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				m_ftpSettings->SetOutputShown(false);
 			}
 			break; }
+		case NotifyMessageRemoteUploadBatchComplete: {
+			RemoteUploadBatch * batch = reinterpret_cast<RemoteUploadBatch*>(lParam);
+			if (batch) {
+				if (m_ftpSession)
+					m_ftpSession->HandleRemoteUploadBatchCompletion(batch, static_cast<LONG>(wParam));
+				batch->Release();
+			}
+			return TRUE; }
 		case NotifyMessageStart:
 		case NotifyMessageEnd: {
 			bool isStart = (uMsg == (UINT)NotifyMessageStart);
@@ -2585,12 +2593,16 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			}
 
 			RemoteUploadBatch * batch = prepare->GetBatch();
-			if (queueResult == -1) {
+			if (!should_dispatch_remote_upload_after_prepare(queueResult, queueOp->WasCanceled())) {
 				if (batch) {
-					std::basic_string<TCHAR> failure(TEXT("Prepare remote directories failed: "));
-					failure.append(GetRemoteFailureMessage(prepare->GetFailureKind()));
-					batch->failures.push_back(failure);
-					OutErr("[FTPWindow] %T", failure.c_str());
+					if (queueResult == -1 && !queueOp->WasCanceled()) {
+						std::basic_string<TCHAR> failure(TEXT("Prepare remote directories failed: "));
+						failure.append(GetRemoteFailureMessage(prepare->GetFailureKind()));
+						batch->failures.push_back(failure);
+						OutErr("[FTPWindow] %T", failure.c_str());
+					} else {
+						OutMsg("[FTPWindow] Directory upload preparation canceled.");
+					}
 				}
 				break;
 			}

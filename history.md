@@ -1,5 +1,16 @@
 # NppFTP 接續紀錄
 
+## 2026-08-18 Task 4 atomic completion handoff review fix
+
+- 遞迴上傳最後一個 selected file 到達 terminal 時，不再由 worker thread 把 `QueueRemoteUploadComplete` 塞進另一條會等待 UI acknowledgement 的 queue；`RemoteUploadBatch` 改以 `AddRef + PostMessage` 非阻斷通知 FTPWindow，再由 UI thread 驗證 session generation 後建立原有 completion marker。
+- `FTPSession::Clear()` 會先遞增 generation、關閉 transfer queue teardown gate，才等待 upload scheduler/worker 結束；舊 generation 的 completion payload 只做 `Release`，不顯示摘要。worker 全停後，Clear 會清掉尚未處理的 payload，避免 reference leak 或已清除 session 被延遲存取。
+- `FTPQueue::AbortActive()` 用原子 execution state 只認領仍在 `Perform()` 的操作；已算出 success/server failure、正等待 End/Remove 的 late Abort 是 no-op，不會覆寫結果。serial prepare 也走相同 active-abort 路徑，Abort 後不會派送 selected files。
+- scheduler rejection/merge/cleanup 與 queue teardown 仍經既有 terminal hook 完成 selected/success/failed/skipped/canceled accounting；正常 session 只發一個摘要，confirmed teardown 才 suppress 摘要。
+- 新增真實 Win32 queue/message-ack lifecycle 測試，覆蓋正常與 late Abort、active upload Abort、prepare Abort、teardown generation drop、scheduler rejection、zero-selected exactly-once marker；不再只以 counter helper 代替行為驗證。
+- focused Release checks 通過：`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_session_upload_routing_exit=0`。
+- `build.bat -Arch x64 -Config Release` 通過；`NppFTP.dll` 4,771,328 bytes，SHA256 `A4842E8D6B46FECB9CB288D8D59414E7491CD7ECBCF521FCAB7886F50E98DE5F`；ZIP 2,203,500 bytes，SHA256 `282F011E8F79401A18D8F4FE52A59ED6ECE281146FF6436A8DED65CADE973F20`。
+- 尚未執行 Notepad++ 搭配真實 FTP/FTPS/SFTP server 的 disconnect-during-upload 手動 QA；build 只剩既有 UTCP code-page 與 legacy conversion warnings。
+
 ## 2026-08-17 Task 4 recursive upload terminal lifecycle review fix
 
 - 遞迴上傳的 scheduler 拒絕、重複合併、等待取消、worker shutdown 與 active Abort，現在都會先經過共用 terminal hook；每個 selected file 恰好計入一次 success、failed 或 canceled，remaining counter 不會卡住。

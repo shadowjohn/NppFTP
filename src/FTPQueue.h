@@ -42,6 +42,7 @@ public:
 	virtual int				Deinitialize();
 
 	virtual int				AddQueueOp(QueueOperation * op, bool sendAddNotification = true);
+	virtual int				BeginTeardown();
 	virtual int				GetQueueSize() const;
 	virtual int				ClearQueue(bool suppressTerminalFollowUps = false);
 	virtual int				CancelQueueOp(QueueOperation * op, QueueOperation ** terminalOp = NULL, bool notifyTerminalCallback = true);
@@ -59,6 +60,8 @@ private:
 	bool					m_running;
 	bool					m_stopping;
 	bool					m_performing;
+	volatile LONG			m_executionState;
+	bool					m_teardown;
 	QueueOperation*			m_activeOp;
 	QueueOperation*			m_activeTerminalOp;
 	HANDLE					m_threadHandle;

@@ -402,16 +402,8 @@ void ConcurrentUploadScheduler::DeleteWorkerList(std::vector<Worker*> & workers)
 void ConcurrentUploadScheduler::QueueTerminalFollowUp(QueueOperation * followUp) {
 	if (!followUp)
 		return;
-	m_monitor->Enter();
-	bool suppress = m_stopping;
-	m_monitor->Exit();
-	followUp = queue_filter_terminal_follow_up(followUp, suppress);
-	if (!followUp)
-		return;
-	if (m_terminalQueue) {
-		m_terminalQueue->AddQueueOp(followUp);
-		return;
-	}
+	// Recursive batches post their ref-counted completion request directly to the UI.
+	// Worker queues must never hand an acknowledging queue operation to another worker.
 	delete followUp;
 }
 

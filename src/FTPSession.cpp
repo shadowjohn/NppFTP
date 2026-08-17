@@ -39,6 +39,7 @@ FTPSession::FTPSession() :
 	m_uploadScheduler(NULL),
 
 	m_running(false),
+	m_generation(0),
 
 	m_hNotify(NULL),
 	m_ftpWindow(NULL),
@@ -136,6 +137,7 @@ int FTPSession::StartSession(FTPProfile * sessionProfile) {
 	m_rootObject = new FileObject("/", true, false);
 	m_rootObject->SetParent(m_rootObject);
 
+	InterlockedIncrement(&m_generation);
 	m_running = true;
 
 	return 0;
@@ -489,7 +491,8 @@ int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 		return -1;
 	}
 
-	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, targetPath.c_str());
+	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, targetPath.c_str(), m_hNotify,
+		InterlockedCompareExchange(&m_generation, 0, 0));
 	std::vector<const RemoteUploadItem*> selectedFiles = plan->GetSelectedFileItems();
 	batch->InitializeFileCounts(static_cast<int>(selectedFiles.size()), plan->GetSkippedFileCount());
 	QueueRemoteUploadPrepare * prepare = new QueueRemoteUploadPrepare(m_hNotify, batch);
@@ -504,8 +507,7 @@ int FTPSession::DispatchRemoteUploadBatch(RemoteUploadBatch * batch) {
 
 	std::vector<const RemoteUploadItem*> selectedFiles = batch->plan->GetSelectedFileItems();
 	if (selectedFiles.empty()) {
-		if (batch->RequestCompletionIfReady())
-			m_transferQueue->AddQueueOp(new QueueRemoteUploadComplete(m_hNotify, batch));
+		batch->RequestCompletionIfReady();
 		return 0;
 	}
 
@@ -521,6 +523,13 @@ int FTPSession::DispatchRemoteUploadBatch(RemoteUploadBatch * batch) {
 			result = -1;
 	}
 	return result;
+}
+
+int FTPSession::HandleRemoteUploadBatchCompletion(RemoteUploadBatch * batch, LONG generation) {
+	if (!batch || !m_running || !m_transferQueue ||
+		generation != InterlockedCompareExchange(&m_generation, 0, 0))
+		return -1;
+	return m_transferQueue->AddQueueOp(new QueueRemoteUploadComplete(m_hNotify, batch));
 }
 
 int FTPSession::ScanRemoteDownloadPlan(RemoteDownloadPlan * plan) {
@@ -747,7 +756,7 @@ int FTPSession::AbortOperation() {
 
 int FTPSession::AbortTransfer() {
 	int result = 0;
-	if (m_transferWrapper && m_transferWrapper->Abort() != 0)
+	if (m_transferQueue && m_transferQueue->AbortActive() != 0)
 		result = -1;
 	if (m_uploadScheduler && m_uploadScheduler->AbortActive() != 0)
 		result = -1;
@@ -766,8 +775,11 @@ int FTPSession::CancelOperation(QueueOperation * cancelOp) {
 }
 
 int FTPSession::Clear() {
+	InterlockedIncrement(&m_generation);
 
 	OutDebug("[FTPSession.Clear] Now clearing the transfer queue.");
+	if (m_transferQueue)
+		m_transferQueue->BeginTeardown();
 
 	if (m_uploadScheduler) {
 		m_uploadScheduler->Deinitialize();
@@ -777,10 +789,8 @@ int FTPSession::Clear() {
 
 	if (m_mainQueue)
 		m_mainQueue->ClearQueue();
-	if (m_transferQueue) {
-		m_transferQueue->AbortActive();
+	if (m_transferQueue)
 		m_transferQueue->ClearQueue(true);
-	}
 
 	if (m_transferWrapper) {
 		m_transferWrapper->Abort();
@@ -799,6 +809,7 @@ int FTPSession::Clear() {
 		delete m_mainQueue;
 		m_mainQueue = NULL;
 	}
+	DiscardRemoteUploadBatchNotifications();
 
 	QueueDisconnect * opdisc = new QueueDisconnect(m_hNotify);
 
@@ -835,4 +846,16 @@ int FTPSession::Clear() {
 	delete opdisc;
 
 	return 0;
+}
+
+void FTPSession::DiscardRemoteUploadBatchNotifications() {
+	if (!m_hNotify)
+		return;
+	MSG message;
+	while (PeekMessage(&message, m_hNotify, NotifyMessageRemoteUploadBatchComplete,
+		NotifyMessageRemoteUploadBatchComplete, PM_REMOVE)) {
+		RemoteUploadBatch * batch = reinterpret_cast<RemoteUploadBatch*>(message.lParam);
+		if (batch)
+			batch->Release();
+	}
 }

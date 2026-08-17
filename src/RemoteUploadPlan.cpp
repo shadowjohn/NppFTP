@@ -77,6 +77,11 @@ RemoteUploadFileOutcome resolve_remote_upload_file_outcome(int result, bool canc
 	return result == -1 ? RemoteUploadFileFailed : RemoteUploadFileSucceeded;
 }
 
+bool should_dispatch_remote_upload_after_prepare(int result, bool canceled)
+{
+	return result != -1 && !canceled;
+}
+
 int RemoteUploadPlan::Build(const TCHAR * localDirectory, const char * remoteParent)
 {
 	m_items.clear();
@@ -282,7 +287,8 @@ int RemoteUploadPlan::GetSkippedFileCount() const
 	return skipped;
 }
 
-RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath) :
+RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath,
+	HWND completionWindow, LONG completionGeneration) :
 	plan(uploadPlan),
 	targetPath(refreshPath ? refreshPath : ""),
 	completedCount(0),
@@ -293,7 +299,9 @@ RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char *
 	m_canceledFiles(0),
 	m_remainingFiles(0),
 	m_completionRequested(0),
-	m_unstartedCancellationRecorded(0)
+	m_unstartedCancellationRecorded(0),
+	m_completionWindow(completionWindow),
+	m_completionGeneration(completionGeneration)
 {
 	InitializeCriticalSection(&m_canceledPathsLock);
 }
@@ -373,7 +381,15 @@ bool RemoteUploadBatch::RequestCompletionIfReady()
 {
 	if (InterlockedCompareExchange(&m_remainingFiles, 0, 0) != 0)
 		return false;
-	return InterlockedCompareExchange(&m_completionRequested, 1, 0) == 0;
+	if (InterlockedCompareExchange(&m_completionRequested, 1, 0) != 0)
+		return false;
+	if (m_completionWindow) {
+		AddRef();
+		if (!PostMessage(m_completionWindow, NotifyMessageRemoteUploadBatchComplete,
+			static_cast<WPARAM>(m_completionGeneration), reinterpret_cast<LPARAM>(this)))
+			Release();
+	}
+	return true;
 }
 
 int RemoteUploadBatch::GetSelectedFileCount() const

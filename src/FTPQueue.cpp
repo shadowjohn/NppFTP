@@ -28,11 +28,18 @@ const int ConditionQueueStop = 1;
 const int ConditionQueueAcked = 2;
 const int ConditionCount = 3;
 
+const LONG QueueExecutionIdle = 0;
+const LONG QueueExecutionRunning = 1;
+const LONG QueueExecutionFinished = 2;
+const LONG QueueExecutionCanceled = 3;
+
 FTPQueue::FTPQueue(FTPClientWrapper* wrapper, FTPQueueTerminalCallback terminalCallback, void * terminalContext) :
 	m_wrapper(wrapper),
 	m_running(false),
 	m_stopping(false),
 	m_performing(false),
+	m_executionState(QueueExecutionIdle),
+	m_teardown(false),
 	m_activeOp(NULL),
 	m_activeTerminalOp(NULL),
 	m_threadHandle(NULL),
@@ -54,6 +61,7 @@ int FTPQueue::Initialize() {
 		return 0;
 
 	m_stopping = false;
+	m_teardown = false;
 	m_running = true;
 
 	m_threadHandle = ::CreateThread(NULL, 0, &ThreadProc, this, 0, NULL);
@@ -117,6 +125,8 @@ int FTPQueue::Deinitialize() {
 	m_running = false;
 	m_stopping = false;
 	m_performing = false;
+	InterlockedExchange(&m_executionState, QueueExecutionIdle);
+	m_teardown = false;
 	m_activeOp = NULL;
 	m_activeTerminalOp = NULL;
 
@@ -124,10 +134,17 @@ int FTPQueue::Deinitialize() {
 }
 
 int FTPQueue::AddQueueOp(QueueOperation * op, bool sendAddNotification) {
+	if (!op)
+		return -1;
 	std::unique_ptr<QueueOperation> owned(op);
 	op->SetClient(m_wrapper);
 
 	m_monitor->Enter();
+		if (m_teardown || m_stopping) {
+			m_monitor->Exit();
+			delete queue_cancel_and_take_terminal(op);
+			return -1;
+		}
 		VQueue::iterator it;
 		for(it = m_queue.begin(); it != m_queue.end(); ++it) {
 			if (op->Equals(**it)) {
@@ -164,6 +181,8 @@ int FTPQueue::GetQueueSize() const {
 int FTPQueue::ClearQueue(bool suppressTerminalFollowUps) {
 	QueueOperation * op = NULL;
 	VQueue completionMarkers;
+	if (suppressTerminalFollowUps)
+		BeginTeardown();
 
 	m_monitor->Enter();
 		if (m_performing) {
@@ -244,10 +263,33 @@ int FTPQueue::CancelQueueOp(QueueOperation * op, QueueOperation ** terminalOp, b
 	return 0;
 }
 
+int FTPQueue::BeginTeardown() {
+	bool abortActive = false;
+
+	m_monitor->Enter();
+		if (!m_teardown) {
+			m_teardown = true;
+			if (m_performing && m_activeOp) {
+				LONG state = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionRunning);
+				if (state == QueueExecutionIdle)
+					state = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionIdle);
+				if (state == QueueExecutionIdle || state == QueueExecutionRunning)
+					m_activeOp->OnQueueCanceled();
+				abortActive = state == QueueExecutionRunning;
+				m_activeOp->Terminate();
+				m_activeOp->ClearPendingNotifications();
+			}
+		}
+	m_monitor->Exit();
+
+	return abortActive ? m_wrapper->Abort() : 0;
+}
+
 int FTPQueue::AbortActive() {
 	bool active = false;
 	m_monitor->Enter();
-		if (m_performing && m_activeOp) {
+		if (m_performing && m_activeOp &&
+			InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionRunning) == QueueExecutionRunning) {
 			m_activeOp->OnQueueCanceled();
 			active = true;
 		}
@@ -272,12 +314,18 @@ int FTPQueue::QueueLoop() {
 			op = m_queue.front();
 			m_activeOp = op;
 			m_performing = true;
+			InterlockedExchange(&m_executionState, QueueExecutionIdle);
 		m_monitor->Exit();
 
 		op->SendNotification(QueueOperation::QueueEventStart);
 		op->SetRunning(true);
 		Sleep(500);
-		op->Perform();
+		if (InterlockedCompareExchange(&m_executionState, QueueExecutionRunning, QueueExecutionIdle) == QueueExecutionIdle) {
+			op->Perform();
+			InterlockedCompareExchange(&m_executionState, QueueExecutionFinished, QueueExecutionRunning);
+		} else {
+			op->OnQueueCanceled();
+		}
 		op->SetRunning(false);
 		QueueOperation * terminalOp = queue_end_and_take_terminal(op, QueueOperation::QueueEventEnd);
 
@@ -300,6 +348,7 @@ int FTPQueue::QueueLoop() {
 		m_monitor->Enter();
 			m_activeOp = NULL;
 			m_performing = false;
+			InterlockedExchange(&m_executionState, QueueExecutionIdle);
 			m_queue.pop_front();
 		m_monitor->Exit();
 
@@ -310,6 +359,7 @@ int FTPQueue::QueueLoop() {
 
 	m_monitor->Enter();
 		m_performing = false;
+		InterlockedExchange(&m_executionState, QueueExecutionIdle);
 		m_monitor->Signal(ConditionQueueStop);
 	m_monitor->Exit();
 

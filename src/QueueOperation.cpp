@@ -496,9 +496,8 @@ void QueueRemoteUploadFile::OnQueueCanceled() {
 }
 
 QueueOperation * QueueRemoteUploadFile::OnQueueTerminal() {
-	if (!m_terminalState.Complete())
-		return NULL;
-	return new QueueRemoteUploadComplete(m_hNotify, m_batch);
+	m_terminalState.Complete();
+	return NULL;
 }
 
 //////////////////////////////////////
@@ -807,9 +806,8 @@ QueueOperation * QueueRemoteUploadPrepare::OnQueueTerminal() {
 	if (!m_batch || (m_result != -1 && !WasCanceled()) ||
 		InterlockedCompareExchange(&m_terminalRecorded, 1, 0) != 0)
 		return NULL;
-	if (!m_batch->CancelUnstartedSelectedFiles())
-		return NULL;
-	return new QueueRemoteUploadComplete(m_hNotify, m_batch);
+	m_batch->CancelUnstartedSelectedFiles();
+	return NULL;
 }
 
 RemoteUploadBatch * QueueRemoteUploadPrepare::GetBatch() const {

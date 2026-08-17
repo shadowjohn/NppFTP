@@ -24,6 +24,9 @@ enum RemoteUploadFileOutcome {
 };
 
 RemoteUploadFileOutcome resolve_remote_upload_file_outcome(int result, bool canceled);
+bool should_dispatch_remote_upload_after_prepare(int result, bool canceled);
+
+const unsigned int NotifyMessageRemoteUploadBatchComplete = WM_USER + 506;
 
 class RemoteUploadPlan {
 public:
@@ -46,7 +49,8 @@ private:
 };
 
 struct RemoteUploadBatch {
-	RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath);
+	RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath,
+		HWND completionWindow = NULL, LONG completionGeneration = 0);
 	~RemoteUploadBatch();
 	void AddRef();
 	void Release();
@@ -78,6 +82,8 @@ private:
 	volatile LONG m_remainingFiles;
 	volatile LONG m_completionRequested;
 	volatile LONG m_unstartedCancellationRecorded;
+	HWND m_completionWindow;
+	LONG m_completionGeneration;
 	mutable CRITICAL_SECTION m_canceledPathsLock;
 	std::vector<std::string> m_canceledPaths;
 	RemoteUploadBatch(const RemoteUploadBatch &);

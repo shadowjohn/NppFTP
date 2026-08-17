@@ -159,6 +159,23 @@ set_target_properties(NppFTP_RemoteUploadPlan PROPERTIES
 )
 target_link_libraries(NppFTP_RemoteUploadPlan shlwapi)
 
+add_executable (NppFTP_FTPQueueTerminalLifecycle
+    tests/ftp_queue_terminal_lifecycle.cpp
+    src/ConcurrentUploadScheduler.cpp
+    src/FTPClientWrapper.cpp
+    src/FTPQueue.cpp
+    src/Monitor.cpp
+    src/QueueOperation.cpp
+    src/RemoteDownloadPlan.cpp
+    src/RemoteUploadPlan.cpp
+    src/StringUtils.cpp
+    src/FileObject.cpp
+)
+set_target_properties(NppFTP_FTPQueueTerminalLifecycle PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+target_link_libraries(NppFTP_FTPQueueTerminalLifecycle shlwapi)
+
 add_executable (NppFTP_CertificateStoreLock
     tests/certificate_store_lock.cpp
     src/CertificateStoreLock.cpp
