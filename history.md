@@ -622,3 +622,9 @@
 - flat remote browser 的目前路徑改為可點擊控制項；點擊會以 Windows clipboard API 複製完整 remote path，Unicode build 使用 `CF_UNICODETEXT`，ANSI build 使用 `CF_TEXT`。滑鼠停在路徑上顯示手勢，clipboard 失敗才寫入 Output。
 - 成功複製後會在路徑下方顯示 non-blocking native balloon tooltip；標題為 `Remote path copied to clipboard`，內容為完整 remote path。尖角對準顯示路徑文字的 80% 處；不使用系統 notification、不搶焦點，兩秒後自動消失，重複點擊會更新文字並重新計時。
 - `git diff --check` 通過，`build.bat -Arch x64 -Config Release` 成功產出 DLL 與 ZIP；ZIP SHA-256：`1FA26C7DBA57243B35429636872750751589D695240618A1D2DF4CA8E78632D3`。尚待 Notepad++ 實機確認點擊後可貼上完整路徑與提示。
+
+## 2026-08-17 Plan concurrent uploads and save priority
+
+- 確定全域 `Concurrent uploads` 範圍為 1-8、預設 1，套用 FTP／FTPS／SFTP，於下次連線生效；不做 profile 個別覆寫。
+- 確定只有 `NPPN_FILESAVED` 的 cache upload 提升為 urgent，僅插隊等待項目、不打斷已在傳輸的檔案；工具列 Abort 全部 active upload、queue 右鍵 Abort 僅作用於選取項目。
+- 多國語系由使用者決定暫緩至後續工作，不與本輪併行 upload／save priority 混合開發。
