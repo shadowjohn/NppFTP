@@ -44,7 +44,7 @@ public:
 	virtual int				AddQueueOp(QueueOperation * op, bool sendAddNotification = true);
 	virtual int				GetQueueSize() const;
 	virtual int				ClearQueue();
-	virtual int				CancelQueueOp(QueueOperation * op);
+	virtual int				CancelQueueOp(QueueOperation * op, QueueOperation ** terminalOp = NULL, bool notifyTerminalCallback = true);
 
 	virtual int				QueueLoop();
 

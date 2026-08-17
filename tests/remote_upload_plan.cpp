@@ -20,6 +20,14 @@ static bool HasRemotePath(const RemoteUploadPlan & plan, const char * path)
 	return false;
 }
 
+static bool Check(bool condition, const char * message)
+{
+	if (condition)
+		return true;
+	fprintf(stderr, "remote_upload_plan_failed=%s\n", message);
+	return false;
+}
+
 int main()
 {
 	RemoteUploadPlan plan;
@@ -41,6 +49,14 @@ int main()
 	plan.GetItems()[2].selected = false;
 	assert(!plan.GetItems()[2].selected);
 	assert(plan.GetItems()[3].selected);
+	std::vector<const RemoteUploadItem*> directories = plan.GetDirectoryItems();
+	if (!Check(directories.size() == 2, "directory preparation count")) return 1;
+	if (!Check(directories[0]->remotePath == "/var/www/site", "parent directory prepares first")) return 1;
+	if (!Check(directories[1]->remotePath == "/var/www/site/assets", "child directory prepares second")) return 1;
+	std::vector<const RemoteUploadItem*> selectedFiles = plan.GetSelectedFileItems();
+	if (!Check(selectedFiles.size() == 1, "only selected files dispatch")) return 1;
+	if (!Check(selectedFiles[0]->remotePath == "/var/www/site/assets/app.js", "selected file identity")) return 1;
+	if (!Check(plan.GetSkippedFileCount() == 1, "skipped file count")) return 1;
 
 	FTPFile targetListing{};
 	lstrcpynA(targetListing.filePath, "/var/www/site", MAX_PATH);
@@ -103,9 +119,29 @@ int main()
 	assert(batch->plan == ownedPlan);
 	assert(batch->targetPath == "/var/www");
 	assert(batch->completedCount == 0);
+	batch->InitializeFileCounts(2, 1);
+	if (!Check(batch->GetSelectedFileCount() == 2, "batch selected count")) return 1;
+	if (!Check(batch->GetSkippedFileCount() == 1, "batch skipped count")) return 1;
+	if (!Check(batch->GetRemainingFileCount() == 2, "batch initial remaining count")) return 1;
+	if (!Check(!batch->CompleteFileTerminal(), "first terminal does not request completion")) return 1;
+	if (!Check(batch->CompleteFileTerminal(), "last terminal requests completion")) return 1;
+	if (!Check(!batch->RequestCompletionIfReady(), "completion marker is requested exactly once")) return 1;
 	batch->AddRef();
 	batch->Release();
 	batch->Release();
+
+	RemoteUploadBatch * failedCanceledBatch = new RemoteUploadBatch(new RemoteUploadPlan, "/var/www");
+	failedCanceledBatch->InitializeFileCounts(2, 0);
+	failedCanceledBatch->RecordFileFailed();
+	if (!Check(!failedCanceledBatch->CompleteFileTerminal(), "failed file remains terminal work")) return 1;
+	failedCanceledBatch->RecordCanceled("/var/www/canceled.txt");
+	if (!Check(failedCanceledBatch->CompleteFileTerminal(), "canceled last file requests completion")) return 1;
+	if (!Check(failedCanceledBatch->GetFailedFileCount() == 1, "failed file count")) return 1;
+	if (!Check(failedCanceledBatch->GetCanceledFileCount() == 1, "canceled file count")) return 1;
+	std::vector<std::string> canceledPaths;
+	failedCanceledBatch->GetCanceledPaths(canceledPaths);
+	if (!Check(canceledPaths.size() == 1 && canceledPaths[0] == "/var/www/canceled.txt", "canceled path")) return 1;
+	failedCanceledBatch->Release();
 	printf("remote_upload_plan_exit=0\n");
 	return 0;
 }

@@ -60,6 +60,7 @@ public:
 	int						UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code = 1, UploadPriority priority = UploadPriorityNormal);
 	int						ScanRemoteUploadPlan(RemoteUploadPlan * plan);
 	int						QueueRemoteUploadPlan(RemoteUploadPlan * plan);
+	int						DispatchRemoteUploadBatch(RemoteUploadBatch * batch);
 	int						ScanRemoteDownloadPlan(RemoteDownloadPlan * plan);
 	int						QueueRemoteDownloadPlan(RemoteDownloadPlan * plan);
 

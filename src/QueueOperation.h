@@ -49,7 +49,7 @@ public:
 	                 QueueTypeDirectoryGet, QueueTypeDirectoryCreate, QueueTypeDirectoryRemove,
 	                 QueueTypeFileCreate, QueueTypeFileDelete, QueueTypeFileRename, QueueTypeQuote,
 	                 QueueTypeDownloadHandle, QueueTypeCopyFile, QueueTypeFileChmod, QueueTypeNoOp,
-	                 QueueTypeRemoteUploadScan, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete,
+	                 QueueTypeRemoteUploadScan, QueueTypeRemoteUploadPrepare, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete,
 	                 QueueTypeRemoteDownloadScan, QueueTypeRemoteDownloadComplete
 	               };
 
@@ -150,6 +150,26 @@ public:
 
 protected:
 	RemoteUploadPlan *		m_plan;
+};
+
+struct RemoteUploadPrepareFailure {
+	std::string remotePath;
+	RemoteFailureKind failureKind;
+};
+
+class QueueRemoteUploadPrepare : public QueueOperation {
+public:
+							QueueRemoteUploadPrepare(HWND hNotify, RemoteUploadBatch * batch, int notifyCode = 0);
+	virtual					~QueueRemoteUploadPrepare();
+
+	virtual int				Perform();
+	virtual bool			Equals(const QueueOperation & other);
+	virtual RemoteUploadBatch * GetBatch() const;
+	virtual const std::vector<RemoteUploadPrepareFailure> & GetFailures() const;
+
+protected:
+	RemoteUploadBatch *		m_batch;
+	std::vector<RemoteUploadPrepareFailure> m_failures;
 };
 
 class QueueEnsureDirectory : public QueueOperation {
@@ -296,9 +316,13 @@ class QueueRemoteUploadFile : public QueueUpload {
 public:
 							QueueRemoteUploadFile(HWND hNotify, const char * externalFile, const TCHAR * localFile, Transfer_Mode tMode, RemoteUploadBatch * batch, int notifyCode = 0);
 	virtual					~QueueRemoteUploadFile();
+	virtual void				OnQueueCanceled();
+	virtual QueueOperation *	OnQueueTerminal();
 
 protected:
 	RemoteUploadBatch *		m_batch;
+	volatile LONG			m_cancelRecorded;
+	volatile LONG			m_terminalRecorded;
 };
 
 class QueueGetDir : public QueueOperation {

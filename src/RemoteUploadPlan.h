@@ -26,6 +26,9 @@ public:
 	const std::string & GetTargetPath() const;
 	const std::vector<RemoteUploadItem> & GetItems() const;
 	std::vector<RemoteUploadItem> & GetItems();
+	std::vector<const RemoteUploadItem*> GetDirectoryItems() const;
+	std::vector<const RemoteUploadItem*> GetSelectedFileItems() const;
+	int GetSkippedFileCount() const;
 
 private:
 	int AddDirectoryRecursive(const TCHAR * localDirectory, const char * remoteDirectory);
@@ -39,14 +42,34 @@ struct RemoteUploadBatch {
 	~RemoteUploadBatch();
 	void AddRef();
 	void Release();
+	void InitializeFileCounts(int selectedFiles, int skippedFiles);
+	void RecordFileSucceeded();
+	void RecordFileFailed();
+	void RecordCanceled(const char * remotePath);
+	bool CompleteFileTerminal();
+	bool RequestCompletionIfReady();
+	int GetSelectedFileCount() const;
+	int GetSkippedFileCount() const;
+	int GetFailedFileCount() const;
+	int GetCanceledFileCount() const;
+	int GetRemainingFileCount() const;
+	void GetCanceledPaths(std::vector<std::string> & paths) const;
 
 	RemoteUploadPlan * plan;
 	std::string targetPath;
-	int completedCount;
+	volatile LONG completedCount;
 	std::vector<std::basic_string<TCHAR> > failures;
 
 private:
 	volatile LONG m_references;
+	volatile LONG m_selectedFiles;
+	volatile LONG m_skippedFiles;
+	volatile LONG m_failedFiles;
+	volatile LONG m_canceledFiles;
+	volatile LONG m_remainingFiles;
+	volatile LONG m_completionRequested;
+	mutable CRITICAL_SECTION m_canceledPathsLock;
+	std::vector<std::string> m_canceledPaths;
 	RemoteUploadBatch(const RemoteUploadBatch &);
 	RemoteUploadBatch & operator=(const RemoteUploadBatch &);
 };

@@ -226,16 +226,54 @@ std::vector<RemoteUploadItem> & RemoteUploadPlan::GetItems()
 	return m_items;
 }
 
+std::vector<const RemoteUploadItem*> RemoteUploadPlan::GetDirectoryItems() const
+{
+	std::vector<const RemoteUploadItem*> directories;
+	for (size_t i = 0; i < m_items.size(); ++i) {
+		if (m_items[i].isDirectory)
+			directories.push_back(&m_items[i]);
+	}
+	return directories;
+}
+
+std::vector<const RemoteUploadItem*> RemoteUploadPlan::GetSelectedFileItems() const
+{
+	std::vector<const RemoteUploadItem*> files;
+	for (size_t i = 0; i < m_items.size(); ++i) {
+		if (!m_items[i].isDirectory && m_items[i].selected)
+			files.push_back(&m_items[i]);
+	}
+	return files;
+}
+
+int RemoteUploadPlan::GetSkippedFileCount() const
+{
+	int skipped = 0;
+	for (size_t i = 0; i < m_items.size(); ++i) {
+		if (!m_items[i].isDirectory && !m_items[i].selected)
+			++skipped;
+	}
+	return skipped;
+}
+
 RemoteUploadBatch::RemoteUploadBatch(RemoteUploadPlan * uploadPlan, const char * refreshPath) :
 	plan(uploadPlan),
 	targetPath(refreshPath ? refreshPath : ""),
 	completedCount(0),
-	m_references(1)
+	m_references(1),
+	m_selectedFiles(0),
+	m_skippedFiles(0),
+	m_failedFiles(0),
+	m_canceledFiles(0),
+	m_remainingFiles(0),
+	m_completionRequested(0)
 {
+	InitializeCriticalSection(&m_canceledPathsLock);
 }
 
 RemoteUploadBatch::~RemoteUploadBatch()
 {
+	DeleteCriticalSection(&m_canceledPathsLock);
 	delete plan;
 }
 
@@ -248,4 +286,79 @@ void RemoteUploadBatch::Release()
 {
 	if (InterlockedDecrement(&m_references) == 0)
 		delete this;
+}
+
+void RemoteUploadBatch::InitializeFileCounts(int selectedFiles, int skippedFiles)
+{
+	InterlockedExchange(&m_selectedFiles, selectedFiles < 0 ? 0 : selectedFiles);
+	InterlockedExchange(&m_skippedFiles, skippedFiles < 0 ? 0 : skippedFiles);
+	InterlockedExchange(&m_remainingFiles, selectedFiles < 0 ? 0 : selectedFiles);
+	InterlockedExchange(&m_completionRequested, 0);
+}
+
+void RemoteUploadBatch::RecordFileSucceeded()
+{
+	InterlockedIncrement(&completedCount);
+}
+
+void RemoteUploadBatch::RecordFileFailed()
+{
+	InterlockedIncrement(&m_failedFiles);
+}
+
+void RemoteUploadBatch::RecordCanceled(const char * remotePath)
+{
+	InterlockedIncrement(&m_canceledFiles);
+	EnterCriticalSection(&m_canceledPathsLock);
+	m_canceledPaths.push_back(remotePath ? remotePath : "(unknown path)");
+	LeaveCriticalSection(&m_canceledPathsLock);
+}
+
+bool RemoteUploadBatch::CompleteFileTerminal()
+{
+	LONG remaining = InterlockedDecrement(&m_remainingFiles);
+	if (remaining < 0) {
+		InterlockedIncrement(&m_remainingFiles);
+		return false;
+	}
+	return remaining == 0 && RequestCompletionIfReady();
+}
+
+bool RemoteUploadBatch::RequestCompletionIfReady()
+{
+	if (InterlockedCompareExchange(&m_remainingFiles, 0, 0) != 0)
+		return false;
+	return InterlockedCompareExchange(&m_completionRequested, 1, 0) == 0;
+}
+
+int RemoteUploadBatch::GetSelectedFileCount() const
+{
+	return static_cast<int>(InterlockedCompareExchange(const_cast<volatile LONG*>(&m_selectedFiles), 0, 0));
+}
+
+int RemoteUploadBatch::GetSkippedFileCount() const
+{
+	return static_cast<int>(InterlockedCompareExchange(const_cast<volatile LONG*>(&m_skippedFiles), 0, 0));
+}
+
+int RemoteUploadBatch::GetFailedFileCount() const
+{
+	return static_cast<int>(InterlockedCompareExchange(const_cast<volatile LONG*>(&m_failedFiles), 0, 0));
+}
+
+int RemoteUploadBatch::GetCanceledFileCount() const
+{
+	return static_cast<int>(InterlockedCompareExchange(const_cast<volatile LONG*>(&m_canceledFiles), 0, 0));
+}
+
+int RemoteUploadBatch::GetRemainingFileCount() const
+{
+	return static_cast<int>(InterlockedCompareExchange(const_cast<volatile LONG*>(&m_remainingFiles), 0, 0));
+}
+
+void RemoteUploadBatch::GetCanceledPaths(std::vector<std::string> & paths) const
+{
+	EnterCriticalSection(&m_canceledPathsLock);
+	paths = m_canceledPaths;
+	LeaveCriticalSection(&m_canceledPathsLock);
 }

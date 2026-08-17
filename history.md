@@ -683,3 +683,11 @@
 - FTPS clone 共用的 certificate vector 由 DLL 內同一把 recursive critical section 保護；certificate load、contains、accept 後二次檢查/append、settings save 與 free 均受鎖保護，避免多 worker auto-connect 同時修改 vector。lock state 由 thread-safe function static 建立並刻意維持到 DLL 卸載，不會早於全域 `NppFTP` destructor 失效，也不提高既有 Windows API target。
 - `FTPQueue` 現在保存並檢查 `CreateThread` handle；建立失敗回傳 `-1`，成功 shutdown 會等待並關閉 handle，避免假成功、永久等待與每 session 最多八個 worker handle leak。
 - focused Release tests 新增 blocked-conflict scheduling/path identity 與八執行緒 certificate lock；source contract 覆蓋 ownership 順序、單一 Add、thread handle lifecycle 與 certificate lock 接線。真實 FTP／FTPS／SFTP 同檔快速重複上傳、FTPS 首次憑證提示、取消 dispatch 中 operation 與關閉 session 仍待實機 QA。
+
+## 2026-08-17 Parallel recursive upload batches
+
+- recursive upload 改由單一 `QueueRemoteUploadPrepare` 留在序列 `m_transferQueue`，依 plan 的 parent-first directory view 建立／合併所有目錄；每個目錄失敗各自保留 path 與 failure kind，完成準備後才把 selected files 以 normal priority 交給 upload scheduler。
+- `RemoteUploadBatch` 在 dispatch 前固定 selected／skipped 數量，success／failed／canceled／remaining 使用 `Interlocked` 更新；canceled paths 另以 critical section 保護。每個 `QueueRemoteUploadFile` 只會登記一次取消與一次 terminal，最後一個 terminal 才透過既有 `OnQueueTerminal()` 產生唯一 `QueueRemoteUploadComplete`。
+- queued cancellation 現在會在 operation 刪除前取得 generic terminal follow-up；scheduler 仍不辨識 recursive operation 型別，且 ownership 在 terminal removal 前保持可見。active abort 仍沿用既有 per-operation failure 行為，不會清掉其他 worker 或等待中的檔案。
+- summary Output 明確列出 selected、successful、failed、skipped、canceled 與 directory failures；file success/failure 仍在 UI thread 的 End acknowledgement 內記錄，completion marker 只能在所有 End acknowledgement 或 cancellation terminal 都完成後出現。
+- Release-safe focused checks 覆蓋 parent-before-child、selected-only、skipped count、兩 worker 反向完成、exactly-once completion、failure/cancellation counters；`remote_upload_plan_exit=0`、`concurrent_upload_scheduler_exit=0`、`ftp_session_upload_routing_exit=0`。x64 Release DLL/package build 通過；真實 Notepad++ limit=2 directory drag/drop、distinct progress rows 與 FTP／FTPS／SFTP server 行為仍待實機 QA。

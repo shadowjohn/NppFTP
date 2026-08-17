@@ -1099,6 +1099,8 @@ void FTPWindow::RecordRemoteUploadFailure(RemoteUploadBatch * batch, const TCHAR
 	failure.append(TEXT(": "));
 	failure.append(reason);
 	batch->failures.push_back(failure);
+	if (op->GetType() == QueueOperation::QueueTypeUpload)
+		batch->RecordFileFailed();
 	OutErr("[FTPWindow] %T", failure.c_str());
 	SU::FreeTChar(remotePath);
 }
@@ -1107,16 +1109,29 @@ void FTPWindow::ShowRemoteUploadSummary(RemoteUploadBatch * batch) {
 	if (!batch)
 		return;
 
-	OutMsg("[FTPWindow] Directory upload completed: %d file(s), %d failed item(s).", batch->completedCount, (int)batch->failures.size());
+	std::vector<std::string> canceledPaths;
+	batch->GetCanceledPaths(canceledPaths);
+	for (size_t i = 0; i < canceledPaths.size(); ++i) {
+		TCHAR * remotePath = SU::Utf8ToTChar(canceledPaths[i].c_str());
+		OutMsg("[FTPWindow] Upload canceled for %T", remotePath ? remotePath : TEXT("(unknown path)"));
+		SU::FreeTChar(remotePath);
+	}
+	int directoryFailures = static_cast<int>(batch->failures.size()) - batch->GetFailedFileCount();
+	if (directoryFailures < 0)
+		directoryFailures = 0;
+	OutMsg("[FTPWindow] Directory upload finished: %d selected, %d successful, %d failed, %d skipped, %d canceled, %d directory failure(s).",
+		batch->GetSelectedFileCount(), static_cast<int>(batch->completedCount), batch->GetFailedFileCount(),
+		batch->GetSkippedFileCount(), batch->GetCanceledFileCount(), directoryFailures);
 	if (!batch->targetPath.empty())
 		m_ftpSession->GetDirectory(batch->targetPath.c_str());
-	if (batch->failures.empty()) {
+	if (batch->failures.empty() && batch->GetCanceledFileCount() == 0) {
 		::MessageBox(m_hwnd, TEXT("Directory upload completed."), TEXT("Directory upload"), MB_OK | MB_ICONINFORMATION);
 		return;
 	}
 
 	TCHAR message[160]{};
-	SU::TSprintf(message, 160, TEXT("Directory upload completed with %d failed item(s). See Output for details."), (int)batch->failures.size());
+	SU::TSprintf(message, 160, TEXT("Directory upload finished: %d successful, %d failed, %d skipped, %d canceled. See Output for details."),
+		static_cast<int>(batch->completedCount), batch->GetFailedFileCount(), batch->GetSkippedFileCount(), batch->GetCanceledFileCount());
 	::MessageBox(m_hwnd, message, TEXT("Directory upload"), MB_OK | MB_ICONWARNING);
 }
 
@@ -2562,6 +2577,28 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				::MessageBox(m_hwnd, TEXT("Unable to queue the directory upload."), TEXT("Directory upload failed"), MB_OK | MB_ICONERROR);
 			}
 			break; }
+		case QueueOperation::QueueTypeRemoteUploadPrepare: {
+			QueueRemoteUploadPrepare * prepare = (QueueRemoteUploadPrepare*)queueOp;
+			if (isStart) {
+				OutMsg("[FTPWindow] Preparing remote directories for upload...");
+				break;
+			}
+
+			RemoteUploadBatch * batch = prepare->GetBatch();
+			const std::vector<RemoteUploadPrepareFailure> & prepareFailures = prepare->GetFailures();
+			for (size_t i = 0; i < prepareFailures.size(); ++i) {
+				TCHAR * remotePath = SU::Utf8ToTChar(prepareFailures[i].remotePath.c_str());
+				std::basic_string<TCHAR> failure(TEXT("Create directory failed for "));
+				failure.append(remotePath ? remotePath : TEXT("(unknown path)"));
+				failure.append(TEXT(": "));
+				failure.append(GetRemoteFailureMessage(prepareFailures[i].failureKind));
+				batch->failures.push_back(failure);
+				OutErr("[FTPWindow] %T", failure.c_str());
+				SU::FreeTChar(remotePath);
+			}
+			if (m_ftpSession->DispatchRemoteUploadBatch(batch) != 0)
+				OutErr("[FTPWindow] One or more directory upload files could not be queued");
+			break; }
 		case QueueOperation::QueueTypeRemoteDownloadScan: {
 			QueueRemoteDownloadScan * scan = (QueueRemoteDownloadScan*)queueOp;
 			if (isStart) {
@@ -2692,7 +2729,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 
 			OutMsg("[FTPWindow] Upload of %T succeeded.", SU::Utf8ToTChar(opuld->GetExternalPath()));
 			if (batch) {
-				batch->completedCount++;
+				batch->RecordFileSucceeded();
 				break;
 			}
 

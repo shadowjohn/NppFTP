@@ -472,7 +472,9 @@ const char* QueueUpload::GetExternalPath() {
 
 QueueRemoteUploadFile::QueueRemoteUploadFile(HWND hNotify, const char * externalFile, const TCHAR * localFile, Transfer_Mode tMode, RemoteUploadBatch * batch, int notifyCode) :
 	QueueUpload(hNotify, externalFile, localFile, tMode, notifyCode, batch),
-	m_batch(batch)
+	m_batch(batch),
+	m_cancelRecorded(0),
+	m_terminalRecorded(0)
 {
 	if (m_batch)
 		m_batch->AddRef();
@@ -481,6 +483,19 @@ QueueRemoteUploadFile::QueueRemoteUploadFile(HWND hNotify, const char * external
 QueueRemoteUploadFile::~QueueRemoteUploadFile() {
 	if (m_batch)
 		m_batch->Release();
+}
+
+void QueueRemoteUploadFile::OnQueueCanceled() {
+	if (m_batch && InterlockedCompareExchange(&m_cancelRecorded, 1, 0) == 0)
+		m_batch->RecordCanceled(GetExternalPath());
+}
+
+QueueOperation * QueueRemoteUploadFile::OnQueueTerminal() {
+	if (!m_batch || InterlockedCompareExchange(&m_terminalRecorded, 1, 0) != 0)
+		return NULL;
+	if (!m_batch->CompleteFileTerminal())
+		return NULL;
+	return new QueueRemoteUploadComplete(m_hNotify, m_batch);
 }
 
 //////////////////////////////////////
@@ -726,6 +741,70 @@ RemoteUploadPlan * QueueRemoteUploadScan::ReleasePlan() {
 
 RemoteUploadPlan * QueueRemoteUploadScan::GetPlan() const {
 	return m_plan;
+}
+
+//////////////////////////////////////
+
+QueueRemoteUploadPrepare::QueueRemoteUploadPrepare(HWND hNotify, RemoteUploadBatch * batch, int notifyCode) :
+	QueueOperation(QueueTypeRemoteUploadPrepare, hNotify, notifyCode, batch),
+	m_batch(batch)
+{
+	if (m_batch)
+		m_batch->AddRef();
+}
+
+QueueRemoteUploadPrepare::~QueueRemoteUploadPrepare() {
+	if (m_batch)
+		m_batch->Release();
+}
+
+int QueueRemoteUploadPrepare::Perform() {
+	if (!m_batch || !m_batch->plan || !m_client) {
+		m_result = -1;
+		return m_result;
+	}
+
+	std::vector<const RemoteUploadItem*> directories = m_batch->plan->GetDirectoryItems();
+	for (size_t i = 0; i < directories.size(); ++i) {
+		const char * path = directories[i]->remotePath.c_str();
+		if (m_doConnect && !m_client->IsConnected()) {
+			if (m_client->Connect() == -1) {
+				RemoteUploadPrepareFailure failure = { path, m_client->GetFailureKind() };
+				m_failures.push_back(failure);
+				continue;
+			}
+		}
+
+		if (m_client->MkDir(path) == 0)
+			continue;
+
+		FTPFile * files = NULL;
+		int listed = m_client->GetDir(path, &files);
+		if (listed >= 0) {
+			if (files)
+				m_client->ReleaseDir(files, listed);
+			continue;
+		}
+
+		RemoteUploadPrepareFailure failure = { path, m_client->GetFailureKind() };
+		m_failures.push_back(failure);
+	}
+
+	// Preparation itself completed even when individual directories failed.
+	m_result = 0;
+	return m_result;
+}
+
+bool QueueRemoteUploadPrepare::Equals(const QueueOperation & other) {
+	return QueueOperation::Equals(other);
+}
+
+RemoteUploadBatch * QueueRemoteUploadPrepare::GetBatch() const {
+	return m_batch;
+}
+
+const std::vector<RemoteUploadPrepareFailure> & QueueRemoteUploadPrepare::GetFailures() const {
+	return m_failures;
 }
 
 //////////////////////////////////////

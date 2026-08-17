@@ -3,6 +3,7 @@
 
 #include "UploadSchedulingPolicy.h"
 #include "UploadTransferIdentity.h"
+#include "RemoteUploadPlan.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -99,6 +100,20 @@ int main()
 	if (!Check(conflictPolicy.TakeNextMatching([](QueueOperation *) { return true; }) == blockedUrgent,
 		"unblocked urgent keeps priority")) return 1;
 	if (!Check(conflictPolicy.TakeNext() == blockedNormal, "unblocked normal remains FIFO")) return 1;
+
+	RemoteUploadBatch * oppositeOrderBatch = new RemoteUploadBatch(new RemoteUploadPlan, "/site");
+	oppositeOrderBatch->InitializeFileCounts(2, 0);
+	int completionMarkers = 0;
+	if (oppositeOrderBatch->CompleteFileTerminal())
+		++completionMarkers; // Worker B finishes before worker A.
+	if (!Check(completionMarkers == 0, "first worker terminal cannot emit completion")) return 1;
+	if (oppositeOrderBatch->CompleteFileTerminal())
+		++completionMarkers;
+	if (!Check(completionMarkers == 1, "opposite worker completion emits one marker after both terminals")) return 1;
+	if (oppositeOrderBatch->RequestCompletionIfReady())
+		++completionMarkers;
+	if (!Check(completionMarkers == 1, "later queue activity cannot duplicate completion marker")) return 1;
+	oppositeOrderBatch->Release();
 
 	printf("concurrent_upload_scheduler_exit=0\n");
 	return 0;

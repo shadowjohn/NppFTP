@@ -477,13 +477,12 @@ int FTPSession::ScanRemoteUploadPlan(RemoteUploadPlan * plan) {
 int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 	if (!plan)
 		return -1;
-	if (!m_running || !m_transferQueue || !m_currentProfile || plan->GetItems().empty() ||
+	if (!m_running || !m_transferQueue || !m_uploadScheduler || !m_currentProfile || plan->GetItems().empty() ||
 		!plan->GetItems()[0].isDirectory) {
 		delete plan;
 		return -1;
 	}
 
-	const std::vector<RemoteUploadItem> & items = plan->GetItems();
 	std::string targetPath = plan->GetTargetPath();
 	if (targetPath.empty()) {
 		delete plan;
@@ -491,27 +490,37 @@ int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 	}
 
 	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, targetPath.c_str());
-	QueueRemoteUploadComplete * complete = new QueueRemoteUploadComplete(m_hNotify, batch);
-	for (size_t i = 0; i < items.size(); ++i) {
-		const RemoteUploadItem & item = items[i];
-		if (item.isDirectory) {
-			QueueEnsureDirectory * ensure = new QueueEnsureDirectory(m_hNotify, item.remotePath.c_str(), 0, batch);
-			m_transferQueue->AddQueueOp(ensure);
-			continue;
-		}
-		if (!item.selected)
-			continue;
+	std::vector<const RemoteUploadItem*> selectedFiles = plan->GetSelectedFileItems();
+	batch->InitializeFileCounts(static_cast<int>(selectedFiles.size()), plan->GetSkippedFileCount());
+	QueueRemoteUploadPrepare * prepare = new QueueRemoteUploadPrepare(m_hNotify, batch);
+	int result = m_transferQueue->AddQueueOp(prepare);
+	batch->Release();
+	return result;
+}
 
+int FTPSession::DispatchRemoteUploadBatch(RemoteUploadBatch * batch) {
+	if (!batch || !batch->plan || !m_running || !m_transferQueue || !m_uploadScheduler || !m_currentProfile)
+		return -1;
+
+	std::vector<const RemoteUploadItem*> selectedFiles = batch->plan->GetSelectedFileItems();
+	if (selectedFiles.empty()) {
+		if (batch->RequestCompletionIfReady())
+			m_transferQueue->AddQueueOp(new QueueRemoteUploadComplete(m_hNotify, batch));
+		return 0;
+	}
+
+	int result = 0;
+	for (size_t i = 0; i < selectedFiles.size(); ++i) {
+		const RemoteUploadItem & item = *selectedFiles[i];
 		const TCHAR * localName = PU::FindLocalFilename(item.localPath.c_str());
 		if (!localName)
 			localName = item.localPath.c_str();
 		Transfer_Mode mode = m_currentProfile->GetFileTransferMode(localName);
 		QueueRemoteUploadFile * upload = new QueueRemoteUploadFile(m_hNotify, item.remotePath.c_str(), item.localPath.c_str(), mode, batch, 1);
-		m_transferQueue->AddQueueOp(upload);
+		if (m_uploadScheduler->AddQueueOp(upload, UploadPriorityNormal) != 0)
+			result = -1;
 	}
-	m_transferQueue->AddQueueOp(complete);
-	batch->Release();
-	return 0;
+	return result;
 }
 
 int FTPSession::ScanRemoteDownloadPlan(RemoteDownloadPlan * plan) {

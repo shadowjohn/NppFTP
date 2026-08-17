@@ -42,7 +42,12 @@ Require-Match $sessionSource 'if \(m_uploadScheduler->Initialize\(\) != 0\)\s*\{
 Require-Match $sessionSource 'm_uploadScheduler->AddQueueOp\(uldop,\s*priority\)' 'Manual UploadFile operations must route through the upload scheduler.'
 Require-Match $sessionSource 'm_transferQueue->AddQueueOp\(dldop\)' 'Downloads must remain on the serial transfer queue.'
 Require-Match $sessionSource 'm_transferQueue->AddQueueOp\(new QueueRemoteDownloadComplete' 'Recursive downloads must remain serial.'
-Require-Match $sessionSource 'm_transferQueue->AddQueueOp\(complete\)' 'Recursive upload restructuring belongs to Task 4 and must remain serial here.'
+Require-Match $sessionSource 'm_transferQueue->AddQueueOp\(prepare\)' 'Recursive directory preparation must remain on the serial transfer queue.'
+Require-Match $sessionSource 'm_uploadScheduler->AddQueueOp\(upload,\s*UploadPriorityNormal\)' 'Selected recursive files must route through normal-priority upload workers.'
+if ($sessionSource -match 'm_transferQueue->AddQueueOp\(upload\)') {
+    throw 'Recursive file uploads must not remain on the serial transfer queue.'
+}
+Require-Match $windowSource 'QueueTypeRemoteUploadPrepare[\s\S]*?DispatchRemoteUploadBatch\(batch\)' 'Selected files must dispatch only after directory preparation ends.'
 Require-Match $sessionSource 'UploadFile\(sourcefile,\s*target,\s*false,\s*0\)' 'Automatic saves must still use the default normal priority until Task 5.'
 Require-Match $sessionSource 'm_uploadScheduler->AbortActive\(\)' 'AbortTransfer must abort active upload workers.'
 Require-Match $sessionSource 'cancelOp->GetType\(\)\s*==\s*QueueOperation::QueueTypeUpload' 'Upload cancellation must consult the upload scheduler.'

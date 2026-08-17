@@ -202,7 +202,10 @@ int ConcurrentUploadScheduler::AddQueueOp(QueueOperation * op, UploadPriority pr
 
 	op->OnQueueCanceled();
 	op->SendNotification(QueueOperation::QueueEventRemove);
+	QueueOperation * terminalOp = op->OnQueueTerminal();
 	delete op;
+	if (terminalOp)
+		AddQueueOp(terminalOp, UploadPriorityNormal);
 	return -1;
 }
 
@@ -222,7 +225,10 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 		m_monitor->Exit();
 		op->OnQueueCanceled();
 		op->SendNotification(QueueOperation::QueueEventRemove);
+		QueueOperation * terminalOp = op->OnQueueTerminal();
 		delete op;
+		if (terminalOp)
+			AddQueueOp(terminalOp, UploadPriorityNormal);
 		return 0;
 	}
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
@@ -236,9 +242,15 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 		}
 		if (assigned == worker->operations.end())
 			continue;
-		int result = worker->queue->CancelQueueOp(op);
-		if (result == 0)
+		QueueOperation * terminalOp = NULL;
+		int result = worker->queue->CancelQueueOp(op, &terminalOp, false);
+		if (result == 0) {
 			worker->operations.erase(assigned);
+			m_monitor->Exit();
+			if (terminalOp)
+				AddQueueOp(terminalOp, UploadPriorityNormal);
+			return 0;
+		}
 		if (result <= 0) {
 			m_monitor->Exit();
 			return result;
