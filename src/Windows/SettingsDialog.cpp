@@ -44,6 +44,9 @@ INT_PTR SettingsDialog::OnInitDialog() {
 	Edit_LimitText(::GetDlgItem(m_hwnd, IDC_EDIT_MASTERPASS), Encryption::KeySize);
 
 	::SetDlgItemText(m_hwnd, IDC_EDIT_CACHE, cachePath);
+	Edit_LimitText(::GetDlgItem(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS), 1);
+	::SendDlgItemMessage(m_hwnd, IDC_SPIN_CONCURRENT_UPLOADS, UDM_SETRANGE32, 1, 8);
+	::SetDlgItemInt(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS, m_ftpSettings->GetMaxConcurrentUploads(), FALSE);
 
 	if (!Encryption::IsDefaultKey()) {
 		char password[Encryption::KeySize+1];
@@ -81,6 +84,7 @@ INT_PTR SettingsDialog::OnCommand(int ctrlId, int notifCode, HWND idHwnd) {
 	switch(ctrlId) {
 		case IDC_BUTTON_CLOSE: {
 			SaveGlobalPath();
+			SaveMaxConcurrentUploads();
 			SaveMasterPassword();
 			SaveClearCache();
 			SaveDebugMode();
@@ -109,6 +113,14 @@ int SettingsDialog::SaveGlobalPath() {
 	::GetDlgItemText(m_hwnd, IDC_EDIT_CACHE, TTextBuffer, MAX_PATH);
 
 	m_ftpSettings->SetGlobalCachePath(TTextBuffer);
+
+	return 0;
+}
+
+int SettingsDialog::SaveMaxConcurrentUploads() {
+	BOOL success = FALSE;
+	UINT value = ::GetDlgItemInt(m_hwnd, IDC_EDIT_CONCURRENT_UPLOADS, &success, FALSE);
+	m_ftpSettings->SetMaxConcurrentUploads(success ? static_cast<int>(value) : 1);
 
 	return 0;
 }

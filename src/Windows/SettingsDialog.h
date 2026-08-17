@@ -41,6 +41,7 @@ protected:
 	int						SaveGlobalPath();
 	int						SaveMasterPassword();
 	int						SaveClearCache();
+	int						SaveMaxConcurrentUploads();
 
 	FTPSettings*			m_ftpSettings;
 };

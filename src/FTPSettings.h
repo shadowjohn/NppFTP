@@ -51,6 +51,9 @@ public:
 	double					GetSplitRatio() const;
 	int						SetSplitRatio(double splitRatio);
 
+	int						GetMaxConcurrentUploads() const;
+	int						SetMaxConcurrentUploads(int maxConcurrentUploads);
+
 	int						LoadSettings(const TiXmlElement * settingsElem);
 	int						SaveSettings(TiXmlElement * settingsElem) const;
 private:
@@ -60,6 +63,7 @@ private:
 	bool					m_clearCachePermanent;
 	bool					m_showOutput;
 	double					m_splitRatio;
+	int						m_maxConcurrentUploads;
 	static bool				m_debugMode;
 };
 

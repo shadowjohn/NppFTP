@@ -17,6 +17,7 @@
 */
 
 #include "StdInc.h"
+#include "ConcurrentUploadSettings.h"
 #include "FTPSettings.h"
 
 #include "Encryption.h"
@@ -28,7 +29,8 @@ FTPSettings::FTPSettings() :
 	m_clearCache(false),
 	m_clearCachePermanent(false),
 	m_showOutput(false),
-	m_splitRatio(0.5)
+	m_splitRatio(0.5),
+	m_maxConcurrentUploads(1)
 {
 	m_globalCachePath = SU::DupString(TEXT("%CONFIGDIR%\\Cache\\%USERNAME%@%HOSTNAME%"));
 
@@ -122,7 +124,18 @@ int FTPSettings::SetSplitRatio(double splitRatio) {
 	return 0;
 }
 
+int FTPSettings::GetMaxConcurrentUploads() const {
+	return m_maxConcurrentUploads;
+}
+
+int FTPSettings::SetMaxConcurrentUploads(int maxConcurrentUploads) {
+	m_maxConcurrentUploads = ConcurrentUploadSettings::Normalize(maxConcurrentUploads);
+	return 0;
+}
+
 int FTPSettings::LoadSettings(const TiXmlElement * settingsElem) {
+	m_maxConcurrentUploads = ConcurrentUploadSettings::Load(settingsElem);
+
 	int outState = 0;
 	const char * outstr = settingsElem->Attribute("outputShown", &outState);
 	if (!outstr) {
@@ -221,6 +234,7 @@ int FTPSettings::SaveSettings(TiXmlElement * settingsElem) const {
 	settingsElem->SetAttribute("debugMode", m_debugMode?1:0);
 	settingsElem->SetAttribute("clearCache", m_clearCache?1:0);
 	settingsElem->SetAttribute("clearCachePermanent", m_clearCachePermanent?1:0);
+	ConcurrentUploadSettings::Save(settingsElem, m_maxConcurrentUploads);
 
 	return 0;
 }

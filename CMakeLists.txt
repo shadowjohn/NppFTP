@@ -132,6 +132,15 @@ link_directories(${CMAKE_BINARY_DIR}/${output_dir}/3rdparty/lib/)
 
 add_definitions (${defs})
 
+add_executable (NppFTP_FTPSettingsRoundTrip
+    tests/ftp_settings_roundtrip.cpp
+    src/ConcurrentUploadSettings.cpp
+    ${tinyxml_sources}
+)
+set_target_properties(NppFTP_FTPSettingsRoundTrip PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+
 add_library (NppFTP MODULE ${project_rc_files} ${project_sources})
 
 add_dependencies(NppFTP NppFTP3rdPartyPrerequists)

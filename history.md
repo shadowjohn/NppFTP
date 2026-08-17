@@ -651,3 +651,10 @@
 
 - `ConcurrentUploadScheduler::GetQueueSize()` 現在包含尚在 `QueueEventAdd` acknowledgement 的 `m_pendingAdds`，避免 caller 在工作已被 scheduler 接手但尚未進入 dispatch lane 時誤判 queue 為 idle。
 - 將三段 count 合併成純 header-only helper，focused test 明確驗證 waiting=0、pendingAdd=1、dispatched=0 時總數為 1；`concurrent_upload_scheduler_exit=0` 與 x64 Release build 均通過。
+
+## 2026-08-17 Global concurrent upload settings
+
+- 新增獨立 `ConcurrentUploadSettings`，統一 `maxConcurrentUploads` XML attribute 的讀寫與 1-8 範圍；缺值、非整數、零、負數或大於 8 一律回復為 1。
+- `FTPSettings` 預設為 1，並透過同一 helper 載入、儲存與設定值正規化。Global settings 對話框新增「同時上傳數量」數字欄位與 1-8 spin control，仍在既有「確定」關閉流程儲存。
+- 只將 `src/Windows/NppFTP.rc` 轉為 UTF-8 無 BOM，檔首加上 `#pragma code_page(65001)`，並僅把 Global settings caption、固定文字與確定按鈕改為正體中文；其他資源及 runtime 字串不在本 task 範圍。
+- `NppFTP_FTPSettingsRoundTrip` 只連結 TinyXML 與 helper，確認 persistence boundary；focused test 與 x64 Release package build 均通過。真實 Notepad++ 對話框的顯示與 restart persistence 仍需實機 QA。
