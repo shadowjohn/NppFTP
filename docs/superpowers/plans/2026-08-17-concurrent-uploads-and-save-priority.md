@@ -37,13 +37,15 @@
 policy.Push(normalA, UploadPriorityNormal);
 assert(policy.TakeNext() == normalA);
 policy.Push(normalB, UploadPriorityNormal);
+policy.Push(normalC, UploadPriorityNormal);
 policy.Push(urgentSave, UploadPriorityUrgent);
 assert(policy.TakeNext() == urgentSave);
-assert(policy.TakeNext() == normalB);
 
 // A waiting matching save promotes, while an active match is not duplicated.
-assert(policy.PromoteWaiting(normalB) == true);
-assert(policy.ContainsWaiting(normalB) == true);
+assert(policy.PromoteWaiting(normalC) == true);
+assert(policy.ContainsWaiting(normalC) == true);
+assert(policy.TakeNext() == normalC);
+assert(policy.TakeNext() == normalB);
 assert(policy.PromoteWaiting(activeUpload) == false);
 ```
 
@@ -96,30 +98,46 @@ cl /nologo /EHsc /I src tests\concurrent_upload_scheduler.cpp /Fe:_build\tests\c
 ### Task 2: Persist the Global Limit and Localize Global Settings
 
 **Files:**
+- Create: `src/ConcurrentUploadSettings.h`
+- Create: `src/ConcurrentUploadSettings.cpp`
+- Create: `tests/ftp_settings_roundtrip.cpp`
 - Modify: `src/FTPSettings.h`
 - Modify: `src/FTPSettings.cpp`
 - Modify: `src/Windows/SettingsDialog.h`
 - Modify: `src/Windows/SettingsDialog.cpp`
 - Modify: `src/Windows/NppFTP.rc`
 - Modify: `src/Windows/resource.h`
-- Modify: `tests/concurrent_upload_scheduler.cpp`
+- Modify: `CMakeLists.txt`
 
-- [ ] Extend `FTPSettings` with `m_maxConcurrentUploads`, initialized to `1`, plus a getter and a `NormalizeConcurrentUploads` helper that returns its input only for values in `[1, 8]` and returns `1` for every other value.
-- [ ] Persist the value in the existing global settings XML element as `maxConcurrentUploads`. Missing, zero, negative, or too-large historical values must load as `1`, not crash and not silently create more than eight workers.
-- [ ] Extend the focused test to assert the clamp boundary and XML round trip:
+- [ ] Add `ConcurrentUploadSettings`, a small dependency-free settings helper over TinyXML with `Normalize(int)`, `Load(const TiXmlElement *)`, and `Save(TiXmlElement *, int)`. It owns the `maxConcurrentUploads` attribute name, accepts values only in `[1, 8]`, and returns `1` for missing or invalid values.
+- [ ] Add the independent `ftp_settings_roundtrip` test before changing `FTPSettings`. It must construct a `TiXmlElement`, verify default/missing and boundary values, save `8`, and load that same element back as `8`:
 
 ```cpp
-assert(FTPSettings::NormalizeConcurrentUploads(0) == 1);
-assert(FTPSettings::NormalizeConcurrentUploads(1) == 1);
-assert(FTPSettings::NormalizeConcurrentUploads(8) == 8);
-assert(FTPSettings::NormalizeConcurrentUploads(9) == 1);
+assert(ConcurrentUploadSettings::Normalize(0) == 1);
+assert(ConcurrentUploadSettings::Normalize(1) == 1);
+assert(ConcurrentUploadSettings::Normalize(8) == 8);
+assert(ConcurrentUploadSettings::Normalize(9) == 1);
+assert(ConcurrentUploadSettings::Load(&elementWithoutValue) == 1);
+ConcurrentUploadSettings::Save(&element, 8);
+assert(ConcurrentUploadSettings::Load(&element) == 8);
 ```
 
+- [ ] Add a `NppFTP_FTPSettingsRoundTrip` CMake executable target containing only the test, `ConcurrentUploadSettings.cpp`, and the TinyXML source files it needs. It must not link cache, encryption, UI, OpenSSL, libssh, or the plugin module.
+- [ ] Extend `FTPSettings` with `m_maxConcurrentUploads`, initialized to `1`, plus a getter. Its load/save methods must delegate the XML boundary rules to `ConcurrentUploadSettings`, so runtime and test use exactly the same persistence logic.
+- [ ] Persist the value in the existing global settings XML element as `maxConcurrentUploads`. Missing, zero, negative, or too-large historical values must load as `1`, not crash and not silently create more than eight workers.
 - [ ] Add a numeric edit control and spin control to `IDD_DIALOG_GLOBAL`, with range `1..8`, a default of `1`, and a new resource id for each control. Load the stored value in `SettingsDialog::OnInitDialog`; save the bounded value in the existing close/save command path.
 - [ ] Convert only `src/Windows/NppFTP.rc` to UTF-8 if required for Chinese literals, add the resource compiler code-page directive at the beginning of that file, and leave every other source file's encoding untouched.
 - [ ] Translate the Global dialog caption and all of its fixed visible strings to Traditional Chinese. Use `同時上傳數量` for the new field. Do not translate unrelated dialogs or runtime messages in this phase.
 - [ ] Verify keyboard navigation stays intact: the numeric field must have a label, accept direct typing, obey the spin range, and leave the existing close button as the dialog's primary action.
-- [ ] Run the focused test and a Release build. Open the built plugin once and confirm the dialog displays readable Traditional Chinese, the stored number returns after restart, and invalid typed values become `1`.
+- [ ] Run the independent setting test and a Release build:
+
+```powershell
+cmake --build _build --config Release --target NppFTP_FTPSettingsRoundTrip
+& .\_build\tests\Release\NppFTP_FTPSettingsRoundTrip.exe
+.\build.bat -Arch x64 -Config Release
+```
+
+- [ ] Open the built plugin once and confirm the dialog displays readable Traditional Chinese, the stored number returns after restart, and invalid typed values become `1`.
 - [ ] Commit the settings/resource change separately after both checks pass.
 
 ### Task 3: Route Normal Uploads Through the Worker Scheduler

@@ -629,3 +629,4 @@
 - 確定只有 `NPPN_FILESAVED` 的 cache upload 提升為 urgent，僅插隊等待項目、不打斷已在傳輸的檔案；工具列 Abort 全部 active upload、queue 右鍵 Abort 僅作用於選取項目。
 - 多國語系由使用者決定暫緩至後續工作，不與本輪併行 upload／save priority 混合開發。
 - 使用者指定本輪 Global settings 對話框的固定字串改為正體中文；這是設定畫面的局部翻譯，不加入語言選擇或擴大為全 plugin i18n。
+- SDD pre-flight 將 XML persistence 驗證拆成獨立 `ConcurrentUploadSettings` + TinyXML round-trip test，避免 unit test 連結 FTP cache、加密與 UI；排程 policy test 也改為先 promotion、再 dequeue，確保只檢查仍在等待中的項目。
