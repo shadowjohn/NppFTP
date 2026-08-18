@@ -117,6 +117,13 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 使用者指定的下載完成後只寫入 Output，不會再詢問或開啟 Notepad++；要下載後開啟請使用 **Edit**。
 - 已於 Notepad++ 實機確認：遠端整個目錄可遞迴下載到選定的本機父目錄。
 
+上傳排程與全域設定：
+
+- Global settings 的「同時上傳數量」可設為 `1` 到 `8`；舊設定缺值或數值無效時使用 `1`。修改後於下一個連線 session 或重新連線生效，不會即時調整目前連線的 worker。
+- 並行排程只套用上傳；下載、遠端瀏覽、複製、rename、CHMOD、刪除等既有流程仍維持序列執行。一般手動與遞迴上傳使用 normal priority。
+- 從遠端 cache 開啟的檔案在 Notepad++ 儲存後會以 urgent priority 上傳：不打斷 active upload，但會在下一個空閒 worker 優先於等待中的 normal upload。同檔若已等待會直接提升，不新增重複項目；同檔若正在上傳則只保留一筆 urgent follow-up。
+- Global settings 目前只有本輪固定文字採正體中文；完整 UI 語系選擇與多國語系系統仍是後續規劃。
+
 ## Build
 
 需求：
@@ -176,6 +183,7 @@ copyNppFTPdllToRealENV.bat
 
 - 安全加固第一輪。
 - Windows baseline build。
+- 全域 `1..8` 同時上傳設定、並行 upload worker 與遠端 cache 儲存優先排程。
 - PSPad-like flat remote browser、鍵盤操作與 metadata 顯示。
 - 右鍵檔案操作、CHMOD、multi-file / recursive directory upload 與失敗提示。
 - Windows x64 GitHub Actions build；`v*` tag 會自動建立 GitHub pre-release。

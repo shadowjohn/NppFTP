@@ -52,7 +52,7 @@ if ($sessionSource -match 'm_transferQueue->AddQueueOp\(upload\)') {
 }
 Require-Match $windowSource 'QueueTypeRemoteUploadPrepare[\s\S]*?DispatchRemoteUploadBatch\(batch\)' 'Selected files must dispatch only after directory preparation ends.'
 Require-Match $windowSource 'QueueTypeRemoteUploadPrepare[\s\S]*?should_dispatch_remote_upload_after_prepare\(queueResult,\s*queueOp->WasCanceled\(\)\)[\s\S]*?break;[\s\S]*?DispatchRemoteUploadBatch\(batch\)' 'Failed or canceled directory preparation must not dispatch selected files.'
-Require-Match $sessionSource 'UploadFile\(sourcefile,\s*target,\s*false,\s*0\)' 'Automatic saves must still use the default normal priority until Task 5.'
+Require-Match $sessionSource 'UploadFile\(sourcefile,\s*target,\s*false,\s*0,\s*UploadPriorityUrgent\)' 'Automatic saves must use urgent upload priority.'
 Require-Match $sessionSource 'm_uploadScheduler->AbortActive\(\)' 'AbortTransfer must abort active upload workers.'
 Require-Match $sessionSource 'm_transferQueue\s*&&\s*m_transferQueue->AbortActive\(\)' 'AbortTransfer must route serial prepare Abort through the active queue state.'
 Require-Match $sessionSource 'cancelOp->GetType\(\)\s*==\s*QueueOperation::QueueTypeUpload' 'Upload cancellation must consult the upload scheduler.'

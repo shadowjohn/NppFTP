@@ -426,7 +426,7 @@ int FTPSession::UploadFileCache(const TCHAR * sourcefile) {
 		return res;
 	}
 
-	return UploadFile(sourcefile, target, false, 0);
+	return UploadFile(sourcefile, target, false, 0, UploadPriorityUrgent);
 }
 
 int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code, UploadPriority priority) {

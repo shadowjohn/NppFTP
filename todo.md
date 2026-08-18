@@ -80,6 +80,12 @@
 - [ ] Run manual SFTP/FTP QA for permission-denied, missing-path, and generic operation failure messages.
 - [ ] Run real-server recursive-upload QA for FTP/SFTP target routing, new/existing directory merge, symlinks, nested collisions, every progress row, and one batch summary.
 
+## 5.1 Concurrent upload scheduling
+
+- [x] Add the global `1..8` upload-worker setting and route manual/recursive uploads through the concurrent scheduler at normal priority.
+- [x] Make cached remote-file saves urgent, including waiting same-file promotion and one follow-up after an active same-file upload.
+- [ ] Run live Notepad++ + FTP/FTPS/SFTP QA for limits 1 and 2, manual/recursive uploads, Abort/cancel, save promotion/follow-up, and active-transfer disconnect.
+
 ## 6. Localization
 
 - [ ] Add UI language selection in a separate slice; default to Traditional Chinese.

@@ -1,5 +1,14 @@
 # NppFTP 接續紀錄
 
+## 2026-08-18 Make cached remote-file saves urgent
+
+- 只將 `FTPSession::UploadFileCache` 改為呼叫 `UploadFile(..., UploadPriorityUrgent)`；`NppFTP::OnSave`、`PluginInterface`、一般手動上傳與遞迴上傳維持既有流程，manual/recursive upload 仍是 normal priority，下載、瀏覽與 mutation 仍走序列 queue。
+- 儲存遠端 cache 檔案不會中斷 active upload，urgent 項目會取得下一個空閒 worker 並排在等待中的 normal upload 前面。同檔 normal upload 尚在等待時會直接提升而不重複；同檔正在 active 時只保留一筆 urgent follow-up，後續再次儲存沿用該筆等待項目。
+- TDD routing contract 先失敗於 `Automatic saves must use urgent upload priority.`；補上唯一 production 引數後，`pwsh -NoProfile -File .\tests\ftp_session_upload_routing.ps1` 輸出 `ftp_session_upload_routing_exit=0`。scheduler focused test 也覆蓋 waiting promotion、active follow-up 與重複 save 不新增第二筆 follow-up。
+- focused Release checks 全部通過：`ftp_settings_roundtrip_exit=0`、`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`certificate_store_lock_exit=0`、`ftp_session_upload_routing_exit=0`。
+- `build.bat -Arch x64 -Config Release` 通過；`NppFTP.dll` 4,772,864 bytes，SHA256 `65107A71C530132CB9250101185FB281D6D79F80CE094639407A93B6FD0AF9FE`；ZIP 2,204,294 bytes，SHA256 `40D4B35D3413082662D9F136B54027BE0E71354804D79F68136B387E624BC080`。僅保留既有 CMake policy 與 UTCP code-page warnings。
+- 未執行 live Notepad++ + FTP/FTPS/SFTP 手動 QA。仍須確認 Global settings 正體中文與重啟 persistence、limit `1`/`2` 的 save 插隊順序、manual/recursive upload、Abort 全部 active、取消單筆 waiting、waiting-save promotion、active-save follow-up，以及 active transfer 中乾淨 disconnect。
+
 ## 2026-08-18 Task 4 atomic completion handoff review fix
 
 - 遞迴上傳最後一個 selected file 到達 terminal 時，不再由 worker thread 把 `QueueRemoteUploadComplete` 塞進另一條會等待 UI acknowledgement 的 queue；`RemoteUploadBatch` 改以 `AddRef + PostMessage` 非阻斷通知 FTPWindow，再由 UI thread 驗證 session generation 後建立原有 completion marker。
