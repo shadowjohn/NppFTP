@@ -1,5 +1,15 @@
 # NppFTP 接續紀錄
 
+## 2026-08-18 Task 5 review fix round 1
+
+- 移除 `tests/concurrent_upload_scheduler.cpp` 自行重做 promotion／follow-up 的 `SavePriorityPolicyHarness`；該模型沒有呼叫 production `ConcurrentUploadScheduler::AddQueueOp()`，也無法覆蓋 `QueueUpload::Equals` duplicate matching 或 active worker 的 `ConflictsWith` 判定。
+- 真實 lifecycle focused test 改以 controllable `FakeWrapper` barrier 呼叫 production scheduler。單 worker 案例先卡住 active normal upload，再把 normal tail 排在 manual same-file upload 前，確認 urgent save 只提升原項目、重複 save 不增加 queue，active 不被 Abort，釋放後 save 仍先於 tail 且只傳一次。
+- 雙 worker 案例先卡住 active same-file normal upload，再 enqueue 兩次 urgent save；空閒 worker 仍因 same-file conflict 不得同時傳輸，queue 只保留一筆 follow-up。釋放 active 後同檔總傳輸次數恰為兩次，且 scheduler 從未呼叫 Abort。
+- mutation checks 證明測試直接約束 production：停用 `PromoteWaiting` 時失敗於 `promoted save runs before earlier normal tail`；略過 `FindWorkerConflictLocked` 時失敗於 `active upload retains exactly one waiting follow-up`；略過 urgent duplicate merge 時失敗於 `waiting promotion keeps one active and two waiting uploads`。三個 mutation 均已還原，`src/ConcurrentUploadScheduler.cpp` 無最終 diff。
+- `todo.md` 的 Task 5 與完整多國語系待辦已改為正體中文；README 明列 limit `1`／`2`、waiting promotion、active follow-up、Abort/cancel 與 active-transfer disconnect 都尚未完成 live Notepad++ + FTP/FTPS/SFTP QA。
+- focused Release checks 全部通過：`ftp_settings_roundtrip_exit=0`、`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`certificate_store_lock_exit=0`、`ftp_session_upload_routing_exit=0`。
+- `build.bat -Arch x64 -Config Release` 通過；`NppFTP.dll` 4,772,864 bytes，SHA256 `09EE52EA9DBE86070752C5B8A744E591CC27C078F7DA399139A391C4556BF91D`；ZIP 2,204,294 bytes，SHA256 `5626619F8E5A78DE1C142C1211A5A0AA304F98762DBD148AD6F347AF29E37C52`。只保留既有 CMake policy 與 UTCP code-page warnings；`OnSave`／`PluginInterface` 未修改，也未執行或宣稱 live protocol QA。
+
 ## 2026-08-18 Make cached remote-file saves urgent
 
 - 只將 `FTPSession::UploadFileCache` 改為呼叫 `UploadFile(..., UploadPriorityUrgent)`；`NppFTP::OnSave`、`PluginInterface`、一般手動上傳與遞迴上傳維持既有流程，manual/recursive upload 仍是 normal priority，下載、瀏覽與 mutation 仍走序列 queue。

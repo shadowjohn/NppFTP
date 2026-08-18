@@ -196,6 +196,8 @@ copyNppFTPdllToRealENV.bat
 
 已開發、仍需要實機手動 QA：
 
+- 尚未實機驗證全域同時上傳 limit `1`／`2`：active normal upload 必須先完成，cache save 應取得下一個空閒 worker；waiting 同檔只提升一筆，active 同檔只追加一筆 urgent follow-up，且不得中斷 active worker。
+- 尚未實機驗證 FTP／FTPS／SFTP 的手動與遞迴上傳、Abort 全部 active upload、取消單筆 waiting upload，以及 active transfer 中乾淨 disconnect。
 - 測 resize、icons、metadata columns、header drag/drop、double-click / Enter 與 typed path。
 - 測右鍵選單、F2、picker / drop target、Skip / Cancel / session overwrite-all。
 - 測 rename、CHMOD、new file 成功 refresh 後，目標列仍被選取、取得鍵盤 focus 並捲回可見位置。

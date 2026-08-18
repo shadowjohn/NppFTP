@@ -80,15 +80,15 @@
 - [ ] Run manual SFTP/FTP QA for permission-denied, missing-path, and generic operation failure messages.
 - [ ] Run real-server recursive-upload QA for FTP/SFTP target routing, new/existing directory merge, symlinks, nested collisions, every progress row, and one batch summary.
 
-## 5.1 Concurrent upload scheduling
+## 5.1 並行上傳排程
 
-- [x] Add the global `1..8` upload-worker setting and route manual/recursive uploads through the concurrent scheduler at normal priority.
-- [x] Make cached remote-file saves urgent, including waiting same-file promotion and one follow-up after an active same-file upload.
-- [ ] Run live Notepad++ + FTP/FTPS/SFTP QA for limits 1 and 2, manual/recursive uploads, Abort/cancel, save promotion/follow-up, and active-transfer disconnect.
+- [x] 新增全域 `1..8` 上傳 worker 設定，並以 normal priority 將手動與遞迴上傳交給並行 scheduler。
+- [x] 將遠端 cache 檔案儲存設為 urgent；同檔仍在等待時直接提升，已在 active 時只保留一筆後續上傳。
+- [ ] 使用 Notepad++ 搭配 FTP/FTPS/SFTP 實機驗證 limit `1`/`2`、手動／遞迴上傳、Abort／取消、儲存提升／active follow-up 與傳輸中斷線。
 
-## 6. Localization
+## 6. 多國語系
 
-- [ ] Add UI language selection in a separate slice; default to Traditional Chinese.
+- [ ] 後續另行加入完整 UI 語系選擇；預設語系規劃為正體中文。
 
 ## 7. User-directed remote download
 

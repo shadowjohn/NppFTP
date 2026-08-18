@@ -74,50 +74,6 @@ private:
 	bool * m_destroyed;
 };
 
-enum SaveEnqueueResult {
-	UploadPromotion,
-	UploadUrgentFollowUp
-};
-
-class SavePriorityPolicyHarness {
-public:
-	SavePriorityPolicyHarness() :
-		m_active(NULL) {
-	}
-
-	void AddWaiting(QueueOperation * op) {
-		m_policy.Push(op, UploadPriorityNormal);
-	}
-
-	void SetActive(QueueOperation * op) {
-		m_active = op;
-	}
-
-	SaveEnqueueResult EnqueueSaveFor(QueueOperation * op) {
-		QueueOperation * waiting = m_policy.FindWaiting([op](QueueOperation * candidate) {
-			return candidate == op;
-		});
-		if (waiting) {
-			m_policy.PromoteWaiting(waiting);
-			return UploadPromotion;
-		}
-		m_policy.Push(op, UploadPriorityUrgent);
-		return UploadUrgentFollowUp;
-	}
-
-	int CountMatching(QueueOperation * op) const {
-		return (m_active == op ? 1 : 0) + (m_policy.ContainsWaiting(op) ? 1 : 0);
-	}
-
-	QueueOperation * TakeNext() {
-		return m_policy.TakeNext();
-	}
-
-private:
-	UploadSchedulingPolicy m_policy;
-	QueueOperation * m_active;
-};
-
 int main()
 {
 	if (!Check(upload_transfer_paths_conflict(_T("C:\\cache\\index.html"), "/site/index.html",
@@ -148,28 +104,6 @@ int main()
 	if (!Check(!policy.PromoteWaiting(activeUpload), "active item cannot be promoted")) return 1;
 	if (!Check(!policy.ContainsWaiting(activeUpload), "active item is not waiting")) return 1;
 	if (!Check(upload_scheduling_queue_size(policy.GetQueueSize(), 1, 0) == 1, "pending add contributes to queue size")) return 1;
-
-	SavePriorityPolicyHarness waitingSavePolicy;
-	QueueOperation * manualWaiting = FakeOperation(6);
-	waitingSavePolicy.AddWaiting(manualWaiting);
-	if (!Check(waitingSavePolicy.EnqueueSaveFor(manualWaiting) == UploadPromotion,
-		"waiting manual upload is promoted for save")) return 1;
-	if (!Check(waitingSavePolicy.CountMatching(manualWaiting) == 1,
-		"waiting save promotion does not duplicate upload")) return 1;
-	if (!Check(waitingSavePolicy.TakeNext() == manualWaiting,
-		"promoted save dispatches before normal work")) return 1;
-
-	SavePriorityPolicyHarness activeSavePolicy;
-	QueueOperation * manualActive = FakeOperation(7);
-	activeSavePolicy.SetActive(manualActive);
-	if (!Check(activeSavePolicy.EnqueueSaveFor(manualActive) == UploadUrgentFollowUp,
-		"active manual upload receives urgent save follow-up")) return 1;
-	if (!Check(activeSavePolicy.CountMatching(manualActive) == 2,
-		"active upload keeps exactly one urgent follow-up")) return 1;
-	if (!Check(activeSavePolicy.EnqueueSaveFor(manualActive) == UploadPromotion,
-		"later save reuses existing urgent follow-up")) return 1;
-	if (!Check(activeSavePolicy.TakeNext() == manualActive && activeSavePolicy.TakeNext() == NULL,
-		"repeated active saves do not add another follow-up")) return 1;
 
 	policy.Push(normalA, UploadPriorityNormal);
 	if (!Check(policy.Remove(normalA), "remove waiting item")) return 1;

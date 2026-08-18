@@ -30,11 +30,22 @@ struct FakeWrapperState {
 		firstSendRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		secondSendStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		secondSendRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		waitingBlockStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		waitingBlockRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		activeSaveStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		activeSaveRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirFinished(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirRelease(CreateEvent(NULL, TRUE, TRUE, NULL)),
 		abortCount(0),
-		sendCallCount(0) {
+		sendCallCount(0),
+		prioritySequence(0),
+		waitingSaveCount(0),
+		waitingTailCount(0),
+		waitingSaveOrder(0),
+		waitingTailOrder(0),
+		activeSaveCount(0),
+		activeFollowUpOrder(0) {
 	}
 
 	~FakeWrapperState() {
@@ -44,6 +55,10 @@ struct FakeWrapperState {
 		CloseHandle(firstSendRelease);
 		CloseHandle(secondSendStarted);
 		CloseHandle(secondSendRelease);
+		CloseHandle(waitingBlockStarted);
+		CloseHandle(waitingBlockRelease);
+		CloseHandle(activeSaveStarted);
+		CloseHandle(activeSaveRelease);
 		CloseHandle(mkdirStarted);
 		CloseHandle(mkdirFinished);
 		CloseHandle(mkdirRelease);
@@ -55,11 +70,22 @@ struct FakeWrapperState {
 	HANDLE firstSendRelease;
 	HANDLE secondSendStarted;
 	HANDLE secondSendRelease;
+	HANDLE waitingBlockStarted;
+	HANDLE waitingBlockRelease;
+	HANDLE activeSaveStarted;
+	HANDLE activeSaveRelease;
 	HANDLE mkdirStarted;
 	HANDLE mkdirFinished;
 	HANDLE mkdirRelease;
 	volatile LONG abortCount;
 	volatile LONG sendCallCount;
+	volatile LONG prioritySequence;
+	volatile LONG waitingSaveCount;
+	volatile LONG waitingTailCount;
+	volatile LONG waitingSaveOrder;
+	volatile LONG waitingTailOrder;
+	volatile LONG activeSaveCount;
+	volatile LONG activeFollowUpOrder;
 };
 
 class FakeWrapper : public FTPClientWrapper {
@@ -81,10 +107,20 @@ public:
 	HANDLE MkdirFinished() const { return m_state->mkdirFinished; }
 	HANDLE FirstSendStarted() const { return m_state->firstSendStarted; }
 	HANDLE SecondSendStarted() const { return m_state->secondSendStarted; }
+	HANDLE WaitingBlockStarted() const { return m_state->waitingBlockStarted; }
+	HANDLE ActiveSaveStarted() const { return m_state->activeSaveStarted; }
 	void ReleaseFirstSend() { SetEvent(m_state->firstSendRelease); }
 	void ReleaseSecondSend() { SetEvent(m_state->secondSendRelease); }
+	void ReleaseWaitingBlock() { SetEvent(m_state->waitingBlockRelease); }
+	void ReleaseActiveSave() { SetEvent(m_state->activeSaveRelease); }
 	int AbortCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->abortCount, 0, 0)); }
 	int SendCallCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->sendCallCount, 0, 0)); }
+	int WaitingSaveCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingSaveCount, 0, 0)); }
+	int WaitingTailCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingTailCount, 0, 0)); }
+	int WaitingSaveOrder() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingSaveOrder, 0, 0)); }
+	int WaitingTailOrder() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingTailOrder, 0, 0)); }
+	int ActiveSaveCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->activeSaveCount, 0, 0)); }
+	int ActiveFollowUpOrder() const { return static_cast<int>(InterlockedCompareExchange(&m_state->activeFollowUpOrder, 0, 0)); }
 
 	virtual FTPClientWrapper * Clone() { return new FakeWrapper(m_state); }
 	virtual int Connect() { m_connected = true; return 0; }
@@ -105,6 +141,31 @@ public:
 	virtual int MkFile(const char *) { return 0; }
 	virtual int SendFile(const TCHAR *, const char * remotePath) {
 		InterlockedIncrement(&m_state->sendCallCount);
+		if (remotePath && strstr(remotePath, "waiting-block.txt")) {
+			SetEvent(m_state->waitingBlockStarted);
+			WaitForSingleObject(m_state->waitingBlockRelease, INFINITE);
+			return 0;
+		}
+		if (remotePath && strstr(remotePath, "waiting-save.txt")) {
+			InterlockedIncrement(&m_state->waitingSaveCount);
+			InterlockedExchange(&m_state->waitingSaveOrder, InterlockedIncrement(&m_state->prioritySequence));
+			return 0;
+		}
+		if (remotePath && strstr(remotePath, "waiting-tail.txt")) {
+			InterlockedIncrement(&m_state->waitingTailCount);
+			InterlockedExchange(&m_state->waitingTailOrder, InterlockedIncrement(&m_state->prioritySequence));
+			return 0;
+		}
+		if (remotePath && strstr(remotePath, "active-save.txt")) {
+			LONG call = InterlockedIncrement(&m_state->activeSaveCount);
+			if (call == 1) {
+				SetEvent(m_state->activeSaveStarted);
+				WaitForSingleObject(m_state->activeSaveRelease, INFINITE);
+			} else {
+				InterlockedExchange(&m_state->activeFollowUpOrder, InterlockedIncrement(&m_state->prioritySequence));
+			}
+			return 0;
+		}
 		if (remotePath && strstr(remotePath, "first.txt")) {
 			SetEvent(m_state->firstSendStarted);
 			WaitForSingleObject(m_state->firstSendRelease, INFINITE);
@@ -129,6 +190,8 @@ public:
 		SetEvent(m_state->sendRelease);
 		SetEvent(m_state->firstSendRelease);
 		SetEvent(m_state->secondSendRelease);
+		SetEvent(m_state->waitingBlockRelease);
+		SetEvent(m_state->activeSaveRelease);
 		SetEvent(m_state->mkdirRelease);
 		return 0;
 	}
@@ -272,7 +335,7 @@ static LRESULT CALLBACK HarnessWindowProc(HWND hwnd, UINT message, WPARAM wParam
 	if (message == NotifyMessageEnd) {
 		if (operation == harness->lateAbortOperation)
 			harness->lateAbortResult = harness->lateAbortQueue->AbortActive();
-		if (operation->GetType() == QueueOperation::QueueTypeUpload) {
+		if (operation->GetType() == QueueOperation::QueueTypeUpload && operation->GetNotifyData()) {
 			RemoteUploadBatch * batch = static_cast<RemoteUploadBatch*>(operation->GetNotifyData());
 			RemoteUploadFileOutcome outcome = resolve_remote_upload_file_outcome(operation->GetResult(), operation->WasCanceled());
 			if (outcome == RemoteUploadFileSucceeded)
@@ -332,6 +395,19 @@ static bool PumpUntilEvent(HANDLE eventHandle, DWORD timeoutMs)
 			return false;
 		Sleep(1);
 	}
+	return true;
+}
+
+static bool PumpUntilSchedulerSize(ConcurrentUploadScheduler * scheduler, int expected, DWORD timeoutMs)
+{
+	DWORD started = GetTickCount();
+	while (scheduler->GetQueueSize() != expected) {
+		PumpMessages();
+		if (GetTickCount() - started >= timeoutMs)
+			return false;
+		Sleep(1);
+	}
+	PumpMessages();
 	return true;
 }
 
@@ -602,6 +678,71 @@ static bool TestSchedulerOppositeCompletionOrder(HWND hwnd, WindowHarness * harn
 	return true;
 }
 
+static bool TestWaitingSavePromotion(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper prototype;
+	ConcurrentUploadScheduler scheduler(hwnd, &prototype, 1, NULL);
+	harness->markerQueue = NULL;
+	if (!Check(scheduler.Initialize() == 0, "initialize waiting-save scheduler")) return false;
+
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-block.txt", TEXT("waiting-block.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue active normal upload")) return false;
+	if (!Check(PumpUntilEvent(prototype.WaitingBlockStarted(), 5000), "active normal upload enters SendFile")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-tail.txt", TEXT("waiting-tail.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue earlier normal tail")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-save.txt", TEXT("waiting-save.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue waiting manual save target")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-save.txt", TEXT("waiting-save.txt"), Mode_Binary),
+		UploadPriorityUrgent) == 0, "promote waiting manual upload")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-save.txt", TEXT("waiting-save.txt"), Mode_Binary),
+		UploadPriorityUrgent) == 0, "dedupe repeated waiting save")) return false;
+	if (!Check(scheduler.GetQueueSize() == 3 && scheduler.GetActiveCount() == 1,
+		"waiting promotion keeps one active and two waiting uploads")) return false;
+	if (!Check(prototype.WaitingSaveCount() == 0 && prototype.WaitingTailCount() == 0 && prototype.AbortCount() == 0,
+		"urgent save does not interrupt active normal upload")) return false;
+
+	prototype.ReleaseWaitingBlock();
+	if (!Check(PumpUntilSchedulerSize(&scheduler, 0, 5000), "waiting promotion scheduler drains")) return false;
+	if (!Check(prototype.WaitingSaveCount() == 1 && prototype.WaitingTailCount() == 1,
+		"waiting save promotion does not duplicate transfer")) return false;
+	if (!Check(prototype.WaitingSaveOrder() > 0 && prototype.WaitingSaveOrder() < prototype.WaitingTailOrder(),
+		"promoted save runs before earlier normal tail")) return false;
+	if (!Check(prototype.AbortCount() == 0, "waiting promotion never aborts active work")) return false;
+
+	scheduler.Deinitialize();
+	return true;
+}
+
+static bool TestActiveSaveUrgentFollowUp(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper prototype;
+	ConcurrentUploadScheduler scheduler(hwnd, &prototype, 2, NULL);
+	harness->markerQueue = NULL;
+	if (!Check(scheduler.Initialize() == 0, "initialize active-save scheduler")) return false;
+
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/active-save.txt", TEXT("active-save.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue active manual upload")) return false;
+	if (!Check(PumpUntilEvent(prototype.ActiveSaveStarted(), 5000), "active manual upload enters SendFile")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/active-save.txt", TEXT("active-save.txt"), Mode_Binary),
+		UploadPriorityUrgent) == 0, "queue urgent follow-up behind active upload")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/active-save.txt", TEXT("active-save.txt"), Mode_Binary),
+		UploadPriorityUrgent) == 0, "dedupe repeated active save")) return false;
+	PumpFor(150);
+	if (!Check(scheduler.GetQueueSize() == 2 && scheduler.GetActiveCount() == 1,
+		"active upload retains exactly one waiting follow-up")) return false;
+	if (!Check(prototype.ActiveSaveCount() == 1 && prototype.ActiveFollowUpOrder() == 0 && prototype.AbortCount() == 0,
+		"matching urgent follow-up neither overlaps nor interrupts active upload")) return false;
+
+	prototype.ReleaseActiveSave();
+	if (!Check(PumpUntilSchedulerSize(&scheduler, 0, 5000), "active follow-up scheduler drains")) return false;
+	if (!Check(prototype.ActiveSaveCount() == 2 && prototype.ActiveFollowUpOrder() > 0,
+		"active upload receives one final urgent follow-up")) return false;
+	if (!Check(prototype.AbortCount() == 0, "active urgent follow-up never aborts active work")) return false;
+
+	scheduler.Deinitialize();
+	return true;
+}
+
 static bool TestFinishedPrepareTeardown(HWND hwnd, WindowHarness * harness)
 {
 	FakeWrapper wrapper;
@@ -694,6 +835,8 @@ int main()
 	if (!TestTeardownSuppression(hwnd, &harness)) return 1;
 	if (!TestSchedulerIdleShutdown(hwnd, &harness)) return 1;
 	if (!TestPostStartPrePerformTeardown(hwnd, &harness)) return 1;
+	if (!TestWaitingSavePromotion(hwnd, &harness)) return 1;
+	if (!TestActiveSaveUrgentFollowUp(hwnd, &harness)) return 1;
 	if (!TestSchedulerOppositeCompletionOrder(hwnd, &harness)) return 1;
 	if (!TestFinishedPrepareTeardown(hwnd, &harness)) return 1;
 	if (!TestActiveCompletionMarkerTeardown(hwnd, &harness)) return 1;
