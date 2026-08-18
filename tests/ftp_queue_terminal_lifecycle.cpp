@@ -34,6 +34,8 @@ struct FakeWrapperState {
 		waitingBlockRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		activeSaveStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		activeSaveRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		activeProbeStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		activeProbeRelease(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirStarted(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirFinished(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirRelease(CreateEvent(NULL, TRUE, TRUE, NULL)),
@@ -45,7 +47,8 @@ struct FakeWrapperState {
 		waitingSaveOrder(0),
 		waitingTailOrder(0),
 		activeSaveCount(0),
-		activeFollowUpOrder(0) {
+		activeFollowUpOrder(0),
+		activeProbeCount(0) {
 	}
 
 	~FakeWrapperState() {
@@ -59,6 +62,8 @@ struct FakeWrapperState {
 		CloseHandle(waitingBlockRelease);
 		CloseHandle(activeSaveStarted);
 		CloseHandle(activeSaveRelease);
+		CloseHandle(activeProbeStarted);
+		CloseHandle(activeProbeRelease);
 		CloseHandle(mkdirStarted);
 		CloseHandle(mkdirFinished);
 		CloseHandle(mkdirRelease);
@@ -74,6 +79,8 @@ struct FakeWrapperState {
 	HANDLE waitingBlockRelease;
 	HANDLE activeSaveStarted;
 	HANDLE activeSaveRelease;
+	HANDLE activeProbeStarted;
+	HANDLE activeProbeRelease;
 	HANDLE mkdirStarted;
 	HANDLE mkdirFinished;
 	HANDLE mkdirRelease;
@@ -86,6 +93,7 @@ struct FakeWrapperState {
 	volatile LONG waitingTailOrder;
 	volatile LONG activeSaveCount;
 	volatile LONG activeFollowUpOrder;
+	volatile LONG activeProbeCount;
 };
 
 class FakeWrapper : public FTPClientWrapper {
@@ -109,10 +117,12 @@ public:
 	HANDLE SecondSendStarted() const { return m_state->secondSendStarted; }
 	HANDLE WaitingBlockStarted() const { return m_state->waitingBlockStarted; }
 	HANDLE ActiveSaveStarted() const { return m_state->activeSaveStarted; }
+	HANDLE ActiveProbeStarted() const { return m_state->activeProbeStarted; }
 	void ReleaseFirstSend() { SetEvent(m_state->firstSendRelease); }
 	void ReleaseSecondSend() { SetEvent(m_state->secondSendRelease); }
 	void ReleaseWaitingBlock() { SetEvent(m_state->waitingBlockRelease); }
 	void ReleaseActiveSave() { SetEvent(m_state->activeSaveRelease); }
+	void ReleaseActiveProbe() { SetEvent(m_state->activeProbeRelease); }
 	int AbortCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->abortCount, 0, 0)); }
 	int SendCallCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->sendCallCount, 0, 0)); }
 	int WaitingSaveCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingSaveCount, 0, 0)); }
@@ -121,6 +131,7 @@ public:
 	int WaitingTailOrder() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingTailOrder, 0, 0)); }
 	int ActiveSaveCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->activeSaveCount, 0, 0)); }
 	int ActiveFollowUpOrder() const { return static_cast<int>(InterlockedCompareExchange(&m_state->activeFollowUpOrder, 0, 0)); }
+	int ActiveProbeCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->activeProbeCount, 0, 0)); }
 
 	virtual FTPClientWrapper * Clone() { return new FakeWrapper(m_state); }
 	virtual int Connect() { m_connected = true; return 0; }
@@ -166,6 +177,12 @@ public:
 			}
 			return 0;
 		}
+		if (remotePath && strstr(remotePath, "active-probe.txt")) {
+			InterlockedIncrement(&m_state->activeProbeCount);
+			SetEvent(m_state->activeProbeStarted);
+			WaitForSingleObject(m_state->activeProbeRelease, INFINITE);
+			return 0;
+		}
 		if (remotePath && strstr(remotePath, "first.txt")) {
 			SetEvent(m_state->firstSendStarted);
 			WaitForSingleObject(m_state->firstSendRelease, INFINITE);
@@ -192,6 +209,7 @@ public:
 		SetEvent(m_state->secondSendRelease);
 		SetEvent(m_state->waitingBlockRelease);
 		SetEvent(m_state->activeSaveRelease);
+		SetEvent(m_state->activeProbeRelease);
 		SetEvent(m_state->mkdirRelease);
 		return 0;
 	}
@@ -402,6 +420,19 @@ static bool PumpUntilSchedulerSize(ConcurrentUploadScheduler * scheduler, int ex
 {
 	DWORD started = GetTickCount();
 	while (scheduler->GetQueueSize() != expected) {
+		PumpMessages();
+		if (GetTickCount() - started >= timeoutMs)
+			return false;
+		Sleep(1);
+	}
+	PumpMessages();
+	return true;
+}
+
+static bool PumpUntilSchedulerState(ConcurrentUploadScheduler * scheduler, int expectedSize, int expectedActive, DWORD timeoutMs)
+{
+	DWORD started = GetTickCount();
+	while (scheduler->GetQueueSize() != expectedSize || scheduler->GetActiveCount() != expectedActive) {
 		PumpMessages();
 		if (GetTickCount() - started >= timeoutMs)
 			return false;
@@ -727,12 +758,19 @@ static bool TestActiveSaveUrgentFollowUp(HWND hwnd, WindowHarness * harness)
 		UploadPriorityUrgent) == 0, "queue urgent follow-up behind active upload")) return false;
 	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/active-save.txt", TEXT("active-save.txt"), Mode_Binary),
 		UploadPriorityUrgent) == 0, "dedupe repeated active save")) return false;
-	PumpFor(150);
-	if (!Check(scheduler.GetQueueSize() == 2 && scheduler.GetActiveCount() == 1,
-		"active upload retains exactly one waiting follow-up")) return false;
-	if (!Check(prototype.ActiveSaveCount() == 1 && prototype.ActiveFollowUpOrder() == 0 && prototype.AbortCount() == 0,
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/active-probe.txt", TEXT("active-probe.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue non-conflicting scheduler probe")) return false;
+	if (!Check(PumpUntilEvent(prototype.ActiveProbeStarted(), 5000),
+		"idle worker starts non-conflicting probe after examining blocked urgent follow-up")) return false;
+	if (!Check(scheduler.GetQueueSize() == 3 && scheduler.GetActiveCount() == 2,
+		"scheduler keeps conflicting urgent follow-up waiting while probe is active")) return false;
+	if (!Check(prototype.ActiveSaveCount() == 1 && prototype.ActiveFollowUpOrder() == 0 &&
+		prototype.ActiveProbeCount() == 1 && prototype.AbortCount() == 0,
 		"matching urgent follow-up neither overlaps nor interrupts active upload")) return false;
 
+	prototype.ReleaseActiveProbe();
+	if (!Check(PumpUntilSchedulerState(&scheduler, 2, 1, 5000),
+		"probe completion leaves active upload and one urgent follow-up")) return false;
 	prototype.ReleaseActiveSave();
 	if (!Check(PumpUntilSchedulerSize(&scheduler, 0, 5000), "active follow-up scheduler drains")) return false;
 	if (!Check(prototype.ActiveSaveCount() == 2 && prototype.ActiveFollowUpOrder() > 0,

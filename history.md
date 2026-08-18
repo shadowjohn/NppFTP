@@ -1,5 +1,13 @@
 # NppFTP 接續紀錄
 
+## 2026-08-18 Task 5 review fix round 2
+
+- `TestActiveSaveUrgentFollowUp` 移除固定 `PumpFor(150)`。active same-file upload 與 urgent follow-up 入列後，測試再 enqueue 一筆 non-conflicting `active-probe.txt`，等待第二個 worker 真正進入 probe `SendFile` barrier，才檢查 scheduler 已掃描 lanes、跳過 conflicting urgent 並選中 probe。
+- probe active 時明確驗證 queue size 為 3、active worker 為 2、same-file 傳輸仍只有原始 1 次、follow-up 尚未執行且 Abort 為 0；釋放 probe 後再等待 state 收斂為 queue size 2／active 1，證明只剩原 active 與一筆 urgent follow-up。釋放原 active 後，同檔總傳輸仍恰為 2 次。
+- deterministic mutation check 暫時略過 production `FindWorkerConflictLocked` 後，probe 已確實開始，測試穩定失敗於 `scheduler keeps conflicting urgent follow-up waiting while probe is active`；mutation 已還原，production source 無本輪 diff。
+- focused Release checks 全部通過：`ftp_settings_roundtrip_exit=0`、`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`certificate_store_lock_exit=0`、`ftp_session_upload_routing_exit=0`。
+- `build.bat -Arch x64 -Config Release` 通過；`NppFTP.dll` 4,772,864 bytes，SHA256 `3C7657DD922FE8882511B271C7F2AF633C376D0D0D78F24507FE1B57A52DACE8`；ZIP 2,204,294 bytes，SHA256 `CB9B614B7E7F40A387985236E47D89EB29F74EF3C6292A244BDE5C5FAB70130E`。只保留既有 CMake policy 與 UTCP code-page warnings；未執行 live Notepad++ + FTP/FTPS/SFTP QA，也未修改 production、`OnSave` 或 `PluginInterface`。
+
 ## 2026-08-18 Task 5 review fix round 1
 
 - 移除 `tests/concurrent_upload_scheduler.cpp` 自行重做 promotion／follow-up 的 `SavePriorityPolicyHarness`；該模型沒有呼叫 production `ConcurrentUploadScheduler::AddQueueOp()`，也無法覆蓋 `QueueUpload::Equals` duplicate matching 或 active worker 的 `ConflictsWith` 判定。
