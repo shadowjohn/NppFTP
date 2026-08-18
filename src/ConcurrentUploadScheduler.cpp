@@ -124,7 +124,7 @@ int ConcurrentUploadScheduler::Deinitialize() {
 	for (std::deque<PendingAdd>::iterator it = m_pendingAdds.begin(); it != m_pendingAdds.end(); ++it)
 		it->operation->Terminate();
 	for (std::vector<Worker*>::iterator it = m_workers.begin(); it != m_workers.end(); ++it) {
-		(*it)->queue->AbortActive();
+		(*it)->queue->BeginTeardown();
 	}
 	HANDLE dispatchThread = m_dispatchThread;
 	m_monitor->Exit();
@@ -389,7 +389,7 @@ void ConcurrentUploadScheduler::DeleteWorkers() {
 
 void ConcurrentUploadScheduler::DeleteWorkerList(std::vector<Worker*> & workers) {
 	for (std::vector<Worker*>::iterator it = workers.begin(); it != workers.end(); ++it) {
-		(*it)->queue->AbortActive();
+		(*it)->queue->BeginTeardown();
 		(*it)->queue->Deinitialize();
 		(*it)->wrapper->Disconnect();
 		delete (*it)->queue;

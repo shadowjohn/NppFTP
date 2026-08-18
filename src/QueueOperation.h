@@ -61,6 +61,7 @@ public:
 	virtual int				Perform() = 0;
 	virtual int				Terminate();
 	virtual void				OnQueueCanceled();
+	virtual void				OnQueueTeardown();
 	virtual QueueOperation*	OnQueueTerminal();
 	virtual bool				WasCanceled() const;
 
@@ -84,6 +85,7 @@ public:
 	virtual bool			ConflictsWith(const QueueOperation & other) const;
 protected:
 	virtual int				SetClient(FTPClientWrapper* wrapper);
+	int						CompletePerform(int result);
 
 	QueueType				m_type;
 
@@ -103,11 +105,17 @@ protected:
 
 	bool					m_running;
 	volatile LONG			m_canceled;
+	volatile LONG			m_executionState;
 
 	Monitor					m_ackMonitor;
 	bool					m_terminating;
 	DWORD					m_winThread;
 
+private:
+	void					PrepareExecution();
+	bool					StartExecution();
+	void					FinishExecution();
+	bool					CancelExecution(bool allowIdle, bool * wasRunning);
 };
 
 class QueueConnect : public QueueOperation {
@@ -166,7 +174,9 @@ public:
 
 	virtual int				Perform();
 	virtual bool			Equals(const QueueOperation & other);
+	virtual void				OnQueueTeardown();
 	virtual QueueOperation *	OnQueueTerminal();
+	virtual void				MarkFilesDispatched();
 	virtual RemoteUploadBatch * GetBatch() const;
 	virtual const std::vector<RemoteUploadPrepareFailure> & GetFailures() const;
 
@@ -174,6 +184,8 @@ protected:
 	RemoteUploadBatch *		m_batch;
 	std::vector<RemoteUploadPrepareFailure> m_failures;
 	volatile LONG			m_terminalRecorded;
+	volatile LONG			m_filesDispatched;
+	void					CancelUnstartedSelectedFilesOnce();
 };
 
 class QueueEnsureDirectory : public QueueOperation {

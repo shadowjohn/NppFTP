@@ -28,17 +28,11 @@ const int ConditionQueueStop = 1;
 const int ConditionQueueAcked = 2;
 const int ConditionCount = 3;
 
-const LONG QueueExecutionIdle = 0;
-const LONG QueueExecutionRunning = 1;
-const LONG QueueExecutionFinished = 2;
-const LONG QueueExecutionCanceled = 3;
-
 FTPQueue::FTPQueue(FTPClientWrapper* wrapper, FTPQueueTerminalCallback terminalCallback, void * terminalContext) :
 	m_wrapper(wrapper),
 	m_running(false),
 	m_stopping(false),
 	m_performing(false),
-	m_executionState(QueueExecutionIdle),
 	m_teardown(false),
 	m_activeOp(NULL),
 	m_activeTerminalOp(NULL),
@@ -85,7 +79,8 @@ int FTPQueue::Deinitialize() {
 
 		if (m_performing) {
 			m_queue.front()->Terminate();
-			m_queue.front()->SendNotification(QueueOperation::QueueEventEnd);
+			if (!m_teardown)
+				m_queue.front()->SendNotification(QueueOperation::QueueEventEnd);
 			//m_queue.front()->SendNotification(QueueOperation::QueueEventRemove);
 		}
 		for (VQueue::iterator it = m_queue.begin(); it != m_queue.end(); ++it)
@@ -125,7 +120,6 @@ int FTPQueue::Deinitialize() {
 	m_running = false;
 	m_stopping = false;
 	m_performing = false;
-	InterlockedExchange(&m_executionState, QueueExecutionIdle);
 	m_teardown = false;
 	m_activeOp = NULL;
 	m_activeTerminalOp = NULL;
@@ -270,12 +264,11 @@ int FTPQueue::BeginTeardown() {
 		if (!m_teardown) {
 			m_teardown = true;
 			if (m_performing && m_activeOp) {
-				LONG state = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionRunning);
-				if (state == QueueExecutionIdle)
-					state = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionIdle);
-				if (state == QueueExecutionIdle || state == QueueExecutionRunning)
+				bool wasRunning = false;
+				if (m_activeOp->CancelExecution(true, &wasRunning))
 					m_activeOp->OnQueueCanceled();
-				abortActive = state == QueueExecutionRunning;
+				abortActive = wasRunning;
+				m_activeOp->OnQueueTeardown();
 				m_activeOp->Terminate();
 				m_activeOp->ClearPendingNotifications();
 			}
@@ -288,8 +281,8 @@ int FTPQueue::BeginTeardown() {
 int FTPQueue::AbortActive() {
 	bool active = false;
 	m_monitor->Enter();
-		if (m_performing && m_activeOp &&
-			InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, QueueExecutionRunning) == QueueExecutionRunning) {
+		bool wasRunning = false;
+		if (m_performing && m_activeOp && m_activeOp->CancelExecution(false, &wasRunning) && wasRunning) {
 			m_activeOp->OnQueueCanceled();
 			active = true;
 		}
@@ -314,15 +307,15 @@ int FTPQueue::QueueLoop() {
 			op = m_queue.front();
 			m_activeOp = op;
 			m_performing = true;
-			InterlockedExchange(&m_executionState, QueueExecutionIdle);
+			op->PrepareExecution();
 		m_monitor->Exit();
 
 		op->SendNotification(QueueOperation::QueueEventStart);
 		op->SetRunning(true);
 		Sleep(500);
-		if (InterlockedCompareExchange(&m_executionState, QueueExecutionRunning, QueueExecutionIdle) == QueueExecutionIdle) {
+		if (op->StartExecution()) {
 			op->Perform();
-			InterlockedCompareExchange(&m_executionState, QueueExecutionFinished, QueueExecutionRunning);
+			op->FinishExecution();
 		} else {
 			op->OnQueueCanceled();
 		}
@@ -348,7 +341,6 @@ int FTPQueue::QueueLoop() {
 		m_monitor->Enter();
 			m_activeOp = NULL;
 			m_performing = false;
-			InterlockedExchange(&m_executionState, QueueExecutionIdle);
 			m_queue.pop_front();
 		m_monitor->Exit();
 
@@ -359,7 +351,6 @@ int FTPQueue::QueueLoop() {
 
 	m_monitor->Enter();
 		m_performing = false;
-		InterlockedExchange(&m_executionState, QueueExecutionIdle);
 		m_monitor->Signal(ConditionQueueStop);
 	m_monitor->Exit();
 

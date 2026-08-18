@@ -502,8 +502,12 @@ int FTPSession::QueueRemoteUploadPlan(RemoteUploadPlan * plan) {
 }
 
 int FTPSession::DispatchRemoteUploadBatch(RemoteUploadBatch * batch) {
-	if (!batch || !batch->plan || !m_running || !m_transferQueue || !m_uploadScheduler || !m_currentProfile)
+	if (!batch || !batch->plan)
 		return -1;
+	if (!m_running || !m_transferQueue || !m_uploadScheduler || !m_currentProfile) {
+		batch->CancelUnstartedSelectedFiles();
+		return -1;
+	}
 
 	std::vector<const RemoteUploadItem*> selectedFiles = batch->plan->GetSelectedFileItems();
 	if (selectedFiles.empty()) {

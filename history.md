@@ -713,3 +713,12 @@
 - queued cancellation 現在會在 operation 刪除前取得 generic terminal follow-up；scheduler 仍不辨識 recursive operation 型別，且 ownership 在 terminal removal 前保持可見。active abort 仍沿用既有 per-operation failure 行為，不會清掉其他 worker 或等待中的檔案。
 - summary Output 明確列出 selected、successful、failed、skipped、canceled 與 directory failures；file success/failure 仍在 UI thread 的 End acknowledgement 內記錄，completion marker 只能在所有 End acknowledgement 或 cancellation terminal 都完成後出現。
 - Release-safe focused checks 覆蓋 parent-before-child、selected-only、skipped count、兩 worker 反向完成、exactly-once completion、failure/cancellation counters；`remote_upload_plan_exit=0`、`concurrent_upload_scheduler_exit=0`、`ftp_session_upload_routing_exit=0`。x64 Release DLL/package build 通過；真實 Notepad++ limit=2 directory drag/drop、distinct progress rows 與 FTP／FTPS／SFTP server 行為仍待實機 QA。
+
+## 2026-08-18 Finalize recursive upload teardown lifecycle
+
+- scheduler 關閉 worker 時改走 `FTPQueue::BeginTeardown()`；Start 已通知、仍在 500ms pre-execution Idle 的 upload 會先 terminal-cancel，斷線後不會再進入 `SendFile()`。Idle／Running 競態由 operation 內的 compare-exchange loop 收斂。
+- `QueueOperation` 自行保存 execution state；`QueueUpload`、`QueueRemoteUploadPrepare` 與 `QueueRemoteUploadComplete` 在 `Perform()` 回傳前以 `CompletePerform()` 原子定案結果。Abort 只有在仍為 Running 時能取得取消權，已成功或已收到 server failure 的結果不會在返回空窗被改標 canceled。
+- prepare 新增 teardown hook 與 files-dispatched one-shot：若目錄準備完成但 End 尚未由 UI 處理，confirmed teardown 會把尚未派送的 selected files 全數 terminal-account；若 UI 已交給 scheduler，則不會重複扣 remaining。session 已無法 dispatch 時也會立即取消未派送項目。
+- `FTPQueue::Deinitialize()` 在 confirmed teardown 不再由 UI thread 補送 active End；operation 與 batch reference 仍完整回收，但 active `QueueRemoteUploadComplete` 不會在斷線期間漏出摘要。正常 session 路徑仍只顯示一次摘要。
+- 真實 lifecycle 測試新增 scheduler Idle shutdown、兩 worker 反向完成、finished prepare before End、active completion marker teardown，以及 success/server-failure late Abort；`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_session_upload_routing_exit=0`。
+- `build.bat -Arch x64 -Config Release` 成功；DLL SHA-256 `A6EFD05F93CF4B8A2A82420A44A6287DAFE8BE2EF9B63307801DDF53C23BAB65`，ZIP SHA-256 `4A87450F60ED4FDCBFC65B32CD1EA4FF78BBA3927E55B4375F57B2A475125BEB`。既有 UTCP code-page／legacy conversion warnings 未新增 error；Notepad++ 加真實 FTP／FTPS／SFTP 的 disconnect/Abort 實機 QA 仍待執行。

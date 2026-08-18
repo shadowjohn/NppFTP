@@ -2617,7 +2617,9 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				OutErr("[FTPWindow] %T", failure.c_str());
 				SU::FreeTChar(remotePath);
 			}
-			if (m_ftpSession->DispatchRemoteUploadBatch(batch) != 0)
+			int dispatchResult = m_ftpSession->DispatchRemoteUploadBatch(batch);
+			prepare->MarkFilesDispatched();
+			if (dispatchResult != 0)
 				OutErr("[FTPWindow] One or more directory upload files could not be queued");
 			break; }
 		case QueueOperation::QueueTypeRemoteDownloadScan: {

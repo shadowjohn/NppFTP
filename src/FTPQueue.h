@@ -60,7 +60,6 @@ private:
 	bool					m_running;
 	bool					m_stopping;
 	bool					m_performing;
-	volatile LONG			m_executionState;
 	bool					m_teardown;
 	QueueOperation*			m_activeOp;
 	QueueOperation*			m_activeTerminalOp;

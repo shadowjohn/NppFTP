@@ -23,6 +23,11 @@
 const int QueueConditionAcked = 0;
 const int QueueConditionCount = 1;
 
+const LONG QueueExecutionIdle = 0;
+const LONG QueueExecutionRunning = 1;
+const LONG QueueExecutionFinished = 2;
+const LONG QueueExecutionCanceled = 3;
+
 QueueOperation::QueueOperation(QueueType type, HWND hNotify, int notifyCode, void * notifyData) :
 	m_type(type),
 	m_client(NULL),
@@ -37,6 +42,7 @@ QueueOperation::QueueOperation(QueueType type, HWND hNotify, int notifyCode, voi
 	m_notifSent(0),
 	m_running(false),
 	m_canceled(0),
+	m_executionState(QueueExecutionIdle),
 	m_ackMonitor(QueueConditionCount),
 	m_terminating(false)
 {
@@ -58,6 +64,9 @@ int QueueOperation::Terminate() {
 
 void QueueOperation::OnQueueCanceled() {
 	InterlockedExchange(&m_canceled, 1);
+}
+
+void QueueOperation::OnQueueTeardown() {
 }
 
 QueueOperation * QueueOperation::OnQueueTerminal() {
@@ -91,6 +100,41 @@ RemoteFailureKind QueueOperation::GetFailureKind() const {
 int QueueOperation::SetRunning(bool running) {
 	m_running = running;
 	return 0;
+}
+
+int QueueOperation::CompletePerform(int result) {
+	m_result = result;
+	FinishExecution();
+	return m_result;
+}
+
+void QueueOperation::PrepareExecution() {
+	InterlockedExchange(&m_executionState, QueueExecutionIdle);
+}
+
+bool QueueOperation::StartExecution() {
+	return InterlockedCompareExchange(&m_executionState, QueueExecutionRunning, QueueExecutionIdle) == QueueExecutionIdle;
+}
+
+void QueueOperation::FinishExecution() {
+	InterlockedCompareExchange(&m_executionState, QueueExecutionFinished, QueueExecutionRunning);
+}
+
+bool QueueOperation::CancelExecution(bool allowIdle, bool * wasRunning) {
+	if (wasRunning)
+		*wasRunning = false;
+	LONG state = InterlockedCompareExchange(&m_executionState, 0, 0);
+	while (state == QueueExecutionRunning || (allowIdle && state == QueueExecutionIdle)) {
+		LONG previous = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, state);
+		if (previous != state) {
+			state = previous;
+			continue;
+		}
+		if (wasRunning)
+			*wasRunning = state == QueueExecutionRunning;
+		return true;
+	}
+	return false;
 }
 
 bool QueueOperation::GetRunning() const {
@@ -438,7 +482,7 @@ int QueueUpload::Perform() {
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
-			return m_result;
+			return CompletePerform(m_result);
 		m_result = -1;
 	}
 
@@ -446,8 +490,7 @@ int QueueUpload::Perform() {
 		((FTPClientWrapperSSL*)m_client)->SetTransferMode(m_tMode);
 	}
 
-	m_result = m_client->SendFile(m_localFile, m_externalFile);
-	return m_result;
+	return CompletePerform(m_client->SendFile(m_localFile, m_externalFile));
 }
 
 bool QueueUpload::Equals(const QueueOperation & other) {
@@ -750,7 +793,8 @@ RemoteUploadPlan * QueueRemoteUploadScan::GetPlan() const {
 QueueRemoteUploadPrepare::QueueRemoteUploadPrepare(HWND hNotify, RemoteUploadBatch * batch, int notifyCode) :
 	QueueOperation(QueueTypeRemoteUploadPrepare, hNotify, notifyCode, batch),
 	m_batch(batch),
-	m_terminalRecorded(0)
+	m_terminalRecorded(0),
+	m_filesDispatched(0)
 {
 	if (m_batch)
 		m_batch->AddRef();
@@ -763,8 +807,7 @@ QueueRemoteUploadPrepare::~QueueRemoteUploadPrepare() {
 
 int QueueRemoteUploadPrepare::Perform() {
 	if (!m_batch || !m_batch->plan || !m_client) {
-		m_result = -1;
-		return m_result;
+		return CompletePerform(-1);
 	}
 
 	std::vector<const RemoteUploadItem*> directories = m_batch->plan->GetDirectoryItems();
@@ -794,20 +837,31 @@ int QueueRemoteUploadPrepare::Perform() {
 	}
 
 	// Preparation itself completed even when individual directories failed.
-	m_result = 0;
-	return m_result;
+	return CompletePerform(0);
 }
 
 bool QueueRemoteUploadPrepare::Equals(const QueueOperation & other) {
 	return QueueOperation::Equals(other);
 }
 
+void QueueRemoteUploadPrepare::OnQueueTeardown() {
+	if (InterlockedCompareExchange(&m_filesDispatched, 0, 0) == 0)
+		CancelUnstartedSelectedFilesOnce();
+}
+
 QueueOperation * QueueRemoteUploadPrepare::OnQueueTerminal() {
-	if (!m_batch || (m_result != -1 && !WasCanceled()) ||
-		InterlockedCompareExchange(&m_terminalRecorded, 1, 0) != 0)
-		return NULL;
-	m_batch->CancelUnstartedSelectedFiles();
+	if (m_result == -1 || WasCanceled())
+		CancelUnstartedSelectedFilesOnce();
 	return NULL;
+}
+
+void QueueRemoteUploadPrepare::MarkFilesDispatched() {
+	InterlockedExchange(&m_filesDispatched, 1);
+}
+
+void QueueRemoteUploadPrepare::CancelUnstartedSelectedFilesOnce() {
+	if (m_batch && InterlockedCompareExchange(&m_terminalRecorded, 1, 0) == 0)
+		m_batch->CancelUnstartedSelectedFiles();
 }
 
 RemoteUploadBatch * QueueRemoteUploadPrepare::GetBatch() const {
@@ -883,8 +937,7 @@ QueueRemoteUploadComplete::~QueueRemoteUploadComplete() {
 }
 
 int QueueRemoteUploadComplete::Perform() {
-	m_result = 0;
-	return m_result;
+	return CompletePerform(0);
 }
 
 bool QueueRemoteUploadComplete::Equals(const QueueOperation & other) {

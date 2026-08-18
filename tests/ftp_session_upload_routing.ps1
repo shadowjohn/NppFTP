@@ -78,7 +78,12 @@ if ($operationSource -match 'return new QueueRemoteUploadComplete') {
     throw 'Worker-owned recursive operations must post batch completion instead of constructing queue markers.'
 }
 Require-Match $queueSource 'queue_filter_terminal_follow_up\(terminalOp,\s*suppressTerminalFollowUps\)' 'Transfer queue teardown must account canceled batches while suppressing their UI summaries.'
-Require-Match $queueSource 'AbortActive[\s\S]*?InterlockedCompareExchange\(&m_executionState,\s*QueueExecutionCanceled,\s*QueueExecutionRunning\)[\s\S]*?OnQueueCanceled\(\)[\s\S]*?m_wrapper->Abort\(\)' 'Active Abort must atomically claim an executing operation before marking it canceled.'
+Require-Match $queueSource 'AbortActive[\s\S]*?m_activeOp->CancelExecution\(false,\s*&wasRunning\)[\s\S]*?OnQueueCanceled\(\)[\s\S]*?m_wrapper->Abort\(\)' 'Active Abort must atomically claim an executing operation before marking it canceled.'
+Require-Match $operationSource 'CompletePerform[\s\S]*?FinishExecution\(\)' 'A completed operation result must linearize before Perform returns.'
+Require-Match $operationSource 'QueueUpload::Perform[\s\S]*?CompletePerform\(m_client->SendFile' 'Uploads must finalize their actual transfer result before late Abort can relabel it.'
+Require-Match $schedulerSource 'Deinitialize[\s\S]*?queue->BeginTeardown\(\)' 'Scheduler shutdown must cancel worker operations that are still in the pre-execution idle state.'
+Require-Match $queueSource 'if \(!m_teardown\)\s*m_queue\.front\(\)->SendNotification\(QueueOperation::QueueEventEnd\)' 'Confirmed teardown must not synthesize an active End notification on the UI thread.'
+Require-Match $operationSource 'QueueRemoteUploadPrepare::OnQueueTeardown[\s\S]*?CancelUnstartedSelectedFilesOnce' 'Undispatched selected files must be terminal-accounted when prepare is torn down after Perform.'
 Require-Match $schedulerSource 'int ConcurrentUploadScheduler::AbortActive\(\)[\s\S]*?int result = 0;[\s\S]*?queue->AbortActive\(\) != 0[\s\S]*?result = -1;[\s\S]*?return result;' 'Active Abort must attempt every worker before returning an aggregate result.'
 Require-Match $windowSource 'm_activeTransferCount' 'FTPWindow must count concurrent active transfers instead of clearing busy state on the first End event.'
 Require-Match ($schedulerHeader + $schedulerSource) 'std::deque<QueueOperation\s*\*>' 'Scheduler workers must retain ownership visibility until terminal removal.'
