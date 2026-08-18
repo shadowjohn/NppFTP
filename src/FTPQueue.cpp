@@ -279,15 +279,15 @@ int FTPQueue::BeginTeardown() {
 }
 
 int FTPQueue::AbortActive() {
-	bool active = false;
+	bool abortActive = false;
 	m_monitor->Enter();
 		bool wasRunning = false;
-		if (m_performing && m_activeOp && m_activeOp->CancelExecution(false, &wasRunning) && wasRunning) {
+		if (m_performing && m_activeOp && m_activeOp->CancelExecution(false, &wasRunning)) {
 			m_activeOp->OnQueueCanceled();
-			active = true;
+			abortActive = wasRunning;
 		}
 	m_monitor->Exit();
-	return active ? m_wrapper->Abort() : 0;
+	return abortActive ? m_wrapper->Abort() : 0;
 }
 
 int FTPQueue::QueueLoop() {
@@ -314,6 +314,7 @@ int FTPQueue::QueueLoop() {
 		op->SetRunning(true);
 		Sleep(500);
 		if (op->StartExecution()) {
+			op->OnExecutionHandoff();
 			op->Perform();
 			op->FinishExecution();
 		} else {

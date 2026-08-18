@@ -85,6 +85,8 @@ public:
 	virtual bool			ConflictsWith(const QueueOperation & other) const;
 protected:
 	virtual int				SetClient(FTPClientWrapper* wrapper);
+	virtual void			OnExecutionHandoff();
+	bool					BeginPerform();
 	int						CompletePerform(int result);
 
 	QueueType				m_type;

@@ -152,6 +152,8 @@ public:
 	}
 
 	virtual int Perform() {
+		if (!BeginPerform())
+			return m_result;
 		m_result = 0;
 		SetEvent(m_started);
 		WaitForSingleObject(m_release, INFINITE);
@@ -181,6 +183,8 @@ public:
 	}
 
 	virtual int Perform() {
+		if (!BeginPerform())
+			return m_result;
 		CompletePerform(m_forcedResult);
 		SetEvent(m_finalized);
 		WaitForSingleObject(m_release, INFINITE);
@@ -193,6 +197,32 @@ public:
 private:
 	int m_forcedResult;
 	HANDLE m_finalized;
+	HANDLE m_release;
+};
+
+class HandoffBlockingUpload : public QueueRemoteUploadFile {
+public:
+	HandoffBlockingUpload(HWND hwnd, RemoteUploadBatch * batch) :
+		QueueRemoteUploadFile(hwnd, "/site/local.txt", TEXT("local.txt"), Mode_Binary, batch),
+		m_handoffReached(CreateEvent(NULL, TRUE, FALSE, NULL)),
+		m_release(CreateEvent(NULL, TRUE, FALSE, NULL)) {
+	}
+
+	~HandoffBlockingUpload() {
+		CloseHandle(m_handoffReached);
+		CloseHandle(m_release);
+	}
+
+	virtual void OnExecutionHandoff() {
+		SetEvent(m_handoffReached);
+		WaitForSingleObject(m_release, INFINITE);
+	}
+
+	HANDLE HandoffReached() const { return m_handoffReached; }
+	void ReleasePerform() { SetEvent(m_release); }
+
+private:
+	HANDLE m_handoffReached;
 	HANDLE m_release;
 };
 
@@ -503,6 +533,37 @@ static bool TestSchedulerIdleShutdown(HWND hwnd, WindowHarness * harness)
 	return true;
 }
 
+static bool TestPostStartPrePerformTeardown(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper wrapper;
+	FTPQueue queue(&wrapper);
+	harness->markerQueue = NULL;
+	if (!Check(queue.Initialize() == 0, "initialize handoff teardown queue")) return false;
+
+	RemoteUploadBatch * batch = MakeFileBatch(hwnd, harness->generation);
+	HandoffBlockingUpload * upload = new HandoffBlockingUpload(hwnd, batch);
+	LONG postsBefore = harness->completionPosts;
+	LONG dropsBefore = harness->droppedPosts;
+	queue.AddQueueOp(upload);
+	if (!Check(PumpUntilEvent(upload->HandoffReached(), 5000),
+		"upload reaches post-StartExecution pre-Perform handoff")) return false;
+
+	InterlockedIncrement(&harness->generation);
+	if (!Check(queue.BeginTeardown() == 0, "teardown wins upload perform handoff")) return false;
+	upload->ReleasePerform();
+	queue.Deinitialize();
+	if (!Check(PumpUntil(&harness->completionPosts, postsBefore + 1, 5000),
+		"handoff teardown posts one terminal completion")) return false;
+	PumpFor(100);
+	if (!Check(wrapper.SendCallCount() == 0 && wrapper.AbortCount() == 0,
+		"handoff teardown needs neither SendFile nor wrapper Abort")) return false;
+	if (!Check(batch->GetCanceledFileCount() == 1 && batch->GetRemainingFileCount() == 0 &&
+		harness->completionPosts == postsBefore + 1 && harness->droppedPosts == dropsBefore + 1,
+		"handoff teardown terminal-accounts exactly once")) return false;
+	batch->Release();
+	return true;
+}
+
 static bool TestSchedulerOppositeCompletionOrder(HWND hwnd, WindowHarness * harness)
 {
 	FakeWrapper prototype;
@@ -632,6 +693,7 @@ int main()
 	if (!TestPrepareAbort(hwnd, &harness)) return 1;
 	if (!TestTeardownSuppression(hwnd, &harness)) return 1;
 	if (!TestSchedulerIdleShutdown(hwnd, &harness)) return 1;
+	if (!TestPostStartPrePerformTeardown(hwnd, &harness)) return 1;
 	if (!TestSchedulerOppositeCompletionOrder(hwnd, &harness)) return 1;
 	if (!TestFinishedPrepareTeardown(hwnd, &harness)) return 1;
 	if (!TestActiveCompletionMarkerTeardown(hwnd, &harness)) return 1;

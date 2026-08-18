@@ -722,3 +722,10 @@
 - `FTPQueue::Deinitialize()` 在 confirmed teardown 不再由 UI thread 補送 active End；operation 與 batch reference 仍完整回收，但 active `QueueRemoteUploadComplete` 不會在斷線期間漏出摘要。正常 session 路徑仍只顯示一次摘要。
 - 真實 lifecycle 測試新增 scheduler Idle shutdown、兩 worker 反向完成、finished prepare before End、active completion marker teardown，以及 success/server-failure late Abort；`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_session_upload_routing_exit=0`。
 - `build.bat -Arch x64 -Config Release` 成功；DLL SHA-256 `A6EFD05F93CF4B8A2A82420A44A6287DAFE8BE2EF9B63307801DDF53C23BAB65`，ZIP SHA-256 `4A87450F60ED4FDCBFC65B32CD1EA4FF78BBA3927E55B4375F57B2A475125BEB`。既有 UTCP code-page／legacy conversion warnings 未新增 error；Notepad++ 加真實 FTP／FTPS／SFTP 的 disconnect/Abort 實機 QA 仍待執行。
+
+## 2026-08-18 Close post-Start pre-Perform teardown handoff
+
+- operation execution state 新增 `Starting`：queue 的 `StartExecution()` 只先選中工作，所有 production `Perform()` 必須在任何 connect／mkdir／transfer 等副作用前以 `BeginPerform()` 原子取得 `Running`。teardown 若先把 `Starting` 轉為 `Canceled`，worker 即使已走進原本選中的分支也只會返回，不會呼叫 SFTP `SendFile()` 或先以 `O_TRUNC` 打開遠端檔案。
+- `BeginTeardown()` 只對已取得 `Running` 的 operation 呼叫 wrapper `Abort()`；尚在交接期的取消直接走 terminal accounting。`AbortActive()` 也會替被取消的 `Starting` operation 設定 canceled outcome，但不對尚未開始的 wrapper 發 Abort。
+- lifecycle test 以真實 `FTPQueue` 與 `QueueRemoteUploadFile` 固定停在 Start 完成、production Perform 尚未開始的位置。修正前穩定失敗於 `handoff teardown never calls SendFile`；修正後確認 `SendFile=0`、wrapper Abort=0、canceled/remaining 正確，且 completion payload 只 post 一次。
+- `concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_session_upload_routing_exit=0`；`build.bat -Arch x64 -Config Release` 成功。DLL SHA-256 `738223775BE5F771BB1DCB3B7832F35FE097BF191E1EA3315C5A8373BB0EBA4E`，ZIP SHA-256 `458A6D164AC96003216F9D050A071A96F3D8B11672BB0414FB34E553AD1A34DD`。Task 5 urgent-save 行為未修改；真實 FTP／FTPS／SFTP teardown 實機 QA 仍待執行。

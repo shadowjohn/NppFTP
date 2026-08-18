@@ -24,9 +24,10 @@ const int QueueConditionAcked = 0;
 const int QueueConditionCount = 1;
 
 const LONG QueueExecutionIdle = 0;
-const LONG QueueExecutionRunning = 1;
-const LONG QueueExecutionFinished = 2;
-const LONG QueueExecutionCanceled = 3;
+const LONG QueueExecutionStarting = 1;
+const LONG QueueExecutionRunning = 2;
+const LONG QueueExecutionFinished = 3;
+const LONG QueueExecutionCanceled = 4;
 
 QueueOperation::QueueOperation(QueueType type, HWND hNotify, int notifyCode, void * notifyData) :
 	m_type(type),
@@ -108,12 +109,26 @@ int QueueOperation::CompletePerform(int result) {
 	return m_result;
 }
 
+void QueueOperation::OnExecutionHandoff() {
+}
+
+bool QueueOperation::BeginPerform() {
+	LONG state = InterlockedCompareExchange(&m_executionState, 0, 0);
+	while (state == QueueExecutionStarting || state == QueueExecutionIdle) {
+		LONG previous = InterlockedCompareExchange(&m_executionState, QueueExecutionRunning, state);
+		if (previous == state)
+			return true;
+		state = previous;
+	}
+	return false;
+}
+
 void QueueOperation::PrepareExecution() {
 	InterlockedExchange(&m_executionState, QueueExecutionIdle);
 }
 
 bool QueueOperation::StartExecution() {
-	return InterlockedCompareExchange(&m_executionState, QueueExecutionRunning, QueueExecutionIdle) == QueueExecutionIdle;
+	return InterlockedCompareExchange(&m_executionState, QueueExecutionStarting, QueueExecutionIdle) == QueueExecutionIdle;
 }
 
 void QueueOperation::FinishExecution() {
@@ -124,7 +139,7 @@ bool QueueOperation::CancelExecution(bool allowIdle, bool * wasRunning) {
 	if (wasRunning)
 		*wasRunning = false;
 	LONG state = InterlockedCompareExchange(&m_executionState, 0, 0);
-	while (state == QueueExecutionRunning || (allowIdle && state == QueueExecutionIdle)) {
+	while (state == QueueExecutionStarting || state == QueueExecutionRunning || (allowIdle && state == QueueExecutionIdle)) {
 		LONG previous = InterlockedCompareExchange(&m_executionState, QueueExecutionCanceled, state);
 		if (previous != state) {
 			state = previous;
@@ -248,6 +263,8 @@ QueueConnect::~QueueConnect() {
 }
 
 int QueueConnect::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	m_result = m_client->Connect();
 
 	return m_result;
@@ -272,6 +289,8 @@ QueueDisconnect::~QueueDisconnect() {
 }
 
 int QueueDisconnect::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	m_result = m_client->Disconnect();
 
 	return m_result;
@@ -301,6 +320,8 @@ QueueDownload::~QueueDownload() {
 }
 
 int QueueDownload::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -348,6 +369,8 @@ QueueDownloadHandle::~QueueDownloadHandle() {
 }
 
 int QueueDownloadHandle::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -397,6 +420,8 @@ QueueCopyFile::~QueueCopyFile() {
 }
 
 int QueueCopyFile::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -479,6 +504,8 @@ QueueUpload::~QueueUpload() {
 }
 
 int QueueUpload::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -579,6 +606,8 @@ QueueGetDir::~QueueGetDir() {
 }
 
 int QueueGetDir::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -653,6 +682,8 @@ QueueCreateDir::~QueueCreateDir() {
 }
 
 int QueueCreateDir::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -689,6 +720,8 @@ QueueNoOp::~QueueNoOp() {
 }
 
 int QueueNoOp::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		return 0;
 	}
@@ -715,6 +748,8 @@ QueueRemoteUploadScan::~QueueRemoteUploadScan() {
 }
 
 int QueueRemoteUploadScan::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (!m_plan) {
 		m_result = -1;
 		return m_result;
@@ -806,6 +841,8 @@ QueueRemoteUploadPrepare::~QueueRemoteUploadPrepare() {
 }
 
 int QueueRemoteUploadPrepare::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (!m_batch || !m_batch->plan || !m_client) {
 		return CompletePerform(-1);
 	}
@@ -890,6 +927,8 @@ QueueEnsureDirectory::~QueueEnsureDirectory() {
 }
 
 int QueueEnsureDirectory::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -937,6 +976,8 @@ QueueRemoteUploadComplete::~QueueRemoteUploadComplete() {
 }
 
 int QueueRemoteUploadComplete::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	return CompletePerform(0);
 }
 
@@ -963,6 +1004,8 @@ QueueRemoteDownloadScan::~QueueRemoteDownloadScan()
 
 int QueueRemoteDownloadScan::Perform()
 {
+	if (!BeginPerform())
+		return m_result;
 	if (!m_plan) {
 		m_result = -1;
 		return m_result;
@@ -1053,6 +1096,8 @@ QueueRemoteDownloadComplete::~QueueRemoteDownloadComplete()
 
 int QueueRemoteDownloadComplete::Perform()
 {
+	if (!BeginPerform())
+		return m_result;
 	m_result = 0;
 	return m_result;
 }
@@ -1080,6 +1125,8 @@ QueueRemoveDir::~QueueRemoveDir() {
 }
 
 int QueueRemoveDir::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -1116,6 +1163,8 @@ QueueCreateFile::~QueueCreateFile() {
 }
 
 int QueueCreateFile::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -1153,6 +1202,8 @@ QueueDeleteFile::~QueueDeleteFile() {
 }
 
 int QueueDeleteFile::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -1191,6 +1242,8 @@ QueueRenameFile::~QueueRenameFile() {
 }
 
 int QueueRenameFile::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -1233,6 +1286,8 @@ QueueQuote::~QueueQuote() {
 }
 
 int QueueQuote::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
@@ -1273,6 +1328,8 @@ QueueChmodFile::~QueueChmodFile() {
 }
 
 int QueueChmodFile::Perform() {
+	if (!BeginPerform())
+		return m_result;
 	if (m_doConnect && !m_client->IsConnected()) {
 		m_result = m_client->Connect();
 		if (m_result == -1)
