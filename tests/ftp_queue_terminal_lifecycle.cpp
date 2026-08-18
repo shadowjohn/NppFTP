@@ -40,6 +40,8 @@ struct FakeWrapperState {
 		mkdirFinished(CreateEvent(NULL, TRUE, FALSE, NULL)),
 		mkdirRelease(CreateEvent(NULL, TRUE, TRUE, NULL)),
 		abortCount(0),
+		disconnectCallCount(0),
+		mkdirCallCount(0),
 		sendCallCount(0),
 		prioritySequence(0),
 		waitingSaveCount(0),
@@ -85,6 +87,8 @@ struct FakeWrapperState {
 	HANDLE mkdirFinished;
 	HANDLE mkdirRelease;
 	volatile LONG abortCount;
+	volatile LONG disconnectCallCount;
+	volatile LONG mkdirCallCount;
 	volatile LONG sendCallCount;
 	volatile LONG prioritySequence;
 	volatile LONG waitingSaveCount;
@@ -124,6 +128,8 @@ public:
 	void ReleaseActiveSave() { SetEvent(m_state->activeSaveRelease); }
 	void ReleaseActiveProbe() { SetEvent(m_state->activeProbeRelease); }
 	int AbortCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->abortCount, 0, 0)); }
+	int DisconnectCallCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->disconnectCallCount, 0, 0)); }
+	int MkdirCallCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->mkdirCallCount, 0, 0)); }
 	int SendCallCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->sendCallCount, 0, 0)); }
 	int WaitingSaveCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingSaveCount, 0, 0)); }
 	int WaitingTailCount() const { return static_cast<int>(InterlockedCompareExchange(&m_state->waitingTailCount, 0, 0)); }
@@ -135,7 +141,13 @@ public:
 
 	virtual FTPClientWrapper * Clone() { return new FakeWrapper(m_state); }
 	virtual int Connect() { m_connected = true; return 0; }
-	virtual int Disconnect() { m_connected = false; return 0; }
+	virtual int Disconnect() {
+		if (!m_connected)
+			return 0;
+		InterlockedIncrement(&m_state->disconnectCallCount);
+		m_connected = false;
+		return 0;
+	}
 	virtual int NoOp() { return 0; }
 	virtual int GetDir(const char *, FTPFile **) { return -1; }
 	virtual int Cwd(const char *) { return 0; }
@@ -143,6 +155,7 @@ public:
 	virtual int Rename(const char *, const char *) { return 0; }
 	virtual int ChmodFile(const char *, const char *) { return 0; }
 	virtual int MkDir(const char *) {
+		InterlockedIncrement(&m_state->mkdirCallCount);
 		SetEvent(m_state->mkdirStarted);
 		WaitForSingleObject(m_state->mkdirRelease, INFINITE);
 		SetEvent(m_state->mkdirFinished);
@@ -217,6 +230,16 @@ public:
 private:
 	FakeWrapperState * m_ownedState;
 	FakeWrapperState * m_state;
+};
+
+class DirectQueueDisconnect : public QueueDisconnect {
+public:
+	DirectQueueDisconnect(HWND hwnd) : QueueDisconnect(hwnd) {
+	}
+
+	void Bind(FTPClientWrapper * wrapper) {
+		SetClient(wrapper);
+	}
 };
 
 class BlockingRemoteUploadComplete : public QueueRemoteUploadComplete {
@@ -485,6 +508,22 @@ static RemoteUploadBatch * MakeFileBatch(HWND hwnd, LONG generation)
 	return batch;
 }
 
+static bool TestIndependentDisconnectOperations(HWND hwnd)
+{
+	FakeWrapper transferWrapper;
+	FakeWrapper mainWrapper;
+	DirectQueueDisconnect transferDisconnect(hwnd);
+	DirectQueueDisconnect mainDisconnect(hwnd);
+	transferWrapper.Connect();
+	mainWrapper.Connect();
+	transferDisconnect.Bind(&transferWrapper);
+	mainDisconnect.Bind(&mainWrapper);
+	transferDisconnect.Perform();
+	mainDisconnect.Perform();
+	return Check(transferWrapper.DisconnectCallCount() == 1 && mainWrapper.DisconnectCallCount() == 1,
+		"independent disconnect operations execute both wrappers");
+}
+
 static bool TestNormalAndLateAbort(HWND hwnd, WindowHarness * harness)
 {
 	FakeWrapper workerWrapper;
@@ -566,7 +605,7 @@ static bool TestFinalizedResultRejectsLateAbort(HWND hwnd, WindowHarness * harne
 	return true;
 }
 
-static bool TestPrepareAbort(HWND hwnd, WindowHarness * harness)
+static bool TestPrepareAbortBetweenDirectories(HWND hwnd, WindowHarness * harness)
 {
 	FakeWrapper workerWrapper;
 	workerWrapper.BlockMkdir();
@@ -578,7 +617,8 @@ static bool TestPrepareAbort(HWND hwnd, WindowHarness * harness)
 	workerQueue.Initialize();
 	RemoteUploadPlan * plan = new RemoteUploadPlan;
 	plan->AddDirectory(TEXT("folder"), "/site/folder");
-	plan->AddFile(TEXT("folder\\file.txt"), "/site/folder/file.txt");
+	plan->AddDirectory(TEXT("folder\\child"), "/site/folder/child");
+	plan->AddFile(TEXT("folder\\child\\file.txt"), "/site/folder/child/file.txt");
 	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, "/site", hwnd, harness->generation);
 	batch->InitializeFileCounts(1, 0);
 	LONG markerBefore = harness->markerEnds;
@@ -587,11 +627,15 @@ static bool TestPrepareAbort(HWND hwnd, WindowHarness * harness)
 	if (!Check(PumpUntilEvent(workerWrapper.MkdirStarted(), 5000), "prepare enters MkDir")) return false;
 	if (!Check(workerQueue.AbortActive() == 0, "prepare Abort succeeds")) return false;
 	if (!Check(PumpUntil(&harness->markerEnds, markerBefore + 1, 5000), "prepare Abort completion marker")) return false;
+	if (!Check(workerWrapper.MkdirCallCount() == 1, "prepare Abort prevents later MkDir calls")) return false;
 	if (!Check(harness->prepareDispatches == dispatchBefore && batch->GetCanceledFileCount() == 1 &&
 		batch->GetRemainingFileCount() == 0, "prepare Abort cancels without dispatch")) return false;
-	batch->Release();
 	workerQueue.Deinitialize();
 	markerQueue.Deinitialize();
+	PumpMessages();
+	if (!Check(harness->markerEnds == markerBefore + 1,
+		"prepare Abort terminal-accounts selected files exactly once")) return false;
+	batch->Release();
 	return true;
 }
 
@@ -865,11 +909,12 @@ int main()
 	WindowHarness harness;
 	HWND hwnd = CreateHarnessWindow(&harness);
 	if (!Check(hwnd != NULL, "create message-ack window")) return 1;
+	if (!TestIndependentDisconnectOperations(hwnd)) return 1;
 	if (!TestNormalAndLateAbort(hwnd, &harness)) return 1;
 	if (!TestActiveAbort(hwnd, &harness)) return 1;
 	if (!TestFinalizedResultRejectsLateAbort(hwnd, &harness, 0)) return 1;
 	if (!TestFinalizedResultRejectsLateAbort(hwnd, &harness, -1)) return 1;
-	if (!TestPrepareAbort(hwnd, &harness)) return 1;
+	if (!TestPrepareAbortBetweenDirectories(hwnd, &harness)) return 1;
 	if (!TestTeardownSuppression(hwnd, &harness)) return 1;
 	if (!TestSchedulerIdleShutdown(hwnd, &harness)) return 1;
 	if (!TestPostStartPrePerformTeardown(hwnd, &harness)) return 1;

@@ -849,16 +849,24 @@ int QueueRemoteUploadPrepare::Perform() {
 
 	std::vector<const RemoteUploadItem*> directories = m_batch->plan->GetDirectoryItems();
 	for (size_t i = 0; i < directories.size(); ++i) {
+		if (WasCanceled())
+			return CompletePerform(-1);
 		const char * path = directories[i]->remotePath.c_str();
 		if (m_doConnect && !m_client->IsConnected()) {
-			if (m_client->Connect() == -1) {
+			int connected = m_client->Connect();
+			if (WasCanceled())
+				return CompletePerform(-1);
+			if (connected == -1) {
 				RemoteUploadPrepareFailure failure = { path, m_client->GetFailureKind() };
 				m_failures.push_back(failure);
 				continue;
 			}
 		}
 
-		if (m_client->MkDir(path) == 0)
+		int created = m_client->MkDir(path);
+		if (WasCanceled())
+			return CompletePerform(-1);
+		if (created == 0)
 			continue;
 
 		FTPFile * files = NULL;
@@ -866,8 +874,12 @@ int QueueRemoteUploadPrepare::Perform() {
 		if (listed >= 0) {
 			if (files)
 				m_client->ReleaseDir(files, listed);
+			if (WasCanceled())
+				return CompletePerform(-1);
 			continue;
 		}
+		if (WasCanceled())
+			return CompletePerform(-1);
 
 		RemoteUploadPrepareFailure failure = { path, m_client->GetFailureKind() };
 		m_failures.push_back(failure);

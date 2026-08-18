@@ -1,5 +1,13 @@
 # NppFTP 接續紀錄
 
+## 2026-08-18 Final concurrent upload integration fixes
+
+- `FTPSession::Clear()` 不再重複使用同一個 single-use `QueueDisconnect`。transfer wrapper 與 main wrapper 各自使用獨立 operation，兩者都會實際呼叫 `Disconnect()`；只由 main wrapper 的 operation 保留既有一次 UI disconnect 通知，避免 SFTP main session cleanup 被第二次 `BeginPerform()` 拒絕。
+- `QueueRemoteUploadPrepare` 在每個 directory 開始前，以及 `Connect`、`MkDir`、`GetDir` 返回後檢查 operation 自己的 persistent canceled state。第一個 `MkDir` 期間 Abort／teardown 即使被 wrapper `OnReturn` 清掉 abort flag，也不會繼續建立後續目錄、派送 selected files 或重複 terminal accounting。
+- `FTPWindow::OnDisconnect()` 會把 `m_activeTransferCount` 與 `m_busy` 歸零後再更新 toolbar；既有 End handler 只在 count 大於零時遞減，因此 teardown suppress 的 End 不會讓 reconnect 維持假 busy，延遲 End 也不會把 count 減成負數。
+- TDD red 證據：routing contract 先失敗於 `Clear must use a dedicated disconnect operation for the transfer wrapper.`；雙目錄 queue lifecycle 先失敗於 `prepare Abort prevents later MkDir calls`；暫時移除 UI reset 的 mutation 會失敗於 `Disconnect must reconcile active transfer count and busy state before refreshing the toolbar.`。
+- focused Release checks 通過：`ftp_settings_roundtrip_exit=0`、`concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`certificate_store_lock_exit=0`、`ftp_session_upload_routing_exit=0`；`build.bat -Arch x64 -Config Release` 成功。DLL SHA256 `29D675A3A733A3DC456A5BB6F029588EFF3682298773D5A1E4D37D6A7049203D`，ZIP SHA256 `325AD589721E898581EC37FB8DF953EC53919C8A0C853A80CD15503E143C5ACD`。Task 5 cached-save urgency 未修改；live Notepad++ + FTP/FTPS/SFTP disconnect／Abort／reconnect QA 仍是外部邊界。
+
 ## 2026-08-18 Task 5 review fix round 2
 
 - `TestActiveSaveUrgentFollowUp` 移除固定 `PumpFor(150)`。active same-file upload 與 urgent follow-up 入列後，測試再 enqueue 一筆 non-conflicting `active-probe.txt`，等待第二個 worker 真正進入 probe `SendFile` barrier，才檢查 scheduler 已掃描 lanes、跳過 conflicting urgent 並選中 probe。

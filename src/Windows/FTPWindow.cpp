@@ -3033,6 +3033,8 @@ int FTPWindow::OnDisconnect(int /*code*/) {
 	m_remotePendingFocusParent = NULL;
 	m_remotePendingFocusPath[0] = 0;
 	m_remoteBusyCursor = false;
+	m_activeTransferCount = 0;
+	m_busy = false;
 	m_overwriteAll = false;
 	ShowRemoteBrowser(false);
 	if (m_remoteList)

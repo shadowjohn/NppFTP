@@ -815,39 +815,25 @@ int FTPSession::Clear() {
 	}
 	DiscardRemoteUploadBatchNotifications();
 
-	QueueDisconnect * opdisc = new QueueDisconnect(m_hNotify);
-
 	if (m_transferWrapper) {
-		//Always perform disconnect operation, if if no connection present
-		//Allows for cleanup
-		//if (m_transferWrapper->IsConnected()) {
-
-			OutDebug("[FTPSession.Clear] Sending disconnect queue item (via m_transferWrapper).");
-			opdisc->SetClient(m_transferWrapper);
-			opdisc->SendNotification(QueueOperation::QueueEventStart);
-			opdisc->Perform();
-			opdisc->SendNotification(QueueOperation::QueueEventEnd);
-		//}
+		QueueDisconnect transferDisconnect(m_hNotify);
+		OutDebug("[FTPSession.Clear] Sending disconnect queue item (via m_transferWrapper).");
+		transferDisconnect.SetClient(m_transferWrapper);
+		transferDisconnect.Perform();
 		delete m_transferWrapper;
 		m_transferWrapper = NULL;
 	}
 
 	if (m_mainWrapper) {
-		//Always perform disconnect operation, if if no connection present
-		//Allows for cleanup
-		//if (m_mainWrapper->IsConnected()) {
-
-			OutDebug("[FTPSession.Clear] Sending disconnect queue item (via m_mainWrapper).");
-			opdisc->SetClient(m_mainWrapper);
-			opdisc->SendNotification(QueueOperation::QueueEventStart);
-			opdisc->Perform();
-			opdisc->SendNotification(QueueOperation::QueueEventEnd);
-		//}
+		QueueDisconnect mainDisconnect(m_hNotify);
+		OutDebug("[FTPSession.Clear] Sending disconnect queue item (via m_mainWrapper).");
+		mainDisconnect.SetClient(m_mainWrapper);
+		mainDisconnect.SendNotification(QueueOperation::QueueEventStart);
+		mainDisconnect.Perform();
+		mainDisconnect.SendNotification(QueueOperation::QueueEventEnd);
 		delete m_mainWrapper;
 		m_mainWrapper = NULL;
 	}
-
-	delete opdisc;
 
 	return 0;
 }
