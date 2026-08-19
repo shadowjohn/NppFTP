@@ -406,7 +406,10 @@ int FTPSession::DownloadFileHandle(const char * sourcefile, HANDLE target) {
 	return 0;
 }
 
-int FTPSession::UploadFileCache(const TCHAR * sourcefile) {
+int FTPSession::UploadFileCache(const TCHAR * sourcefile, char * resolvedTarget, int resolvedTargetSize) {
+	if (resolvedTarget && resolvedTargetSize > 0)
+		resolvedTarget[0] = 0;
+
 	if (!m_running) {
 		OutErr("[UploadFileCache] fail. m_running is not set");
 		return -1;
@@ -426,7 +429,11 @@ int FTPSession::UploadFileCache(const TCHAR * sourcefile) {
 		return res;
 	}
 
-	return UploadFile(sourcefile, target, false, 0, UploadPriorityUrgent);
+	int uploadResult = UploadFile(sourcefile, target, false, 0, UploadPriorityUrgent);
+	if (uploadResult == 0 && resolvedTarget && resolvedTargetSize > 0)
+		lstrcpynA(resolvedTarget, target, resolvedTargetSize);
+
+	return uploadResult;
 }
 
 int FTPSession::UploadFile(const TCHAR * sourcefile, const char * target, bool targetIsDir, int code, UploadPriority priority) {

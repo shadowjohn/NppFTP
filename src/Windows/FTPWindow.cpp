@@ -890,6 +890,8 @@ int FTPWindow::NavigateRemotePath(const char * path) {
 	if (targetObj && !targetObj->isDir())
 		return -1;
 
+	m_remotePendingFocusParent = NULL;
+	m_remotePendingFocusPath[0] = 0;
 	lstrcpynA(m_remotePendingPath, target, MAX_PATH);
 	m_remoteBusyCursor = true;
 	int res = targetObj ? m_ftpSession->GetDirectory(target) : m_ftpSession->GetDirectoryHierarchy(target);
@@ -898,6 +900,24 @@ int FTPWindow::NavigateRemotePath(const char * path) {
 		m_remoteBusyCursor = false;
 	}
 	return res;
+}
+
+int FTPWindow::NavigateRemoteSavedFile(const char * remoteFilePath) {
+	if (!remoteFilePath || !m_ftpSession || !m_ftpSession->IsConnected())
+		return -1;
+
+	char parentPath[MAX_PATH]{};
+	if (remote_browser_saved_file_parent_path(remoteFilePath, parentPath, MAX_PATH) != 0)
+		return -1;
+
+	int res = NavigateRemotePath(parentPath);
+	if (res != 0)
+		return res;
+
+	FileObject * parent = m_ftpSession->FindPathObject(parentPath);
+	m_remotePendingFocusParent = (parent && parent->isDir()) ? parent : NULL;
+	lstrcpynA(m_remotePendingFocusPath, remoteFilePath, MAX_PATH);
+	return 0;
 }
 
 int FTPWindow::ActivateRemoteListSelection() {
@@ -2918,7 +2938,13 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	if (!updateVisibleUi)
 		return 0;
 
-	bool restorePendingFocus = updateVisibleUi && (parent == m_remotePendingFocusParent);
+	char pendingFocusPath[MAX_PATH]{};
+	bool restorePendingFocus = updateVisibleUi && m_remotePendingFocusPath[0] &&
+		(parent == m_remotePendingFocusParent ||
+			(remote_browser_saved_file_parent_path(m_remotePendingFocusPath, pendingFocusPath, MAX_PATH) == 0 &&
+				strcmp(parent->GetPath(), pendingFocusPath) == 0));
+	if (restorePendingFocus)
+		lstrcpynA(pendingFocusPath, m_remotePendingFocusPath, MAX_PATH);
 	if (updateVisibleUi && isCurrentRemoteDir)
 		m_currentSelection = parent;
 
@@ -2943,8 +2969,8 @@ int FTPWindow::OnDirectoryRefresh(FileObject * parent, FTPFile * files, int coun
 	}
 
 	if (restorePendingFocus) {
-		FileObject * file = m_ftpSession->FindPathObject(m_remotePendingFocusPath);
-		if (isCurrentRemoteDir && file && file->GetParent() == parent)
+		FileObject * file = m_ftpSession->FindPathObject(pendingFocusPath);
+		if (parent == m_remoteCurrentDir && file && file->GetParent() == parent)
 			RestoreRemoteListFocus(file);
 		m_remotePendingFocusParent = NULL;
 		m_remotePendingFocusPath[0] = 0;

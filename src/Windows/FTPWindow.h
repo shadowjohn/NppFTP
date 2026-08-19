@@ -123,6 +123,7 @@ protected:
 	virtual int				LoadRemoteRecentDirs(const TCHAR * prefix);
 	virtual int				NavigateRemotePathFromCombo();
 	virtual int				NavigateRemotePath(const char * path);
+	virtual int				NavigateRemoteSavedFile(const char * remoteFilePath);
 	virtual int				ActivateRemoteListSelection();
 	virtual FileObject*		GetRemoteListSelection();
 	virtual int				OnRemoteListSelectionChanged();

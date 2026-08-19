@@ -764,3 +764,10 @@
 - `BeginTeardown()` 只對已取得 `Running` 的 operation 呼叫 wrapper `Abort()`；尚在交接期的取消直接走 terminal accounting。`AbortActive()` 也會替被取消的 `Starting` operation 設定 canceled outcome，但不對尚未開始的 wrapper 發 Abort。
 - lifecycle test 以真實 `FTPQueue` 與 `QueueRemoteUploadFile` 固定停在 Start 完成、production Perform 尚未開始的位置。修正前穩定失敗於 `handoff teardown never calls SendFile`；修正後確認 `SendFile=0`、wrapper Abort=0、canceled/remaining 正確，且 completion payload 只 post 一次。
 - `concurrent_upload_scheduler_exit=0`、`remote_upload_plan_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_session_upload_routing_exit=0`；`build.bat -Arch x64 -Config Release` 成功。DLL SHA-256 `738223775BE5F771BB1DCB3B7832F35FE097BF191E1EA3315C5A8373BB0EBA4E`，ZIP SHA-256 `458A6D164AC96003216F9D050A071A96F3D8B11672BB0414FB34E553AD1A34DD`。Task 5 urgent-save 行為未修改；真實 FTP／FTPS／SFTP teardown 實機 QA 仍待執行。
+
+## 2026-08-18 Return remote browser to saved cache file
+
+- `NPPN_FILESAVED` 的 cache upload 成功排入 urgent scheduler 後，會保留已解析的 remote file path，立即把 Remote Browser 導向該檔的父目錄；例如儲存 `/var/www/html/3waAIHub/index.php` 的 cache 後，畫面會切回 `/var/www/html/3waAIHub`。
+- 目錄 listing 回來後會沿用既有 pending focus 機制選取剛儲存的檔案；若父目錄尚未在 object tree，完成 hierarchy listing 時仍會以 path 比對恢復焦點。使用者後續手動導覽會清除這個 pending focus，避免舊 save 結果搶回畫面。
+- 新增 `remote_browser_saved_file_navigation` focused test，覆蓋巢狀路徑、根目錄檔案與無效路徑；routing contract 也確認只有 upload queue 接受成功才導向。全部 focused checks 與 `build.bat -Arch x64 -Config Release` 通過；尚待 Notepad++ 搭配真實 FTP／FTPS／SFTP 確認 save 後切換、refresh 與 list focus 體驗。
+- 2026-08-19 已在 Notepad++ 搭配真實 FTP 驗證：從 `/var/www/html/3waAIHub/index.php` 切到其他目錄後儲存，Remote Browser 會切回檔案父目錄並保留 `index.php` 的選取與鍵盤 focus。

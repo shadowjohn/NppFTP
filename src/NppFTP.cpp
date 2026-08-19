@@ -185,7 +185,10 @@ int NppFTP::OnSave(const TCHAR* path) {
 	}
 
 	if (m_ftpSession->IsConnected()) {
-		m_ftpSession->UploadFileCache(path);
+		char remotePath[MAX_PATH]{};
+		int uploadResult = m_ftpSession->UploadFileCache(path, remotePath, MAX_PATH);
+		if (uploadResult == 0 && m_ftpWindow)
+			m_ftpWindow->NavigateRemoteSavedFile(remotePath);
 	}
 
 	return 0;

@@ -37,6 +37,32 @@ static inline bool remote_browser_pending_path_matches(const char *pendingPath, 
 	return pendingPath && pendingPath[0] && completedPath && strcmp(pendingPath, completedPath) == 0;
 }
 
+static inline int remote_browser_saved_file_parent_path(const char *remoteFilePath, char *parentPath, size_t parentPathSize)
+{
+	if (!remoteFilePath || !parentPath || parentPathSize == 0 || remoteFilePath[0] != '/')
+		return -1;
+
+	const char *separator = strrchr(remoteFilePath, '/');
+	if (!separator || separator[1] == 0)
+		return -1;
+
+	if (separator == remoteFilePath) {
+		if (parentPathSize < 2)
+			return -1;
+		parentPath[0] = '/';
+		parentPath[1] = 0;
+		return 0;
+	}
+
+	size_t parentLength = static_cast<size_t>(separator - remoteFilePath);
+	if (parentLength >= parentPathSize)
+		return -1;
+
+	memcpy(parentPath, remoteFilePath, parentLength);
+	parentPath[parentLength] = 0;
+	return 0;
+}
+
 static inline bool remote_browser_completed_request_commits_pending(bool isFinalTarget, const char *pendingPath, const char *completedRequestPath)
 {
 	return isFinalTarget && remote_browser_pending_path_matches(pendingPath, completedRequestPath);

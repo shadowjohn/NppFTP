@@ -102,6 +102,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 支援 double-click 或 Enter 進目錄與下載開檔。
 - Backspace 會以 server LIST 確認上層目錄後再切換；目錄載入失敗或較舊請求晚到時保留現有畫面。
 - 支援 typed path：已知目錄切換、已知檔案開啟，未載入目錄會向伺服器查詢後切換。
+- 從遠端 cache 開啟的檔案儲存成功後，flat browser 會立即切到遠端檔案所在目錄；目錄載入完成後會選取、取得鍵盤 focus 並捲回剛儲存的檔案。手動 Change dir / double-click 導覽會優先，不會被較舊的儲存回應搶回畫面。
 - FTP / SFTP 檔案大小與傳輸進度保留超過 2 GB 的 64-bit 值；Size 使用 B / KB / MB / GB / TB、兩位小數並靠右；Modified 固定顯示為 `yyyy-MM-dd HH:mm:ss`。
 - 支援五欄 view-only 排序；重新整理或 mutation refresh 後仍以目前排序顯示，並依 remote path 找回目標列的 focus。
 - 修正 dock resize / splitter resize 後 flat browser 沒跟著重排的問題。
@@ -122,6 +123,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - Global settings 的「同時上傳數量」可設為 `1` 到 `8`；舊設定缺值或數值無效時使用 `1`。修改後於下一個連線 session 或重新連線生效，不會即時調整目前連線的 worker。
 - 並行排程只套用上傳；下載、遠端瀏覽、複製、rename、CHMOD、刪除等既有流程仍維持序列執行。一般手動與遞迴上傳使用 normal priority。
 - 從遠端 cache 開啟的檔案在 Notepad++ 儲存後會以 urgent priority 上傳：不打斷 active upload，但會在下一個空閒 worker 優先於等待中的 normal upload。同檔若已等待會直接提升，不新增重複項目；同檔若正在上傳則只保留一筆 urgent follow-up。
+- cache 儲存成功排入 upload queue 時，remote browser 會依實際解析出的 remote path 立即切回父目錄並聚焦該檔；沒有 cache mapping、路由拒絕或上傳佇列失敗時，保留使用者目前瀏覽位置。
 - Global settings 目前只有本輪固定文字採正體中文；完整 UI 語系選擇與多國語系系統仍是後續規劃。
 
 ## Build
