@@ -18,6 +18,7 @@
 
 #include "StdInc.h"
 #include "FTPClientWrapper.h"
+#include "ftp_listing_time_utils.h"
 
 #include "CertificateStoreLock.h"
 #include "FTPSHostnameVerifier.h"
@@ -492,7 +493,7 @@ int FTPClientWrapperSSL::Quote(const char * quote) {
 }
 
 FILETIME FTPClientWrapperSSL::ConvertFiletime(int day, int month, int year, int hour, int minute) {
-	FILETIME ft;
+	FILETIME ft{};
 	SYSTEMTIME st{};
 	st.wYear = year;
 	st.wMonth = month;
@@ -503,7 +504,7 @@ FILETIME FTPClientWrapperSSL::ConvertFiletime(int day, int month, int year, int 
 	st.wSecond = 0;
 	st.wMilliseconds = 0;
 
-	SystemTimeToFileTime(&st, &ft);
+	ftp_listing_local_system_time_to_filetime(st, &ft);
 
 	return ft;
 }

@@ -45,6 +45,7 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - `Quick search` 可即時過濾目前目錄。
 - `Change dir` 可以手動輸入路徑並按 Enter 切換；每個 profile 會保存最近 8 筆成功進入的目錄，重複目錄會移到最前方，手打時會顯示符合前綴的下拉建議；尚未載入的路徑會直接向伺服器查詢。
 - 清單顯示 `Name`、`Size`、`Modified`、`Type`、`Permissions`；Size 使用靠右的人類可讀格式，Modified 固定為 `yyyy-MM-dd HH:mm:ss`。
+- FTP / FTPS 的 LIST 日期本身不帶時區，Modified 會以本機時間解讀，避免顯示時重複加上 UTC offset；SFTP 則維持 Unix UTC timestamp 的轉換方式。
 - 點欄位標題可排序 `Name`、`Size`、`Modified`、`Type`、`Permissions`：首次為遞增、再次點同欄改為遞減；一次只顯示一個箭頭。`..` 固定在第 0 列，資料夾永遠排在檔案前；Size 依原始 64-bit 值比較，名稱依系統 locale、不分大小寫比較。
 - 資料夾與檔案有圖示。
 - 欄位標題可拖曳調整順序。
@@ -190,6 +191,7 @@ copyNppFTPdllToRealENV.bat
 - 右鍵檔案操作、CHMOD、multi-file / recursive directory upload 與失敗提示。
 - Windows x64 GitHub Actions build；`v*` tag 會自動建立 GitHub pre-release。
 - Windows x64 DLL 已在 Notepad++ 實機載入；FTP 清單正確顯示 `5.00 GB`，確認超過 4 GB 的 64-bit 檔案大小路徑。
+- 已在 Notepad++ 搭配真實 FTP 驗證遠端 `Modified` 欄位與伺服器時間相符，不再多加 8 小時。
 - README、第三方來源 ledger 與維護紀錄整理。
 
 目前主線尚未開發：

@@ -1,5 +1,27 @@
 # NppFTP 接續紀錄
 
+## 2026-08-26 Fix FTP/FTPS modified-time timezone offset
+
+- 修正 flat Remote Browser 的 FTP／FTPS 修改時間多加本機 UTC offset。根因是 `FTPClientWrapperSSL::ConvertFiletime()` 將 FTP LIST 的無時區 wall-clock time 直接以 UTC 存入 `FILETIME`，而清單與 tree 顯示端再依本機時區轉換一次。
+- 新增 `ftp_listing_local_system_time_to_filetime()`：FTP LIST 日期先依本機時區正規化為 UTC，再存入 `FILETIME`。SFTP 維持既有 Unix epoch to UTC conversion，不改變其時間語意。FTP LIST 本身不帶伺服器時區，因此仍以既有本機時區假設解讀；跨時區 FTP server 的可設定時區支援不在本次範圍。
+- TDD：routing contract 原先失敗於 FTP／FTPS wrapper 未 include / 呼叫 time helper；新增 `NppFTP_FTPListingTime`，確認 FTP listing local time 經 `FILETIME` 與顯示端 round-trip 後年月日時分不變，也覆蓋 null output。
+- 本機驗證：`build.bat -Arch x64 -Config Release`、`ftp_listing_time_exit=0`、`ftp_listing_time_routing_exit=0`、`remote_browser_saved_file_navigation_exit=0`、`ftp_session_upload_routing_exit=0`。尚未以真實 FTP／FTPS／SFTP server 實機確認不同時區與 DST 邊界。
+- 2026-08-26 使用者已在 Notepad++ 搭配真實 FTP 驗收：遠端檔案 `Modified` 時間顯示正確，原本多加的 8 小時已消失。FTPS／SFTP、跨時區 server 與 DST 邊界仍未實機確認。
+
+## 2026-08-19 Planned bulk upload queue controls
+
+- 使用者指定下一刀先規劃 FileZilla-like 大量上傳控制：transfer list 的右鍵選單依狀態互斥顯示 `Pause all uploads` 或 `Resume uploads`，並加入 `Clear selected upload task` 與 `Clear all upload tasks`。
+- 現況已確認 `ConcurrentUploadScheduler` 有單筆 `CancelQueueOp()` 與所有 active worker 的 `AbortActive()`，但尚無 pause / resume dispatch gate；`FTPWindow` 的 queue popup 仍是舊的單筆 `Abort operation` / `Remove operation from queue`。
+- 第一版範圍定為安全的 dispatch pause：waiting upload 不再派送，active upload 照常完成；不把強制中斷後重啟誤稱為 protocol-level pause。清除全部會取消 waiting 並 abort active，但只作用於 upload scheduler，不碰 download 或其他 queue。
+- 實作前需以 focused scheduler / lifecycle tests 覆蓋 pause、resume、urgent priority、單筆／全部 clear、batch terminal accounting 與 teardown；完成後再作 FTP／FTPS／SFTP 實機 QA。
+
+## 2026-08-19 Planned large remote-directory responsiveness
+
+- 使用者回報連線 `3wa.tw` 後進入 `/tmp` 類超大量目錄時，Remote Browser 清單長時間卡住；已列為獨立效能待辦，不與大量上傳 queue control 混在同一刀。
+- 現況 `OnDirectoryRefresh()` 在 UI thread 會建立／排序整批 `FileObject`，並同步更新 legacy tree；`FillRemoteList()` 則對每個項目逐一呼叫 `ListView_InsertItem` 並格式化五欄 metadata。這是大量檔案的明確 UI blocking 路徑。
+- 建議第一階段以 `LVS_OWNERDATA` virtual list + display window 解決可操作性，並在 flat browser 模式避開大型目錄的 legacy tree 同步工作；完整 model 仍保留給排序、Quick search、focus restore 與既有檔案操作。
+- 真正把 FTP LIST / MLSD、FTPS、SFTP 改為 streaming batches 是第二階段選項；它能降低首次資料到畫面的延遲，但牽涉 protocol callback、取消、listing 上限與 ownership，先在第一階段量測後再決定。
+
 ## 2026-08-18 Final concurrent upload integration fixes
 
 - `FTPSession::Clear()` 不再重複使用同一個 single-use `QueueDisconnect`。transfer wrapper 與 main wrapper 各自使用獨立 operation，兩者都會實際呼叫 `Disconnect()`；只由 main wrapper 的 operation 保留既有一次 UI disconnect 通知，避免 SFTP main session cleanup 被第二次 `BeginPerform()` 拒絕。

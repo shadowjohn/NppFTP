@@ -191,6 +191,13 @@ set_target_properties(NppFTP_RemoteBrowserSavedFileNavigation PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
 )
 
+add_executable (NppFTP_FTPListingTime
+    tests/ftp_listing_time.cpp
+)
+set_target_properties(NppFTP_FTPListingTime PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+
 add_library (NppFTP MODULE ${project_rc_files} ${project_sources})
 
 add_dependencies(NppFTP NppFTP3rdPartyPrerequists)
