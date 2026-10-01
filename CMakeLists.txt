@@ -198,6 +198,27 @@ set_target_properties(NppFTP_FTPListingTime PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
 )
 
+add_executable (NppFTP_ConnectionFailure
+    tests/connection_failure.cpp
+    src/SSLCertificates.cpp
+    ${tinyxml_sources}
+    src/FTPClientWrapper.cpp
+    src/FTPClientWrapperSSL.cpp
+    src/StringUtils.cpp
+    src/PathUtils.cpp
+    src/CertificateStoreLock.cpp
+    ${UTCP_sources}
+)
+add_dependencies(NppFTP_ConnectionFailure NppFTP3rdPartyPrerequists)
+set_target_properties(NppFTP_ConnectionFailure PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+if (MINGW)
+    target_link_libraries(NppFTP_ConnectionFailure shlwapi ssl crypto crypt32 z ws2_32 iphlpapi)
+else()
+    target_link_libraries(NppFTP_ConnectionFailure shlwapi libssl libcrypto crypt32 zlib ws2_32 iphlpapi)
+endif()
+
 add_library (NppFTP MODULE ${project_rc_files} ${project_sources})
 
 add_dependencies(NppFTP NppFTP3rdPartyPrerequists)

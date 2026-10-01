@@ -2567,9 +2567,12 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 					OutMsg("[FTPWindow] Connected");
 				} else {
 					OutErr("[FTPWindow] Unable to connect");
+					const ConnectionFailureKind failure = static_cast<QueueConnect*>(queueOp)->GetConnectionFailureKind();
 					OnDisconnect(code);
 					m_ftpSession->TerminateSession();
 					result = 1;
+					// The queue is gone; show one prompt on the UI thread after cleanup.
+					::MessageBox(m_hwnd, GetConnectionFailureMessage(failure), TEXT("Connection failed"), MB_OK | MB_ICONERROR);
 				}
 			}
 			break; }

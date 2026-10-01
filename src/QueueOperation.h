@@ -124,10 +124,13 @@ class QueueConnect : public QueueOperation {
 public:
 							QueueConnect(HWND hNotify, int notifyCode = 0, void * notifyData = NULL);
 	virtual					~QueueConnect();
+	ConnectionFailureKind GetConnectionFailureKind() const { return m_connectionFailure; }
 
 	virtual int				Perform();
 
 	virtual bool			Equals(const QueueOperation & other);
+private:
+	ConnectionFailureKind m_connectionFailure = ConnectionFailureUnknown;
 };
 
 class QueueDisconnect : public QueueOperation {

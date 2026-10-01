@@ -904,11 +904,44 @@ static bool TestRejectionAndZeroSelected(HWND hwnd, WindowHarness * harness)
 	return true;
 }
 
+class LoginWrapper : public FakeWrapper {
+public:
+    ConnectionFailureKind nextFailure = ConnectionFailureAuthentication;
+    int nextResult = -1;
+    virtual int Connect() {
+        m_connectionFailure = nextFailure;
+        return nextResult;
+    }
+};
+
+class DirectQueueConnect : public QueueConnect {
+public:
+    DirectQueueConnect(HWND hwnd, FTPClientWrapper * wrapper) : QueueConnect(hwnd) { SetClient(wrapper); }
+};
+
+static bool TestConnectionFailureSnapshot(HWND hwnd) {
+    LoginWrapper wrapper;
+    DirectQueueConnect denied(hwnd, &wrapper);
+    if (!Check(denied.Perform() == -1 && denied.GetConnectionFailureKind() == ConnectionFailureAuthentication,
+        "authentication rejection reaches connect operation")) return false;
+    wrapper.nextFailure = ConnectionFailureUnknown;
+    DirectQueueConnect network(hwnd, &wrapper);
+    if (!Check(network.Perform() == -1 && network.GetConnectionFailureKind() == ConnectionFailureUnknown,
+        "other connection errors stay generic on retry")) return false;
+    if (!Check(denied.GetConnectionFailureKind() == ConnectionFailureAuthentication,
+        "completed operation snapshots failure independently of wrapper reuse")) return false;
+    wrapper.nextResult = 0;
+    DirectQueueConnect success(hwnd, &wrapper);
+    return Check(success.Perform() == 0 && success.GetConnectionFailureKind() == ConnectionFailureUnknown,
+        "successful retry clears failure");
+}
+
 int main()
 {
 	WindowHarness harness;
 	HWND hwnd = CreateHarnessWindow(&harness);
 	if (!Check(hwnd != NULL, "create message-ack window")) return 1;
+	if (!TestConnectionFailureSnapshot(hwnd)) return 1;
 	if (!TestIndependentDisconnectOperations(hwnd)) return 1;
 	if (!TestNormalAndLateAbort(hwnd, &harness)) return 1;
 	if (!TestActiveAbort(hwnd, &harness)) return 1;
