@@ -113,6 +113,7 @@ public:
 	}
 
 	void BlockSend() { ResetEvent(m_state->sendRelease); }
+	void ReleaseSend() { SetEvent(m_state->sendRelease); }
 	void BlockMkdir() { ResetEvent(m_state->mkdirRelease); }
 	HANDLE SendStarted() const { return m_state->sendStarted; }
 	HANDLE MkdirStarted() const { return m_state->mkdirStarted; }
@@ -788,6 +789,107 @@ static bool TestWaitingSavePromotion(HWND hwnd, WindowHarness * harness)
 	return true;
 }
 
+static bool TestSchedulerDispatchPause(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper prototype;
+	prototype.BlockSend();
+	ConcurrentUploadScheduler scheduler(hwnd, &prototype, 1, NULL);
+	harness->markerQueue = NULL;
+	if (!Check(scheduler.Initialize() == 0, "initialize dispatch-pause scheduler")) return false;
+
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/pause-active.txt", TEXT("pause-active.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue active upload before pause")) return false;
+	if (!Check(PumpUntilEvent(prototype.SendStarted(), 5000), "active upload enters SendFile before pause")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-tail.txt", TEXT("waiting-tail.txt"), Mode_Binary),
+		UploadPriorityNormal) == 0, "queue normal upload while active")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueUpload(hwnd, "/site/waiting-save.txt", TEXT("waiting-save.txt"), Mode_Binary),
+		UploadPriorityUrgent) == 0, "queue urgent upload while active")) return false;
+	if (!Check(scheduler.SetDispatchPaused(true) == 0, "scheduler accepts a dispatch pause while live")) return false;
+	if (!Check(scheduler.IsDispatchPaused(), "scheduler reports a live dispatch pause")) return false;
+
+	prototype.ReleaseSend();
+	if (!Check(PumpUntilSchedulerState(&scheduler, 2, 0, 5000),
+		"active upload finishes while waiting uploads remain paused")) return false;
+	PumpFor(200);
+	if (!Check(prototype.WaitingSaveCount() == 0 && prototype.WaitingTailCount() == 0,
+		"paused scheduler does not dispatch waiting uploads")) return false;
+
+	if (!Check(scheduler.SetDispatchPaused(false) == 0, "scheduler resumes dispatch")) return false;
+	if (!Check(PumpUntilSchedulerSize(&scheduler, 0, 5000), "resumed scheduler drains waiting uploads")) return false;
+	if (!Check(prototype.WaitingSaveCount() == 1 && prototype.WaitingTailCount() == 1,
+		"resume dispatches both waiting uploads exactly once")) return false;
+	if (!Check(prototype.WaitingSaveOrder() > 0 && prototype.WaitingSaveOrder() < prototype.WaitingTailOrder(),
+		"urgent upload remains first after resume")) return false;
+
+	scheduler.Deinitialize();
+	if (!Check(!scheduler.IsDispatchPaused(), "scheduler clears pause state during deinitialize")) return false;
+	return true;
+}
+
+static bool TestSchedulerCancelSelectedActiveUpload(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper prototype;
+	prototype.BlockSend();
+	ConcurrentUploadScheduler scheduler(hwnd, &prototype, 1, NULL);
+	harness->markerQueue = NULL;
+	if (!Check(scheduler.Initialize() == 0, "initialize selected-cancel scheduler")) return false;
+
+	QueueUpload * active = new QueueUpload(hwnd, "/site/selected-active.txt", TEXT("selected-active.txt"), Mode_Binary);
+	if (!Check(scheduler.AddQueueOp(active, UploadPriorityNormal) == 0, "queue selected active upload")) return false;
+	if (!Check(PumpUntilEvent(prototype.SendStarted(), 5000), "selected upload enters SendFile")) return false;
+	if (!Check(scheduler.CancelQueueOp(active) == 0, "selected active upload is aborted by its owning worker")) return false;
+	if (!Check(PumpUntilSchedulerState(&scheduler, 0, 0, 5000), "selected active upload reaches terminal state")) return false;
+	if (!Check(prototype.AbortCount() == 1, "selected active upload issues one worker abort")) return false;
+
+	scheduler.Deinitialize();
+	return true;
+}
+
+static bool TestSchedulerClearAllUploads(HWND hwnd, WindowHarness * harness)
+{
+	FakeWrapper prototype;
+	prototype.BlockSend();
+	FakeWrapper markerWrapper;
+	FTPQueue markerQueue(&markerWrapper);
+	ConcurrentUploadScheduler scheduler(hwnd, &prototype, 1, &markerQueue);
+	harness->markerQueue = &markerQueue;
+	if (!Check(markerQueue.Initialize() == 0 && scheduler.Initialize() == 0,
+		"initialize clear-all scheduler")) return false;
+
+	RemoteUploadPlan * plan = new RemoteUploadPlan;
+	plan->AddFile(TEXT("clear-active.txt"), "/site/clear-active.txt");
+	plan->AddFile(TEXT("clear-waiting-one.txt"), "/site/clear-waiting-one.txt");
+	plan->AddFile(TEXT("clear-waiting-two.txt"), "/site/clear-waiting-two.txt");
+	RemoteUploadBatch * batch = new RemoteUploadBatch(plan, "/site", hwnd, harness->generation);
+	batch->InitializeFileCounts(3, 0);
+	LONG markerBefore = harness->markerEnds;
+
+	if (!Check(scheduler.AddQueueOp(new QueueRemoteUploadFile(hwnd, "/site/clear-active.txt", TEXT("clear-active.txt"), Mode_Binary, batch),
+		UploadPriorityNormal) == 0, "queue active upload before clear all")) return false;
+	if (!Check(PumpUntilEvent(prototype.SendStarted(), 5000), "clear-all active upload enters SendFile")) return false;
+	if (!Check(scheduler.SetDispatchPaused(true) == 0, "pause dispatch before queuing clear-all waiters")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueRemoteUploadFile(hwnd, "/site/clear-waiting-one.txt", TEXT("clear-waiting-one.txt"), Mode_Binary, batch),
+		UploadPriorityNormal) == 0, "queue first waiting upload before clear all")) return false;
+	if (!Check(scheduler.AddQueueOp(new QueueRemoteUploadFile(hwnd, "/site/clear-waiting-two.txt", TEXT("clear-waiting-two.txt"), Mode_Binary, batch),
+		UploadPriorityNormal) == 0, "queue second waiting upload before clear all")) return false;
+	if (!Check(scheduler.GetQueueSize() == 3 && scheduler.GetActiveCount() == 1,
+		"clear-all fixture has one active and two waiting uploads")) return false;
+
+	if (!Check(scheduler.CancelAllQueueOps() == 0, "clear all accepts upload scheduler work")) return false;
+	if (!Check(PumpUntil(&harness->markerEnds, markerBefore + 1, 5000),
+		"clear all emits one recursive upload completion marker")) return false;
+	if (!Check(PumpUntilSchedulerState(&scheduler, 0, 0, 5000), "clear all drains every upload operation")) return false;
+	if (!Check(batch->GetCanceledFileCount() == 3 && batch->GetRemainingFileCount() == 0,
+		"clear all terminal-accounts every recursive upload as canceled")) return false;
+	if (!Check(prototype.AbortCount() == 1 && prototype.SendCallCount() == 1,
+		"clear all aborts only the active worker and never dispatches waiting uploads")) return false;
+
+	batch->Release();
+	scheduler.Deinitialize();
+	markerQueue.Deinitialize();
+	return true;
+}
+
 static bool TestActiveSaveUrgentFollowUp(HWND hwnd, WindowHarness * harness)
 {
 	FakeWrapper prototype;
@@ -919,6 +1021,9 @@ int main()
 	if (!TestSchedulerIdleShutdown(hwnd, &harness)) return 1;
 	if (!TestPostStartPrePerformTeardown(hwnd, &harness)) return 1;
 	if (!TestWaitingSavePromotion(hwnd, &harness)) return 1;
+	if (!TestSchedulerDispatchPause(hwnd, &harness)) return 1;
+	if (!TestSchedulerCancelSelectedActiveUpload(hwnd, &harness)) return 1;
+	if (!TestSchedulerClearAllUploads(hwnd, &harness)) return 1;
 	if (!TestActiveSaveUrgentFollowUp(hwnd, &harness)) return 1;
 	if (!TestSchedulerOppositeCompletionOrder(hwnd, &harness)) return 1;
 	if (!TestFinishedPrepareTeardown(hwnd, &harness)) return 1;

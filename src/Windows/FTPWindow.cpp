@@ -208,6 +208,10 @@ FTPWindow::FTPWindow() :
 	m_remoteList(NULL),
 	m_remoteSortColumn(RemoteSortNone),
 	m_remoteSortAscending(true),
+	m_popupQueueActive(NULL),
+	m_popupQueueHold(NULL),
+	m_popupQueueUpload(NULL),
+	m_popupQueueUploadBlank(NULL),
 	m_popupRemoteFile(NULL),
 	m_popupRemoteDir(NULL),
 	m_popupRemoteBlank(NULL),
@@ -336,6 +340,10 @@ int FTPWindow::Destroy() {
 	DestroyMenu(m_popupTreeProfileRootFolder);
 	DestroyMenu(m_popupDir);
 	DestroyMenu(m_popupLink);
+	DestroyMenu(m_popupQueueActive);
+	DestroyMenu(m_popupQueueHold);
+	DestroyMenu(m_popupQueueUpload);
+	DestroyMenu(m_popupQueueUploadBlank);
 	DestroyMenu(m_popupRemoteFile);
 	DestroyMenu(m_popupRemoteDir);
 	DestroyMenu(m_popupRemoteBlank);
@@ -1129,30 +1137,17 @@ void FTPWindow::ShowRemoteUploadSummary(RemoteUploadBatch * batch) {
 	if (!batch)
 		return;
 
-	std::vector<std::string> canceledPaths;
-	batch->GetCanceledPaths(canceledPaths);
-	for (size_t i = 0; i < canceledPaths.size(); ++i) {
-		TCHAR * remotePath = SU::Utf8ToTChar(canceledPaths[i].c_str());
-		OutMsg("[FTPWindow] Upload canceled for %T", remotePath ? remotePath : TEXT("(unknown path)"));
-		SU::FreeTChar(remotePath);
-	}
 	int directoryFailures = static_cast<int>(batch->failures.size()) - batch->GetFailedFileCount();
 	if (directoryFailures < 0)
 		directoryFailures = 0;
 	OutMsg("[FTPWindow] Directory upload finished: %d selected, %d successful, %d failed, %d skipped, %d canceled, %d directory failure(s).",
 		batch->GetSelectedFileCount(), static_cast<int>(batch->completedCount), batch->GetFailedFileCount(),
 		batch->GetSkippedFileCount(), batch->GetCanceledFileCount(), directoryFailures);
-	if (!batch->targetPath.empty())
+	const char * currentPath = m_remoteCurrentDir ? m_remoteCurrentDir->GetPath() : NULL;
+	if (m_ftpSession && remote_browser_upload_summary_refreshes_current_directory(currentPath,
+		m_remotePendingPath, batch->targetPath.c_str()))
 		m_ftpSession->GetDirectory(batch->targetPath.c_str());
-	if (batch->failures.empty() && batch->GetCanceledFileCount() == 0) {
-		::MessageBox(m_hwnd, TEXT("Directory upload completed."), TEXT("Directory upload"), MB_OK | MB_ICONINFORMATION);
-		return;
-	}
-
-	TCHAR message[160]{};
-	SU::TSprintf(message, 160, TEXT("Directory upload finished: %d successful, %d failed, %d skipped, %d canceled. See Output for details."),
-		static_cast<int>(batch->completedCount), batch->GetFailedFileCount(), batch->GetSkippedFileCount(), batch->GetCanceledFileCount());
-	::MessageBox(m_hwnd, message, TEXT("Directory upload"), MB_OK | MB_ICONWARNING);
+	// Completion is informational. Keep it in Output so large batches never interrupt queue controls.
 }
 
 int FTPWindow::PromptRemoteDownload(FileObject * fo) {
@@ -1503,6 +1498,39 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 						if (prefix[0] && SendMessage(m_remoteDirCombo, CB_GETCOUNT, 0, 0) > 0)
 							SendMessage(m_remoteDirCombo, CB_SHOWDROPDOWN, TRUE, 0);
 					}
+					result = TRUE;
+					break; }
+				case IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE: {
+					if (m_ftpSession) {
+						bool pause = !m_ftpSession->IsUploadDispatchPaused();
+						if (m_ftpSession->SetUploadDispatchPaused(pause) == 0) {
+							if (pause)
+								OutMsg("[FTPWindow] Uploads paused; active uploads will finish.");
+							else
+								OutMsg("[FTPWindow] Uploads resumed.");
+						} else
+							OutErr("[FTPWindow] Unable to change upload pause state.");
+					}
+					m_cancelOperation = NULL;
+					result = TRUE;
+					break; }
+				case IDM_POPUP_QUEUE_CLEAR_SELECTED_UPLOAD: {
+					if (m_ftpSession && m_cancelOperation &&
+						m_cancelOperation->GetType() == QueueOperation::QueueTypeUpload) {
+						if (m_ftpSession->CancelOperation(m_cancelOperation) != 0)
+							OutErr("[FTPWindow] Unable to clear selected upload task.");
+					}
+					m_cancelOperation = NULL;
+					result = TRUE;
+					break; }
+				case IDM_POPUP_QUEUE_CLEAR_ALL_UPLOADS: {
+					if (m_ftpSession) {
+						if (m_ftpSession->ClearAllUploadOperations() == 0)
+							OutMsg("[FTPWindow] Cleared all upload tasks.");
+						else
+							OutErr("[FTPWindow] Unable to clear upload tasks.");
+					}
+					m_cancelOperation = NULL;
 					result = TRUE;
 					break; }
 				case IDM_POPUP_QUEUE_ABORT: {
@@ -2030,6 +2058,7 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 		case WM_CONTEXTMENU: {
 			HWND hWinContext = (HWND)wParam;
 			HMENU hContext = NULL;
+			m_cancelOperation = NULL;
 
 			POINT menuPos{};
 			menuPos.x = GET_X_LPARAM(lParam);
@@ -2109,29 +2138,46 @@ LRESULT FTPWindow::MessageProc(UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				}
 
 			} else if (hWinContext == m_queueWindow.GetHWND()) {
-				QueueOperation * op = m_queueWindow.GetSelectedQueueOperation();
-				if (!op) {
-					result = FALSE;
-					break;
-				}
-
-				m_cancelOperation = op;
-				bool run = op->GetRunning();
-
+				QueueOperation * op = NULL;
 				if (fromKeyboard) {
+					op = m_queueWindow.GetSelectedQueueOperation();
 					RECT queuerect;
-					bool res = m_queueWindow.GetSelectedQueueRect(&queuerect);
-					if (res) {
+					if (op && m_queueWindow.GetSelectedQueueRect(&queuerect)) {
 						menuPos.x = queuerect.left;
 						menuPos.y = queuerect.bottom;
 						::ClientToScreen(m_queueWindow.GetHWND(), &menuPos);
 					}
+				} else {
+					POINT clientPoint = menuPos;
+					ScreenToClient(m_queueWindow.GetHWND(), &clientPoint);
+					LVHITTESTINFO hit{};
+					hit.pt = clientPoint;
+					int item = ListView_HitTest(m_queueWindow.GetHWND(), &hit);
+					ListView_SetItemState(m_queueWindow.GetHWND(), -1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+					if (item >= 0) {
+						ListView_SetItemState(m_queueWindow.GetHWND(), item, LVIS_SELECTED | LVIS_FOCUSED,
+							LVIS_SELECTED | LVIS_FOCUSED);
+						ListView_SetSelectionMark(m_queueWindow.GetHWND(), item);
+						op = m_queueWindow.GetSelectedQueueOperation();
+					}
 				}
 
-				if (run) {
-					hContext = m_popupQueueActive;
-				} else {
-					hContext = m_popupQueueHold;
+				if (m_ftpSession && (!op || op->GetType() == QueueOperation::QueueTypeUpload)) {
+					bool paused = m_ftpSession->IsUploadDispatchPaused();
+					const TCHAR * toggleLabel = paused ? TEXT("Resume uploads") : TEXT("Pause all uploads");
+					ModifyMenu(m_popupQueueUpload, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE,
+						MF_BYCOMMAND | MF_STRING, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE, toggleLabel);
+					ModifyMenu(m_popupQueueUploadBlank, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE,
+						MF_BYCOMMAND | MF_STRING, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE, toggleLabel);
+					if (op) {
+						m_cancelOperation = op;
+						hContext = m_popupQueueUpload;
+					} else {
+						hContext = m_popupQueueUploadBlank;
+					}
+				} else if (op) {
+					hContext = op->GetRunning() ? m_popupQueueActive : m_popupQueueHold;
+					m_cancelOperation = op;
 				}
 			}
 
@@ -2482,6 +2528,19 @@ int FTPWindow::CreateMenus() {
 	m_popupQueueHold = CreatePopupMenu();
 	AppendMenu(m_popupQueueHold,MF_STRING,IDM_POPUP_QUEUE_CANCEL,TEXT("&Remove operation from queue"));
 
+	//Create menu for upload queue items
+	m_popupQueueUpload = CreatePopupMenu();
+	AppendMenu(m_popupQueueUpload, MF_STRING, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE, TEXT("Pause all uploads"));
+	AppendMenu(m_popupQueueUpload, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupQueueUpload, MF_STRING, IDM_POPUP_QUEUE_CLEAR_SELECTED_UPLOAD, TEXT("Clear selected upload task"));
+	AppendMenu(m_popupQueueUpload, MF_STRING, IDM_POPUP_QUEUE_CLEAR_ALL_UPLOADS, TEXT("Clear all upload tasks"));
+
+	//Create menu for empty upload queue space
+	m_popupQueueUploadBlank = CreatePopupMenu();
+	AppendMenu(m_popupQueueUploadBlank, MF_STRING, IDM_POPUP_QUEUE_TOGGLE_UPLOAD_PAUSE, TEXT("Pause all uploads"));
+	AppendMenu(m_popupQueueUploadBlank, MF_SEPARATOR, 0, NULL);
+	AppendMenu(m_popupQueueUploadBlank, MF_STRING, IDM_POPUP_QUEUE_CLEAR_ALL_UPLOADS, TEXT("Clear all upload tasks"));
+
 	ProfilesWindow::CreateMenus();
 
 	return 0;
@@ -2543,6 +2602,7 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			break; }
 		case QueueOperation::QueueTypeDirectoryCreate:
 		case QueueOperation::QueueTypeDirectoryRemove:
+		case QueueOperation::QueueTypeDirectoryRemoveRecursive:
 		case QueueOperation::QueueTypeFileCreate:
 		case QueueOperation::QueueTypeFileDelete:
 		case QueueOperation::QueueTypeFileRename:
@@ -2589,7 +2649,6 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			}
 			if (queueResult == -1) {
 				OutErr("[FTPWindow] Unable to scan remote directories for upload conflicts");
-				ShowOperationFailure(queueOp);
 				OnError(queueOp, code, data, isStart);
 				break;
 			}
@@ -2759,9 +2818,10 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			RemoteUploadBatch * batch = (RemoteUploadBatch*)data;
 			if (isStart)
 				break;
-			RemoteUploadFileOutcome outcome = resolve_remote_upload_file_outcome(queueResult, batch && queueOp->WasCanceled());
-			if (batch && outcome == RemoteUploadFileCanceled) {
-				OutMsg("[FTPWindow] Upload canceled for %T", SU::Utf8ToTChar(opuld->GetExternalPath()));
+			RemoteUploadFileOutcome outcome = resolve_remote_upload_file_outcome(queueResult, queueOp->WasCanceled());
+			if (outcome == RemoteUploadFileCanceled) {
+				if (!batch)
+					OutMsg("[FTPWindow] Upload canceled for %T", SU::Utf8ToTChar(opuld->GetExternalPath()));
 				break;
 			}
 			if (outcome == RemoteUploadFileFailed) {
@@ -2803,8 +2863,9 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 			OutMsg("[FTPWindow] Ready directory %T", SU::Utf8ToTChar(ensure->GetDirectoryPath()));
 			break; }
 		case QueueOperation::QueueTypeRemoteUploadComplete: {
-			if (!isStart && queueResult == 0)
-				ShowRemoteUploadSummary(((QueueRemoteUploadComplete*)queueOp)->GetBatch());
+			RemoteUploadBatch * batch = ((QueueRemoteUploadComplete*)queueOp)->GetBatch();
+			if (!isStart && queueResult == 0 && batch && batch->TryBeginSummaryDisplay())
+				ShowRemoteUploadSummary(batch);
 			break; }
 		case QueueOperation::QueueTypeRemoteDownloadComplete: {
 			if (!isStart && queueResult == 0)
@@ -2831,6 +2892,19 @@ int FTPWindow::OnEvent(QueueOperation * queueOp, int code, void * data, bool isS
 				break;	//failure
 			}
 			OutMsg("[FTPWindow] Removed directory %T", SU::Utf8ToTChar(oprmdir->GetDirPath()));
+			break; }
+		case QueueOperation::QueueTypeDirectoryRemoveRecursive: {
+			QueueRemoveDirRecursive * opremove = (QueueRemoveDirRecursive*)queueOp;
+			if (isStart) {
+				OutMsg("[FTPWindow] Deleting directory tree %T...", SU::Utf8ToTChar(opremove->GetDirPath()));
+				break;
+			}
+			if (queueResult == -1) {
+				OutErr("[FTPWindow] Unable to remove directory tree %T at %T", SU::Utf8ToTChar(opremove->GetDirPath()), SU::Utf8ToTChar(opremove->GetFailedPath()));
+				ShowOperationFailure(queueOp);
+				break;
+			}
+			OutMsg("[FTPWindow] Removed directory tree %T (%d files, %d directories)", SU::Utf8ToTChar(opremove->GetDirPath()), opremove->GetDeletedFileCount(), opremove->GetDeletedDirectoryCount());
 			break; }
 		case QueueOperation::QueueTypeFileCreate: {
 			QueueCreateFile * opmkfile = (QueueCreateFile*)queueOp;
@@ -3059,6 +3133,7 @@ int FTPWindow::OnDisconnect(int /*code*/) {
 	m_remotePendingFocusParent = NULL;
 	m_remotePendingFocusPath[0] = 0;
 	m_remoteBusyCursor = false;
+	m_cancelOperation = NULL;
 	m_activeTransferCount = 0;
 	m_busy = false;
 	m_overwriteAll = false;
@@ -3105,13 +3180,19 @@ int FTPWindow::CreateDirectory(FileObject * parent) {
 }
 
 int FTPWindow::DeleteDirectory(FileObject * dir) {
+	if (!dir || dir->isRoot()) {
+		OutErr("[FTPWindow] Refusing to remove the remote root directory");
+		MessageBeep(MB_ICONERROR);
+		return -1;
+	}
+
 	MessageDialog md;
 
-	int res = md.Create(m_hwnd, TEXT("Deleting directory"), TEXT("Are you sure you want to delete this directory?"));
+	int res = md.Create(m_hwnd, TEXT("Deleting directory"), TEXT("Delete this directory and all files and subdirectories inside it?"));
 	if (res != 1)
 		return 0;
 
-	res = m_ftpSession->RmDir(dir->GetPath());
+	res = m_ftpSession->RmDirRecursive(dir->GetPath());
 	if (res == -1)
 		return -1;
 

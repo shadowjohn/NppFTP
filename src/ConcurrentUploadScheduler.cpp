@@ -40,7 +40,8 @@ ConcurrentUploadScheduler::ConcurrentUploadScheduler(HWND, FTPClientWrapper * pr
 	m_running(false),
 	m_initializing(false),
 	m_stopping(false),
-	m_accepting(false) {
+	m_accepting(false),
+	m_dispatchPaused(false) {
 	if (m_workerCount < 1)
 		m_workerCount = 1;
 	if (m_workerCount > 8)
@@ -87,6 +88,7 @@ int ConcurrentUploadScheduler::Initialize() {
 	m_workers.swap(workers);
 	m_stopping = false;
 	m_accepting = true;
+	m_dispatchPaused = false;
 	m_running = true;
 	m_dispatchThread = ::CreateThread(NULL, 0, &ConcurrentUploadScheduler::SchedulerThread, this, 0, NULL);
 	if (!m_dispatchThread) {
@@ -94,6 +96,7 @@ int ConcurrentUploadScheduler::Initialize() {
 		m_running = false;
 		m_accepting = false;
 		m_stopping = false;
+		m_dispatchPaused = false;
 		m_initializing = false;
 		m_monitor->Signal(ConditionSchedulerState);
 		m_monitor->Exit();
@@ -147,6 +150,7 @@ int ConcurrentUploadScheduler::Deinitialize() {
 	m_running = false;
 	m_stopping = false;
 	m_accepting = false;
+	m_dispatchPaused = false;
 	m_monitor->Signal(ConditionSchedulerState);
 	m_monitor->Exit();
 	return 0;
@@ -252,13 +256,84 @@ int ConcurrentUploadScheduler::CancelQueueOp(QueueOperation * op) {
 			QueueTerminalFollowUp(terminalOp);
 			return 0;
 		}
-		if (result <= 0) {
+		if (result == -1) {
+			int abortResult = worker->queue->AbortActive();
+			m_monitor->Exit();
+			return abortResult == 0 ? 0 : -1;
+		}
+		if (result < 0) {
 			m_monitor->Exit();
 			return result;
 		}
 	}
 	m_monitor->Exit();
 	return 1;
+}
+
+int ConcurrentUploadScheduler::CancelAllQueueOps() {
+	std::vector<QueueOperation*> waiting;
+	std::vector<QueueOperation*> terminalFollowUps;
+
+	m_monitor->Enter();
+	if (!m_running || m_stopping) {
+		m_monitor->Exit();
+		return -1;
+	}
+	for (std::deque<PendingAdd>::iterator pending = m_pendingAdds.begin(); pending != m_pendingAdds.end(); ++pending) {
+		pending->canceled = true;
+		pending->operation->Terminate();
+	}
+	while (true) {
+		QueueOperation * op = m_policy.TakeNext();
+		if (!op)
+			break;
+		waiting.push_back(op);
+	}
+	for (std::vector<Worker*>::iterator worker = m_workers.begin(); worker != m_workers.end(); ++worker) {
+		for (std::deque<QueueOperation*>::iterator op = (*worker)->operations.begin(); op != (*worker)->operations.end();) {
+			QueueOperation * terminalOp = NULL;
+			int result = (*worker)->queue->CancelQueueOp(*op, &terminalOp, false);
+			if (result == 0) {
+				op = (*worker)->operations.erase(op);
+				if (terminalOp)
+					terminalFollowUps.push_back(terminalOp);
+				continue;
+			}
+			if (result == -1)
+				(*worker)->queue->AbortActive();
+			++op;
+		}
+	}
+	m_monitor->Exit();
+
+	for (std::vector<QueueOperation*>::iterator op = waiting.begin(); op != waiting.end(); ++op) {
+		(*op)->SendNotification(QueueOperation::QueueEventRemove);
+		QueueOperation * terminalOp = queue_cancel_and_take_terminal(*op);
+		delete *op;
+		QueueTerminalFollowUp(terminalOp);
+	}
+	for (std::vector<QueueOperation*>::iterator terminalOp = terminalFollowUps.begin(); terminalOp != terminalFollowUps.end(); ++terminalOp)
+		QueueTerminalFollowUp(*terminalOp);
+	return 0;
+}
+
+int ConcurrentUploadScheduler::SetDispatchPaused(bool paused) {
+	m_monitor->Enter();
+	if (!m_running || m_stopping) {
+		m_monitor->Exit();
+		return -1;
+	}
+	m_dispatchPaused = paused;
+	m_monitor->Signal(ConditionSchedulerState);
+	m_monitor->Exit();
+	return 0;
+}
+
+bool ConcurrentUploadScheduler::IsDispatchPaused() const {
+	m_monitor->Enter();
+	bool paused = m_running && !m_stopping && m_dispatchPaused;
+	m_monitor->Exit();
+	return paused;
 }
 
 int ConcurrentUploadScheduler::AbortActive() {
@@ -303,14 +378,16 @@ int ConcurrentUploadScheduler::SchedulerLoop() {
 			m_monitor->Exit();
 			break;
 		}
-		worker = FindIdleWorkerLocked();
-		if (worker) {
-			op = m_policy.TakeNextMatching([this](QueueOperation * candidate) {
-				return !FindWorkerConflictLocked(*candidate);
-			});
-			if (op) {
-				worker->operations.push_back(op);
-				worker->queue->AddQueueOp(op, false);
+		if (!m_dispatchPaused) {
+			worker = FindIdleWorkerLocked();
+			if (worker) {
+				op = m_policy.TakeNextMatching([this](QueueOperation * candidate) {
+					return !FindWorkerConflictLocked(*candidate);
+				});
+				if (op) {
+					worker->operations.push_back(op);
+					worker->queue->AddQueueOp(op, false);
+				}
 			}
 		}
 		m_monitor->Exit();

@@ -125,7 +125,12 @@ PSPad 的 FTP 面板比較接近實際工作習慣：上方固定顯示目前路
 - 並行排程只套用上傳；下載、遠端瀏覽、複製、rename、CHMOD、刪除等既有流程仍維持序列執行。一般手動與遞迴上傳使用 normal priority。
 - 從遠端 cache 開啟的檔案在 Notepad++ 儲存後會以 urgent priority 上傳：不打斷 active upload，但會在下一個空閒 worker 優先於等待中的 normal upload。同檔若已等待會直接提升，不新增重複項目；同檔若正在上傳則只保留一筆 urgent follow-up。
 - cache 儲存成功排入 upload queue 時，remote browser 會依實際解析出的 remote path 立即切回父目錄並聚焦該檔；沒有 cache mapping、路由拒絕或上傳佇列失敗時，保留使用者目前瀏覽位置。
+- transfer list 的 upload row 可右鍵選擇 `Pause all uploads`／`Resume uploads`、`Clear selected upload task`、`Clear all upload tasks`；空白處則提供全域 pause/resume 與 clear-all。選單會依目前狀態只顯示一個 pause/resume 動作。
+- pause 是目前連線 session 的 scheduler dispatch gate：已在上傳的檔案會自然完成，只有 waiting upload 暫時不再派送；resume 後仍保留 urgent 優先與同檔 conflict 規則。disconnect / reconnect 後自動回到正常派送。
+- clear selected 只取消該 upload；clear all 只取消 waiting upload 並 abort active upload worker，不會碰 download、目錄準備、遠端瀏覽或 mutation queue。遞迴上傳仍維持單一 canceled summary。
 - Global settings 目前只有本輪固定文字採正體中文；完整 UI 語系選擇與多國語系系統仍是後續規劃。
+
+本輪尚待 Notepad++ 搭配真實 FTP／FTPS／SFTP 手動確認：limit `1`／`2` 下的 pause/resume、active upload 自然完成、urgent cache save 的恢復順序、waiting／active selected clear、recursive clear all，以及傳輸中 disconnect 後重新連線。
 
 ## Build
 

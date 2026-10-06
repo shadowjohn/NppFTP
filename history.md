@@ -1,5 +1,13 @@
 # NppFTP 接續紀錄
 
+## 2026-08-26 Bulk upload queue controls
+
+- `ConcurrentUploadScheduler` 新增 session-only dispatch pause：paused 時仍接受 waiting upload 並保留 normal／urgent 與同檔 conflict 規則，但不將新工作派給 idle worker；已在傳輸中的 upload 不被中斷。scheduler teardown 後 pause state 歸零，重新連線不會帶入舊狀態。
+- transfer list 的 upload row 右鍵可顯示互斥的 `Pause all uploads`／`Resume uploads`、`Clear selected upload task`、`Clear all upload tasks`；真正點到空白區時只顯示全域 pause/resume 與 clear-all。下載列維持原有右鍵行為。Output 會記錄 pause/resume 與 clear-all 指令。
+- selected active upload 只呼叫所屬 worker 的 `FTPQueue::AbortActive()`；clear-all 只作用 upload scheduler：waiting policy 項目走既有 cancel terminal、pending add 標記取消、每個 worker 的 active upload 個別 abort。worker operation 在 scheduler lock 持有時就完成取消／abort 決策，避免釋鎖後使用已被 terminal callback 刪除的 stale pointer。
+- TDD：先加入 scheduler pause、selected active cancel 與 recursive batch clear-all 紅燈；完成後 `NppFTP_FTPQueueTerminalLifecycle.exe` 驗證 active upload 可完成、paused waiting 不派送、resume urgent 優先、selected active 僅 abort 一次，以及 clear-all 對三個 recursive files 恰好一次 canceled terminal / completion marker。`ftp_session_upload_routing.ps1` 也確認 session 只轉送 upload scheduler、queue row hit-test、pause label 切換、single-file upload 一律以 `WasCanceled()` 判定 canceled，以及 download legacy abort 不變。
+- 本機驗證：完整 focused suite 均通過：`certificate_store_lock_exit=0`、`concurrent_upload_scheduler_exit=0`、`ftp_listing_time_exit=0`、`ftp_queue_terminal_lifecycle_exit=0`、`ftp_settings_roundtrip_exit=0`、`remote_browser_saved_file_navigation_exit=0`、`remote_upload_plan_exit=0`、`ftp_listing_time_routing_exit=0`、`ftp_session_upload_routing_exit=0`。`build.bat -Arch x64 -Config Release` 成功產生 DLL 與 zip；DLL SHA-256 `0D1C6AF17A953BED0106015B8852AE075C6BB8E1D7616432CABB033B06306A0E`，zip SHA-256 `269A7DB452875A05C16EE5D09B1659B45AB8090C6879EA9522DBB2F97273E136`。僅保留既有 UTCP code-page 與 legacy conversion warnings。尚未執行 Notepad++ 搭配真實 FTP／FTPS／SFTP 的 pause/resume、single/all clear、recursive batch、disconnect/reconnect 手動 QA。
+
 ## 2026-08-26 Fix FTP/FTPS modified-time timezone offset
 
 - 修正 flat Remote Browser 的 FTP／FTPS 修改時間多加本機 UTC offset。根因是 `FTPClientWrapperSSL::ConvertFiletime()` 將 FTP LIST 的無時區 wall-clock time 直接以 UTC 存入 `FILETIME`，而清單與 tree 顯示端再依本機時區轉換一次。
@@ -793,3 +801,25 @@
 - 目錄 listing 回來後會沿用既有 pending focus 機制選取剛儲存的檔案；若父目錄尚未在 object tree，完成 hierarchy listing 時仍會以 path 比對恢復焦點。使用者後續手動導覽會清除這個 pending focus，避免舊 save 結果搶回畫面。
 - 新增 `remote_browser_saved_file_navigation` focused test，覆蓋巢狀路徑、根目錄檔案與無效路徑；routing contract 也確認只有 upload queue 接受成功才導向。全部 focused checks 與 `build.bat -Arch x64 -Config Release` 通過；尚待 Notepad++ 搭配真實 FTP／FTPS／SFTP 確認 save 後切換、refresh 與 list focus 體驗。
 - 2026-08-19 已在 Notepad++ 搭配真實 FTP 驗證：從 `/var/www/html/3waAIHub/index.php` 切到其他目錄後儲存，Remote Browser 會切回檔案父目錄並保留 `index.php` 的選取與鍵盤 focus。
+
+## 2026-08-26 Fix plugin shutdown after upload queue activity
+
+- Windows Application Error 已記錄 `notepad++.exe` 的 `NppFTP.dll_unloaded` access violation；追查 `NPPN_SHUTDOWN -> NppFTP::Stop()` 後發現既有 `Stop()` 只將 `m_ftpSession`、`m_ftpWindow` 設為 `NULL`，沒有停止或釋放任何 queue worker。
+- `Stop()` 現在會先以非互動模式停止 session，讓既有 `FTPSession::Clear()` join upload scheduler 與 legacy queue thread；再 deinitialize/delete session，最後 destroy/delete FTP window，避免 thread 在 DLL unload 後繼續執行。
+- 新增 `tests/nppftp_shutdown_lifecycle.ps1`。修正前明確失敗於 `Plugin shutdown must stop sessions without leaving background queues alive.`；修正後 `nppftp_shutdown_lifecycle_exit=0`。完整 focused suite 與 `build.bat -Arch x64 -Config Release` 均通過。
+- x64 Release DLL SHA-256：`80DEA22043C2B4867E933DF4B88011B94AFE356735985D6A3A707908BDC17CB8`；ZIP SHA-256：`EEB336007E240915D25440C01B5DB617C2BC7B1C34821E0689C866D3857AE47B`。仍需在 Notepad++ 實機以「暫停/清除大量 upload 後關閉 Notepad++」驗證不再卡死或 crash。
+
+## 2026-08-26 Keep bulk-upload cancellation responsive
+
+- 大量遞迴 upload 的 `Clear all upload tasks` 後，原本每個 canceled worker End 與最後 batch summary 都會逐檔寫入 Output；例如 474 筆取消會造成數百次 UI-thread Output 更新，讓 Remote Browser 看起來卡住。batch 現在只保留原子 canceled count，並以一行 completion summary 呈現；單檔 upload 的取消訊息仍保留。
+- `RemoteUploadBatch` 的 summary display 改為 one-shot，避免延遲 completion notification 重複出現完成提示。完成後只在使用者仍停留於該 target、且沒有較新的 pending navigation 時刷新，不能把使用者剛切走的目錄重新排入 main queue。
+- remote upload conflict scan 失敗仍會輸出錯誤並提示，但不再跳出阻斷式 `Remote operation failed` modal，讓 Remote Browser 可以繼續導覽或由使用者決定是否重試。這次 log 的 `Disconnected` 已確認不是 `OnError()` 直接造成；它只可能經 session terminate / connect failure 路徑發生，尚未以實機重現到同一個 server-side rejection。
+- 測試先驗證舊版仍有逐檔 Output／modal 路徑後，再加入 upload summary refresh、one-shot completion 與 recursive-cancel contract。`build.bat -Arch x64 -Config Release`、certificate/scheduler/listing/queue/settings/browser/upload-plan focused executables、`ftp_listing_time_routing.ps1`、`ftp_session_upload_routing.ps1`、`nppftp_shutdown_lifecycle.ps1`、`remote_refresh_source_contract.ps1` 均通過。
+- x64 Release DLL SHA-256：`6B9050AF1EEF9D1B26446258AB69B737DCDFC8C617DECDF75D2C417423152A3C`。仍需 Notepad++ + 真實 FTP／FTPS／SFTP 實機以 100+ 檔、pause/resume、clear selected/clear all 後驗證 list 可立即切換，並在 server-side scan failure 時確認不會自行斷線。
+
+## 2026-08-26 Recursively delete non-empty remote directories
+
+- Remote Browser 的「Delete directory」不再只呼叫 server 的 empty-directory `RmDir`；確認文字明確說明會刪除目錄及全部內容，並在既有序列 `m_mainQueue` 以 post-order 執行：檔案與 symlink 先刪、子目錄後刪、目標目錄最後刪除。
+- 操作拒絕 remote root `/`、過長或非絕對 path；listing 項目也必須仍位於目前目錄樹下，否則停止且不送任何遠端 delete。symlink 一律走 `DeleteFile`，絕不追進連結目標。
+- 成功會在 Output 記錄刪除的檔案／目錄數量；失敗會記錄 operation 的目標與實際失敗 path，並沿用既有 permission/not-found remote failure dialog。完成或失敗後的 parent listing refresh 仍依 queue 順序執行，因此會反映已完成的部分刪除。
+- 新增 fake-wrapper focused test，覆蓋 post-order、symlink、不刪 root、listing 越界拒絕，以及深層 permission failure path；source routing test 確認 UI 導向 `RmDirRecursive`。`build.bat -Arch x64 -Config Release` 與 certificate/scheduler/listing/queue/settings/browser/recursive-delete/upload-plan focused executables、5 支 PowerShell source contract tests 均通過。真實 Notepad++ + FTP／FTPS／SFTP 的 non-empty、nested、permission-denied 目錄仍待實機 QA。

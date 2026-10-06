@@ -86,6 +86,25 @@ if ([regex]::Matches($perform, 'FTPFile\s*\*\s*files\s*=\s*NULL\s*;').Count -ne 
 	throw 'QueueGetDir does not initialize both wrapper output pointers'
 }
 
+$uploadSummary = Get-BracedBlock $source 'void FTPWindow::ShowRemoteUploadSummary('
+if ($uploadSummary -match 'GetCanceledPaths|Upload canceled for') {
+	throw 'Large canceled directory uploads must not emit one Output row per file'
+}
+if ($uploadSummary -notmatch 'remote_browser_upload_summary_refreshes_current_directory') {
+	throw 'Directory upload completion must refresh only the currently viewed directory'
+}
+
+$uploadScan = Get-BracedBlock $source 'case QueueOperation::QueueTypeRemoteUploadScan:'
+if ($uploadScan -match 'ShowOperationFailure\(queueOp\)') {
+	throw 'Background upload conflict scans must not block remote browsing with a modal failure dialog'
+}
+
+$guiEventsStart = $source.IndexOf('//Perform GUI operations')
+$uploadEvent = Get-BracedBlock $source 'case QueueOperation::QueueTypeUpload:' $guiEventsStart
+if ($uploadEvent -notmatch 'if \(outcome == RemoteUploadFileCanceled\) \{\s*if \(!batch\)\s*OutMsg') {
+	throw 'Recursive upload cancellation must be summarized instead of emitting one Output row per file'
+}
+
 $fillRemoteList = Get-BracedBlock $source 'int FTPWindow::FillRemoteList()'
 if ($fillRemoteList -notmatch 'if\s*\(parent\s*&&\s*!m_remoteCurrentDir->isRoot\(\)\)') {
 	throw 'Remote list still inserts the parent item at root'

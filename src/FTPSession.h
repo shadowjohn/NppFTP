@@ -40,7 +40,7 @@ public:
 	int						SetCertificates(vScopedX509 * x509Vect);
 
 	int						StartSession(FTPProfile * sessionProfile);
-	int						TerminateSession();
+	int						TerminateSession(bool confirmTransfers = true);
 
 	bool					IsConnected() const;
 	FTPProfile*				GetCurrentProfile();
@@ -71,6 +71,7 @@ public:
 
 	int						MkDir(const char * path);
 	int						RmDir(const char * path);
+	int						RmDirRecursive(const char * path);
 	int						MkFile(const char * path);
 	int						DeleteFile(const char * path);
 	int						Rename(const char * oldpath, const char * newpath);
@@ -82,6 +83,9 @@ public:
 	int						AbortOperation();
 	int						AbortTransfer();
 	int						CancelOperation(QueueOperation * cancelOp);
+	int					SetUploadDispatchPaused(bool paused);
+	bool					IsUploadDispatchPaused() const;
+	int					ClearAllUploadOperations();
 private:
 	int						Clear();
 	void					DiscardRemoteUploadBatchNotifications();

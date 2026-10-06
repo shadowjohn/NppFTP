@@ -143,7 +143,7 @@ int FTPSession::StartSession(FTPProfile * sessionProfile) {
 	return 0;
 }
 
-int FTPSession::TerminateSession() {
+int FTPSession::TerminateSession(bool confirmTransfers) {
 
 	OutDebug("[FTPSession] Terminating session.");
 
@@ -155,7 +155,7 @@ int FTPSession::TerminateSession() {
 	int transferCount = m_transferQueue ? m_transferQueue->GetQueueSize() : 0;
 	if (m_uploadScheduler)
 		transferCount += m_uploadScheduler->GetQueueSize();
-	if (transferCount > 0) {
+	if (confirmTransfers && transferCount > 0) {
 		int ret = ::MessageBox(_MainOutputWindow, TEXT("There are still transfers running, do you want to close the connection?"), TEXT("Closing connection"), MB_YESNO);
 		if (ret != IDYES)
 			return -1;
@@ -640,6 +640,17 @@ int FTPSession::RmDir(const char * path) {
 	return 0;
 }
 
+int FTPSession::RmDirRecursive(const char * path) {
+	if (!m_running || !path || strcmp(path, "/") == 0)
+		return -1;
+
+	QueueRemoveDirRecursive * dirop = new QueueRemoveDirRecursive(m_hNotify, path);
+
+	m_mainQueue->AddQueueOp(dirop);
+
+	return 0;
+}
+
 int FTPSession::MkFile(const char * path) {
 	if (!m_running)
 		return -1;
@@ -783,6 +794,18 @@ int FTPSession::CancelOperation(QueueOperation * cancelOp) {
 			return result;
 	}
 	return m_transferQueue ? m_transferQueue->CancelQueueOp(cancelOp) : -1;
+}
+
+int FTPSession::SetUploadDispatchPaused(bool paused) {
+	return m_uploadScheduler ? m_uploadScheduler->SetDispatchPaused(paused) : -1;
+}
+
+bool FTPSession::IsUploadDispatchPaused() const {
+	return m_uploadScheduler ? m_uploadScheduler->IsDispatchPaused() : false;
+}
+
+int FTPSession::ClearAllUploadOperations() {
+	return m_uploadScheduler ? m_uploadScheduler->CancelAllQueueOps() : -1;
 }
 
 int FTPSession::Clear() {

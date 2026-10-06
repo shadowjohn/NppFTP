@@ -31,6 +31,9 @@ public:
 	int Deinitialize();
 	int AddQueueOp(QueueOperation * op, UploadPriority priority);
 	int CancelQueueOp(QueueOperation * op);
+	int CancelAllQueueOps();
+	int SetDispatchPaused(bool paused);
+	bool IsDispatchPaused() const;
 	int AbortActive();
 	int GetQueueSize() const;
 	int GetActiveCount() const;
@@ -75,6 +78,7 @@ private:
 	bool m_initializing;
 	bool m_stopping;
 	bool m_accepting;
+	bool m_dispatchPaused;
 };
 
 #endif //CONCURRENTUPLOADSCHEDULER_H

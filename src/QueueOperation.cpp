@@ -1164,6 +1164,111 @@ char * QueueRemoveDir::GetDirPath() {
 
 //////////////////////////////////////
 
+QueueRemoveDirRecursive::QueueRemoveDirRecursive(HWND hNotify, const char * dirPath, int notifyCode, void * notifyData) :
+	QueueOperation(QueueTypeDirectoryRemoveRecursive, hNotify, notifyCode, notifyData),
+	m_dirPath(SU::strdup(dirPath)),
+	m_failedPath(NULL),
+	m_deletedFileCount(0),
+	m_deletedDirectoryCount(0)
+{
+	if (m_dirPath) {
+		size_t length = strlen(m_dirPath);
+		while (length > 1 && m_dirPath[length - 1] == '/')
+			m_dirPath[--length] = 0;
+	}
+}
+
+QueueRemoveDirRecursive::~QueueRemoveDirRecursive() {
+	SU::free(m_dirPath);
+	SU::free(m_failedPath);
+}
+
+int QueueRemoveDirRecursive::Perform() {
+	if (!BeginPerform())
+		return m_result;
+	if (!m_client || !m_dirPath || m_dirPath[0] != '/' || strlen(m_dirPath) >= MAX_PATH || strcmp(m_dirPath, "/") == 0)
+		return CompletePerform(FailAt(m_dirPath));
+	if (m_doConnect && !m_client->IsConnected()) {
+		if (m_client->Connect() == -1)
+			return CompletePerform(FailAt(m_dirPath));
+	}
+
+	return CompletePerform(RemoveTree(m_dirPath));
+}
+
+bool QueueRemoveDirRecursive::Equals(const QueueOperation & other) {
+	if (!QueueOperation::Equals(other))
+		return false;
+	const QueueRemoveDirRecursive & otherRemove = (QueueRemoveDirRecursive&) other;
+
+	return (!strcmp(otherRemove.m_dirPath, m_dirPath));
+}
+
+char * QueueRemoveDirRecursive::GetDirPath() {
+	return m_dirPath;
+}
+
+const char * QueueRemoveDirRecursive::GetFailedPath() const {
+	return m_failedPath ? m_failedPath : m_dirPath;
+}
+
+int QueueRemoveDirRecursive::GetDeletedFileCount() const {
+	return m_deletedFileCount;
+}
+
+int QueueRemoveDirRecursive::GetDeletedDirectoryCount() const {
+	return m_deletedDirectoryCount;
+}
+
+int QueueRemoveDirRecursive::RemoveTree(const char * dirPath) {
+	FTPFile * files = NULL;
+	int count = m_client->GetDir(dirPath, &files);
+	if (count < 0)
+		return FailAt(dirPath);
+
+	for (int i = 0; i < count; ++i) {
+		size_t dirLength = strlen(dirPath);
+		if (WasCanceled() || files[i].filePath[0] == 0 ||
+			strncmp(files[i].filePath, dirPath, dirLength) != 0 ||
+			files[i].filePath[dirLength] != '/' || files[i].filePath[dirLength + 1] == 0) {
+			if (files)
+				m_client->ReleaseDir(files, count);
+			return FailAt(dirPath);
+		}
+
+		int result = files[i].fileType == FTPTypeDir ?
+			RemoveTree(files[i].filePath) : m_client->DeleteFile(files[i].filePath);
+		if (result != 0) {
+			if (files)
+				m_client->ReleaseDir(files, count);
+			if (files[i].fileType != FTPTypeDir)
+				return FailAt(files[i].filePath);
+			return -1;
+		}
+
+		if (files[i].fileType != FTPTypeDir)
+			++m_deletedFileCount;
+	}
+
+	if (files)
+		m_client->ReleaseDir(files, count);
+	if (WasCanceled())
+		return FailAt(dirPath);
+	if (m_client->RmDir(dirPath) != 0)
+		return FailAt(dirPath);
+
+	++m_deletedDirectoryCount;
+	return 0;
+}
+
+int QueueRemoveDirRecursive::FailAt(const char * path) {
+	SU::free(m_failedPath);
+	m_failedPath = SU::strdup(path ? path : "");
+	return -1;
+}
+
+//////////////////////////////////////
+
 QueueCreateFile::QueueCreateFile(HWND hNotify, const char * filePath, int notifyCode, void * notifyData) :
 	QueueOperation(QueueTypeFileCreate, hNotify, notifyCode, notifyData)
 {

@@ -57,16 +57,16 @@ struct RemoteUploadBatch {
 	void InitializeFileCounts(int selectedFiles, int skippedFiles);
 	void RecordFileSucceeded();
 	void RecordFileFailed();
-	void RecordCanceled(const char * remotePath);
+	void RecordCanceled();
 	bool CancelUnstartedSelectedFiles();
 	bool CompleteFileTerminal();
 	bool RequestCompletionIfReady();
+	bool TryBeginSummaryDisplay();
 	int GetSelectedFileCount() const;
 	int GetSkippedFileCount() const;
 	int GetFailedFileCount() const;
 	int GetCanceledFileCount() const;
 	int GetRemainingFileCount() const;
-	void GetCanceledPaths(std::vector<std::string> & paths) const;
 
 	RemoteUploadPlan * plan;
 	std::string targetPath;
@@ -81,11 +81,10 @@ private:
 	volatile LONG m_canceledFiles;
 	volatile LONG m_remainingFiles;
 	volatile LONG m_completionRequested;
+	volatile LONG m_summaryDisplayed;
 	volatile LONG m_unstartedCancellationRecorded;
 	HWND m_completionWindow;
 	LONG m_completionGeneration;
-	mutable CRITICAL_SECTION m_canceledPathsLock;
-	std::vector<std::string> m_canceledPaths;
 	RemoteUploadBatch(const RemoteUploadBatch &);
 	RemoteUploadBatch & operator=(const RemoteUploadBatch &);
 };

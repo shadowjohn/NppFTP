@@ -76,6 +76,13 @@ static inline bool remote_browser_refresh_updates_visible_ui(bool isFinalTarget,
 			(isCurrentRemoteDir && (!pendingPath || pendingPath[0] == 0)));
 }
 
+static inline bool remote_browser_upload_summary_refreshes_current_directory(const char *currentPath,
+	const char *pendingPath, const char *uploadTargetPath)
+{
+	return currentPath && currentPath[0] && uploadTargetPath && uploadTargetPath[0] &&
+		(!pendingPath || pendingPath[0] == 0) && strcmp(currentPath, uploadTargetPath) == 0;
+}
+
 static inline HWND remote_browser_combo_edit(HWND combo)
 {
 	COMBOBOXINFO info{};

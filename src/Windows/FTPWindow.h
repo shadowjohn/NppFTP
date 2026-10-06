@@ -192,6 +192,8 @@ protected:
 	HMENU					m_popupLink;
 	HMENU					m_popupQueueActive;
 	HMENU					m_popupQueueHold;
+	HMENU					m_popupQueueUpload;
+	HMENU					m_popupQueueUploadBlank;
 	HMENU					m_popupRemoteFile;
 	HMENU					m_popupRemoteDir;
 	HMENU					m_popupRemoteBlank;

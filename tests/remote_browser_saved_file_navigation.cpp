@@ -22,6 +22,9 @@ int main()
 
 	if (Check(remote_browser_saved_file_parent_path("/var/www/html/3waAIHub/", parent, MAX_PATH) == -1, "directory path is not a saved file")) return 1;
 	if (Check(remote_browser_saved_file_parent_path("index.php", parent, MAX_PATH) == -1, "relative saved file path is rejected")) return 1;
+	if (Check(remote_browser_upload_summary_refreshes_current_directory("/var/www/html", "", "/var/www/html"), "current upload target refreshes")) return 1;
+	if (Check(!remote_browser_upload_summary_refreshes_current_directory("/var/www/other", "", "/var/www/html"), "stale upload target does not refresh")) return 1;
+	if (Check(!remote_browser_upload_summary_refreshes_current_directory("/var/www/html", "/var/www/other", "/var/www/html"), "pending navigation wins over upload refresh")) return 1;
 
 	printf("remote_browser_saved_file_navigation_exit=0\n");
 	return 0;

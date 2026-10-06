@@ -130,6 +130,8 @@ int main()
 	if (!Check(!batch->CompleteFileTerminal(), "first terminal does not request completion")) return 1;
 	if (!Check(batch->CompleteFileTerminal(), "last terminal requests completion")) return 1;
 	if (!Check(!batch->RequestCompletionIfReady(), "completion marker is requested exactly once")) return 1;
+	if (!Check(batch->TryBeginSummaryDisplay(), "first completion marker may display the directory summary")) return 1;
+	if (!Check(!batch->TryBeginSummaryDisplay(), "duplicate completion markers cannot display the directory summary twice")) return 1;
 	batch->AddRef();
 	batch->Release();
 	batch->Release();
@@ -138,13 +140,10 @@ int main()
 	failedCanceledBatch->InitializeFileCounts(2, 0);
 	failedCanceledBatch->RecordFileFailed();
 	if (!Check(!failedCanceledBatch->CompleteFileTerminal(), "failed file remains terminal work")) return 1;
-	failedCanceledBatch->RecordCanceled("/var/www/canceled.txt");
+	failedCanceledBatch->RecordCanceled();
 	if (!Check(failedCanceledBatch->CompleteFileTerminal(), "canceled last file requests completion")) return 1;
 	if (!Check(failedCanceledBatch->GetFailedFileCount() == 1, "failed file count")) return 1;
 	if (!Check(failedCanceledBatch->GetCanceledFileCount() == 1, "canceled file count")) return 1;
-	std::vector<std::string> canceledPaths;
-	failedCanceledBatch->GetCanceledPaths(canceledPaths);
-	if (!Check(canceledPaths.size() == 1 && canceledPaths[0] == "/var/www/canceled.txt", "canceled path")) return 1;
 	failedCanceledBatch->Release();
 
 	RemoteUploadPlan * fatalPlan = new RemoteUploadPlan;

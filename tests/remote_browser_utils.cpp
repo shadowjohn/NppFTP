@@ -104,6 +104,10 @@ int main()
 	assert(!remote_browser_refresh_updates_visible_ui(true, "/other", "/dir", true));
 	assert(!remote_browser_refresh_updates_visible_ui(true, "/other", "/dir", false));
 	assert(!remote_browser_refresh_updates_visible_ui(false, "", "/dir", true));
+	assert(remote_browser_upload_summary_refreshes_current_directory("/dir", "", "/dir"));
+	assert(!remote_browser_upload_summary_refreshes_current_directory("/other", "", "/dir"));
+	assert(!remote_browser_upload_summary_refreshes_current_directory("/dir", "/other", "/dir"));
+	assert(!remote_browser_upload_summary_refreshes_current_directory("/dir", "", ""));
 
 	printf("remote_browser_utils_exit=0\n");
 	return 0;

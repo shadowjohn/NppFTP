@@ -114,8 +114,15 @@ int NppFTP::Start(NppData nppData, TCHAR * nppConfigStore, int id, FuncItem func
 int NppFTP::Stop() {
 	SaveSettings();
 
-	//delete m_ftpWindow;
-	//delete m_ftpSession;
+	if (m_ftpSession) {
+		m_ftpSession->TerminateSession(false);
+		m_ftpSession->Deinit();
+		delete m_ftpSession;
+	}
+	if (m_ftpWindow) {
+		m_ftpWindow->Destroy();
+		delete m_ftpWindow;
+	}
 
 	m_ftpWindow = NULL;
 	m_ftpSession = NULL;

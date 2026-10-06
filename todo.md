@@ -99,17 +99,17 @@
 - [x] 將遠端 cache 檔案儲存設為 urgent；同檔仍在等待時直接提升，已在 active 時只保留一筆後續上傳。
 - [ ] 使用 Notepad++ 搭配 FTP/FTPS/SFTP 實機驗證 limit `1`/`2`、手動／遞迴上傳、Abort／取消、儲存提升／active follow-up 與傳輸中斷線。
 
-## 5.2 大量上傳佇列控制（下一刀）
+## 5.2 大量上傳佇列控制
 
 目標：在下方 transfer list 的 upload 項目按右鍵，提供接近 FileZilla 的大量上傳控制；不影響下載、遠端瀏覽或檔案 mutation queue。
 
-- [ ] 在 upload row 或 transfer list 空白處的右鍵選單加入一組全域上傳控制：正常運作時只顯示 `Pause all uploads`；已暫停時只顯示 `Resume uploads`。
-- [ ] 第一版暫停採 scheduler dispatch gate：停止派送新的 waiting upload 給空閒 worker；已在傳輸中的檔案繼續完成，不對 FTP／FTPS／SFTP data stream 做不安全的強制 suspend。恢復後沿用原有 normal / urgent priority 與同檔 conflict 規則。
-- [ ] 顯示暫停狀態並在 Output 記錄 pause / resume；waiting rows 保留在清單中，進度不會假裝仍在前進。暫停狀態只存在目前 session，disconnect / reconnect 後回到正常派送。
-- [ ] 在 upload row 的右鍵選單加入 `Clear selected upload task`：waiting 項目立即取消並移除；active 項目走既有 abort / terminal accounting，最後顯示 canceled，不誤報為成功或失敗。
-- [ ] 在 upload row 或 transfer list 空白處加入 `Clear all upload tasks`：取消所有 waiting upload，並對所有 active upload 發 abort；不得影響 download、directory preparation、remote browser 或其他序列 queue operation。
-- [ ] 保留既有 recursive upload batch 的 selected / success / failed / canceled accounting 與單一 summary；clear selected / clear all、scheduler rejection、teardown 與延遲 End/Remove notification 都不能造成重複摘要、reference leak 或 UI deadlock。
-- [ ] focused tests：暫停後 active worker 可正常結束但不再派送 waiting upload；resume 後 urgent 仍先於 normal；清除 waiting / active 單筆與 clear all 都恰好一次 terminal accounting；paused 狀態下 disconnect / teardown 安全收斂。
+- [x] 在 upload row 或 transfer list 空白處的右鍵選單加入一組全域上傳控制：正常運作時只顯示 `Pause all uploads`；已暫停時只顯示 `Resume uploads`。
+- [x] 第一版暫停採 scheduler dispatch gate：停止派送新的 waiting upload 給空閒 worker；已在傳輸中的檔案繼續完成，不對 FTP／FTPS／SFTP data stream 做不安全的強制 suspend。恢復後沿用原有 normal / urgent priority 與同檔 conflict 規則。
+- [x] 顯示暫停狀態並在 Output 記錄 pause / resume；waiting rows 保留在清單中，進度不會假裝仍在前進。暫停狀態只存在目前 session，disconnect / reconnect 後回到正常派送。
+- [x] 在 upload row 的右鍵選單加入 `Clear selected upload task`：waiting 項目立即取消並移除；active 項目走既有 abort / terminal accounting，最後顯示 canceled，不誤報為成功或失敗。
+- [x] 在 upload row 或 transfer list 空白處加入 `Clear all upload tasks`：取消所有 waiting upload，並對所有 active upload 發 abort；不得影響 download、directory preparation、remote browser 或其他序列 queue operation。
+- [x] 保留既有 recursive upload batch 的 selected / success / failed / canceled accounting 與單一 summary；clear selected / clear all、scheduler rejection、teardown 與延遲 End/Remove notification 都不能造成重複摘要、reference leak 或 UI deadlock。
+- [x] focused tests：暫停後 active worker 可正常結束但不再派送 waiting upload；resume 後 urgent 仍先於 normal；清除 waiting / active 單筆與 clear all 都恰好一次 terminal accounting；paused 狀態下 disconnect / teardown 安全收斂。
 - [ ] Notepad++ 實機 QA：limit `1` / `2`、normal + urgent cache save、手動與遞迴上傳、waiting / active selected clear、clear all、pause / resume、FTP／FTPS／SFTP 及傳輸中 disconnect；確認選單文字依狀態互斥且不影響下載。
 
 ## 6. 多國語系

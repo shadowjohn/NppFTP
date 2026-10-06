@@ -176,6 +176,21 @@ set_target_properties(NppFTP_FTPQueueTerminalLifecycle PROPERTIES
 )
 target_link_libraries(NppFTP_FTPQueueTerminalLifecycle shlwapi)
 
+add_executable (NppFTP_RemoteRecursiveDelete
+    tests/remote_recursive_delete.cpp
+    src/FTPClientWrapper.cpp
+    src/Monitor.cpp
+    src/QueueOperation.cpp
+    src/RemoteDownloadPlan.cpp
+    src/RemoteUploadPlan.cpp
+    src/StringUtils.cpp
+    src/FileObject.cpp
+)
+set_target_properties(NppFTP_RemoteRecursiveDelete PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests"
+)
+target_link_libraries(NppFTP_RemoteRecursiveDelete shlwapi)
+
 add_executable (NppFTP_CertificateStoreLock
     tests/certificate_store_lock.cpp
     src/CertificateStoreLock.cpp

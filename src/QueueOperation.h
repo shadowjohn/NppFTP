@@ -46,7 +46,7 @@ class QueueOperation {
 	friend class FTPSession;
 public:
 	enum QueueType { QueueTypeConnect, QueueTypeDisconnect, QueueTypeDownload, QueueTypeUpload,
-	                 QueueTypeDirectoryGet, QueueTypeDirectoryCreate, QueueTypeDirectoryRemove,
+	                 QueueTypeDirectoryGet, QueueTypeDirectoryCreate, QueueTypeDirectoryRemove, QueueTypeDirectoryRemoveRecursive,
 	                 QueueTypeFileCreate, QueueTypeFileDelete, QueueTypeFileRename, QueueTypeQuote,
 	                 QueueTypeDownloadHandle, QueueTypeCopyFile, QueueTypeFileChmod, QueueTypeNoOp,
 	                 QueueTypeRemoteUploadScan, QueueTypeRemoteUploadPrepare, QueueTypeEnsureDirectory, QueueTypeRemoteUploadComplete,
@@ -389,6 +389,29 @@ public:
 	virtual char*			GetDirPath();
 protected:
 	char*					m_dirPath;
+};
+
+class QueueRemoveDirRecursive : public QueueOperation {
+public:
+							QueueRemoveDirRecursive(HWND hNotify, const char * dirPath, int notifyCode = 0, void * notifyData = NULL);
+	virtual					~QueueRemoveDirRecursive();
+
+	virtual int				Perform();
+
+	virtual bool			Equals(const QueueOperation & other);
+
+	virtual char*			GetDirPath();
+	virtual const char*		GetFailedPath() const;
+	virtual int				GetDeletedFileCount() const;
+	virtual int				GetDeletedDirectoryCount() const;
+protected:
+	int						RemoveTree(const char * dirPath);
+	int						FailAt(const char * path);
+
+	char*					m_dirPath;
+	char*					m_failedPath;
+	int						m_deletedFileCount;
+	int						m_deletedDirectoryCount;
 };
 
 class QueueCreateFile : public QueueOperation {
