@@ -823,3 +823,11 @@
 - 操作拒絕 remote root `/`、過長或非絕對 path；listing 項目也必須仍位於目前目錄樹下，否則停止且不送任何遠端 delete。symlink 一律走 `DeleteFile`，絕不追進連結目標。
 - 成功會在 Output 記錄刪除的檔案／目錄數量；失敗會記錄 operation 的目標與實際失敗 path，並沿用既有 permission/not-found remote failure dialog。完成或失敗後的 parent listing refresh 仍依 queue 順序執行，因此會反映已完成的部分刪除。
 - 新增 fake-wrapper focused test，覆蓋 post-order、symlink、不刪 root、listing 越界拒絕，以及深層 permission failure path；source routing test 確認 UI 導向 `RmDirRecursive`。`build.bat -Arch x64 -Config Release` 與 certificate/scheduler/listing/queue/settings/browser/recursive-delete/upload-plan focused executables、5 支 PowerShell source contract tests 均通過。真實 Notepad++ + FTP／FTPS／SFTP 的 non-empty、nested、permission-denied 目錄仍待實機 QA。
+
+## 2026-10-06 Integrate local work and fix recursive delete failure lifetime
+
+- 使用者核准先保存本地成果再整合；先建立 checkpoint `77d62c67acc97b8852bb3d8493381404a78c7671`，保留 23 個 tracked 修改與 4 個新檔，再以 merge `8fd705f318d86aed4508d63f5fa85d35a729af3a` 整合 `origin/master` 的認證失敗提示與 `v0.30.22-3wa.3` 預發佈內容。六個重疊檔案自動合併，兩邊功能與測試入口均保留。
+- `QueueRemoveDirRecursive::RemoveTree()` 現在先複製失敗檔案路徑，再釋放 listing；子目錄失敗保留已記錄的精確路徑，消除原本 `ReleaseDir()` 後讀取 `files[i]` 的 use-after-free。fake-wrapper 測試增加第一個檔案失敗、子目錄刪除失敗，以及失敗後不繼續刪除其他項目或祖先的斷言。
+- `build.bat -Arch x64 -Config Release` 成功產出 DLL 與 `NppFTP-0.30.22-3wa.3-win64.zip`；9 個 CMake focused executables 與 6 個 PowerShell source contracts 全部 exit 0。認證測試通過 9 個 loopback 情境、TCP refusal 與提示分類；遞迴刪除使用記憶體 fixture，沒有存取或刪除真人遠端資料。`git diff --check` 通過，獨立檢閱未發現新增問題。
+- ASan 修前 Release 測試明確報 `heap-use-after-free`，exit 86。修後一般 Release 測試正常完成；ASan Release/RelWithDebInfo 則在斷言結束後退出逾時。臨時診斷確認 26 個斷言全部通過，關閉符號解析仍逾時，因此不宣稱 ASan 完整通過；臨時診斷標記已移除，退出逾時原因仍待獨立釐清。
+- DLL SHA-256：`AA151EBE06DA262C35AF2FDB7DAAE34FCEEBBAC891D71F707EEE507654D31A01`；ZIP SHA-256：`63F1428913AD4C7F3F3B2C8FB1ACD12A2B30C5EE84D296DF1A1BE07780EA6F7A`。本輪只在本地提交，沒有 push、部署、發布或覆蓋 Notepad++ 安裝的 DLL；真人 Notepad++ 與 FTP/FTPS/SFTP UI/伺服器整合 QA 尚未執行。

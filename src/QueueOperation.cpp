@@ -1240,10 +1240,12 @@ int QueueRemoveDirRecursive::RemoveTree(const char * dirPath) {
 		int result = files[i].fileType == FTPTypeDir ?
 			RemoveTree(files[i].filePath) : m_client->DeleteFile(files[i].filePath);
 		if (result != 0) {
+			// Capture the file failure before releasing the directory listing.
+			// A failed child directory has already recorded its exact path.
+			if (files[i].fileType != FTPTypeDir)
+				FailAt(files[i].filePath);
 			if (files)
 				m_client->ReleaseDir(files, count);
-			if (files[i].fileType != FTPTypeDir)
-				return FailAt(files[i].filePath);
 			return -1;
 		}
 

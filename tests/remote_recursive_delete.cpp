@@ -74,6 +74,10 @@ public:
 	virtual int RmDir(const char * path)
 	{
 		m_operations.push_back(std::string("dir:") + path);
+		if (m_failDeletePath == path) {
+			m_failure = RemoteFailurePermissionDenied;
+			return -1;
+		}
 		return 0;
 	}
 	virtual int MkFile(const char *) { return 0; }
@@ -150,6 +154,23 @@ int main()
 	if (!Check(failedOperation.Perform() == -1, "delete failure stops recursive operation")) return 1;
 	if (!Check(strcmp(failedOperation.GetFailedPath(), "/var/www/html/test/test_upload/assets/app.js") == 0, "delete failure identifies the exact path")) return 1;
 	if (!Check(failedOperation.GetFailureKind() == RemoteFailurePermissionDenied, "delete failure retains remote permission detail")) return 1;
+	if (!Check(failedWrapper.Operations().size() == 3, "nested file failure never removes ancestor directories")) return 1;
+
+	RecursiveDeleteWrapper firstFileWrapper("/var/www/html/test/test_upload/index.php");
+	TestQueueRemoveDirRecursive firstFileOperation("/var/www/html/test/test_upload");
+	firstFileOperation.SetClient(&firstFileWrapper);
+	if (!Check(firstFileOperation.Perform() == -1, "first file failure stops deletion")) return 1;
+	if (!Check(strcmp(firstFileOperation.GetFailedPath(), "/var/www/html/test/test_upload/index.php") == 0, "first file failure survives listing release")) return 1;
+	if (!Check(firstFileOperation.GetFailureKind() == RemoteFailurePermissionDenied, "first file failure retains permission detail")) return 1;
+	if (!Check(firstFileWrapper.Operations().size() == 1, "first file failure prevents later mutations")) return 1;
+
+	RecursiveDeleteWrapper directoryFailureWrapper("/var/www/html/test/test_upload/assets");
+	TestQueueRemoveDirRecursive directoryFailureOperation("/var/www/html/test/test_upload");
+	directoryFailureOperation.SetClient(&directoryFailureWrapper);
+	if (!Check(directoryFailureOperation.Perform() == -1, "child directory failure stops deletion")) return 1;
+	if (!Check(strcmp(directoryFailureOperation.GetFailedPath(), "/var/www/html/test/test_upload/assets") == 0, "parent listing release preserves the child directory failure path")) return 1;
+	if (!Check(directoryFailureOperation.GetFailureKind() == RemoteFailurePermissionDenied, "child directory failure retains permission detail")) return 1;
+	if (!Check(directoryFailureWrapper.Operations().size() == 4, "child directory failure never removes the parent")) return 1;
 
 	printf("remote_recursive_delete_exit=0\n");
 	return 0;
