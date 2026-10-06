@@ -120,6 +120,7 @@ DWORD FTPClientWrapperSSL::LastAction() {
 }
 
 int FTPClientWrapperSSL::Connect() {
+	m_connectionFailure = ConnectionFailureUnknown;
 	if (m_connected)
 		return OnReturn(0);
 
@@ -127,6 +128,10 @@ int FTPClientWrapperSSL::Connect() {
 	int retcode = m_client.FTPConnect(m_hostname, m_username, m_password, "");
 	if (retcode == UTE_SUCCESS)
 		m_connected = true;
+	else
+		m_connectionFailure = ClassifyFtpLoginFailure(
+			retcode == UTE_USER_NA || retcode == UTE_PASS_NA || retcode == UTE_ACCT_NA,
+			m_client.GetLastReplyCode());
 
 	return OnReturn((retcode == UTE_SUCCESS)?0:-1);
 }

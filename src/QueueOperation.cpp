@@ -266,6 +266,7 @@ int QueueConnect::Perform() {
 	if (!BeginPerform())
 		return m_result;
 	m_result = m_client->Connect();
+	m_connectionFailure = m_client->GetConnectionFailureKind();
 
 	return m_result;
 }

@@ -87,6 +87,7 @@ DWORD FTPClientWrapperSSH::LastAction() {
 }
 
 int FTPClientWrapperSSH::Connect() {
+	m_connectionFailure = ConnectionFailureUnknown;
 	if (m_connected)
 		return 0;
 
@@ -575,6 +576,7 @@ int FTPClientWrapperSSH::authenticate(ssh_session session) {
 		}
 
 		if (methods == 0) {
+			m_connectionFailure = ConnectionFailureAuthentication;
 			OutErr("[SFTP] None of the server's authentication methods were accepted. Please check the options under the authentication tab.");
 			return -1;
 		}
@@ -591,6 +593,7 @@ int FTPClientWrapperSSH::authenticate(ssh_session session) {
 		retries++;
 	} while (authres == SSH_AUTH_PARTIAL && retries <= maxRetries);
 
+	m_connectionFailure = ClassifySshLoginFailure(authres);
 	OutErr("[SFTP] Unable to authenticate");
 
 	return -1;

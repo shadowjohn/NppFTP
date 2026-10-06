@@ -25,6 +25,7 @@
 #include <libssh/sftp.h>
 #include "FTPFile.h"
 #include "RemoteFailure.h"
+#include "ConnectionFailure.h"
 #include "SSLCertificates.h"
 
 enum Client_Type { Client_SSL, Client_SSH };
@@ -54,6 +55,7 @@ public:
 
 	virtual int				SetCertificates(vScopedX509 * x509Vect);
 
+	int GetLastReplyCode() const { return m_lastResponseCode; }
 	virtual DWORD			LastAction();
 
 	virtual BOOL			IsConnected();
@@ -96,6 +98,7 @@ public:
 
 	virtual Client_Type		GetType();
 	virtual RemoteFailureKind GetFailureKind() const;
+	ConnectionFailureKind GetConnectionFailureKind() const { return m_connectionFailure; }
 
 	virtual int				SetProgressMonitor(ProgressMonitor * progmon);
 	virtual int				SetTimeout(int timeout);
@@ -134,6 +137,7 @@ public:
 protected:
 	virtual int				OnReturn(int res);	//for use with time consuming operations
 
+	ConnectionFailureKind		m_connectionFailure;
 	Client_Type				m_type;
 
 	bool					m_connected;

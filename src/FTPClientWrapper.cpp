@@ -20,6 +20,7 @@
 #include "FTPClientWrapper.h"
 
 FTPClientWrapper::FTPClientWrapper(Client_Type type, const char * host, int port, const char * user, const char * password) :
+	m_connectionFailure(ConnectionFailureUnknown),
 	m_type(type),
 	m_connected(false),
 	m_aborting(false),
