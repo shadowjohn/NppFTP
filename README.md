@@ -1,6 +1,8 @@
 # NppFTP 維護版
 
-Current fork pre-release: **v0.30.22-3wa.3**, Windows x64 Unicode. See [release notes](docs/releases/v0.30.22-3wa.3.md). Maintained by shadowjohn; based on [ashkulz/NppFTP](https://github.com/ashkulz/NppFTP), with original author credits and GPL license retained.
+Current fork pre-release: **v0.30.22-3wa.4**, Windows x64 Unicode. See [release notes](docs/releases/v0.30.22-3wa.4.md). Maintained by shadowjohn; based on [ashkulz/NppFTP](https://github.com/ashkulz/NppFTP), with original author credits and GPL license retained.
+
+Profile settings 修正：避免 Hostname 按 Tab 後內容整片變白。candidate2 已由使用者實測驗收；以頁面裁切與 Z-order 修正，不改動連線設定或密碼。詳細測試與限制見 [調查紀錄](docs/profile-tab-paint-investigation.md)。
 
 NppFTP 是 Notepad++ 的 FTP / FTPS / FTPES / SFTP 外掛。這個維護版目前重點放在三件事：
 
@@ -152,7 +154,7 @@ build.bat
 產物：
 
 - Plugin DLL：`_build\Release\NppFTP.dll`
-- Zip package：`_build\NppFTP-0.30.22-3wa.3-win64.zip`
+- Zip package：`_build\NppFTP-0.30.22-3wa.4-win64.zip`
 
 `build_scripts.ps1` 會檢查 Visual Studio、CMake、Perl 等環境；OpenSSL / zlib / libssh 仍走既有 third-party build 流程，並保留 hash 驗證。
 

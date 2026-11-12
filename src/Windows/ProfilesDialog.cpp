@@ -542,6 +542,11 @@ INT_PTR ProfilesDialog::OnInitDialog() {
 	m_pageFTP.Create(m_hwnd, m_hwnd, TEXT(""));
 	m_pageCache.Create(m_hwnd, m_hwnd, TEXT(""));
 
+	// Pages overlap the tab as siblings, not children. Keep its background behind
+	// them: WS_CLIPSIBLINGS only clips siblings above the tab in Z order.
+	::SetWindowPos(hTab, HWND_BOTTOM, 0, 0, 0, 0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
 	PF::EnableThemeDialogTexture(m_pageConnection.GetHWND(), ETDT_ENABLETAB);
 	PF::EnableThemeDialogTexture(m_pageAuthentication.GetHWND(), ETDT_ENABLETAB);
 	PF::EnableThemeDialogTexture(m_pageTransfer.GetHWND(), ETDT_ENABLETAB);
